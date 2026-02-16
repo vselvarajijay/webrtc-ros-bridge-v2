@@ -1,0 +1,15 @@
+services:
+  ros2-kilted:
+    image: osrf/ros:kilted-desktop
+    container_name: ros2-kilted
+    stdin_open: true
+    tty: true
+    environment:
+      # On macOS (Docker Desktop), use host.docker.internal so the container can reach XQuartz
+      - DISPLAY=${DISPLAY:-host.docker.internal:0}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # Unix socket for X11 (Linux). On macOS we use DISPLAY=host.docker.internal:0 (TCP) instead
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - .:/root/workspace
+    network_mode: host

@@ -1,0 +1,34 @@
+running egg_info
+creating ../../build/scout_boot/scout_boot.egg-info
+writing ../../build/scout_boot/scout_boot.egg-info/PKG-INFO
+writing dependency_links to ../../build/scout_boot/scout_boot.egg-info/dependency_links.txt
+writing requirements to ../../build/scout_boot/scout_boot.egg-info/requires.txt
+writing top-level names to ../../build/scout_boot/scout_boot.egg-info/top_level.txt
+writing manifest file '../../build/scout_boot/scout_boot.egg-info/SOURCES.txt'
+reading manifest file '../../build/scout_boot/scout_boot.egg-info/SOURCES.txt'
+writing manifest file '../../build/scout_boot/scout_boot.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /root/workspace/ros2_ws/build/scout_boot/build
+creating /root/workspace/ros2_ws/build/scout_boot/build/lib
+creating /root/workspace/ros2_ws/build/scout_boot/build/lib/scout_boot
+copying scout_boot/__init__.py -> /root/workspace/ros2_ws/build/scout_boot/build/lib/scout_boot
+copying scout_boot/py.typed -> /root/workspace/ros2_ws/build/scout_boot/build/lib/scout_boot
+running install
+running install_lib
+creating /root/workspace/ros2_ws/install/scout_boot/lib/python3.12/site-packages/scout_boot
+copying /root/workspace/ros2_ws/build/scout_boot/build/lib/scout_boot/__init__.py -> /root/workspace/ros2_ws/install/scout_boot/lib/python3.12/site-packages/scout_boot
+copying /root/workspace/ros2_ws/build/scout_boot/build/lib/scout_boot/py.typed -> /root/workspace/ros2_ws/install/scout_boot/lib/python3.12/site-packages/scout_boot
+byte-compiling /root/workspace/ros2_ws/install/scout_boot/lib/python3.12/site-packages/scout_boot/__init__.py to __init__.cpython-312.pyc
+running install_data
+creating /root/workspace/ros2_ws/install/scout_boot/share/ament_index
+creating /root/workspace/ros2_ws/install/scout_boot/share/ament_index/resource_index
+creating /root/workspace/ros2_ws/install/scout_boot/share/ament_index/resource_index/packages
+copying resource/scout_boot -> /root/workspace/ros2_ws/install/scout_boot/share/ament_index/resource_index/packages
+copying package.xml -> /root/workspace/ros2_ws/install/scout_boot/share/scout_boot
+creating /root/workspace/ros2_ws/install/scout_boot/share/scout_boot/launch
+copying scout_boot/launch/scout.launch.py -> /root/workspace/ros2_ws/install/scout_boot/share/scout_boot/launch
+running install_egg_info
+Copying ../../build/scout_boot/scout_boot.egg-info to /root/workspace/ros2_ws/install/scout_boot/lib/python3.12/site-packages/scout_boot-0.0.0-py3.12.egg-info
+running install_scripts
+writing list of installed files to '/root/workspace/ros2_ws/build/scout_boot/install.log'
