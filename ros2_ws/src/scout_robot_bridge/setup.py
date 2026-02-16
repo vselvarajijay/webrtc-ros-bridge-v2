@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'scout_control'
+package_name = 'scout_robot_bridge'
 
 setup(
     name=package_name,

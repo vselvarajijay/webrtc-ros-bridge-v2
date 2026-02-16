@@ -11,12 +11,6 @@
 *.gch
 *.pch
 
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
 # Compiled Dynamic libraries
 *.so
 *.dylib
@@ -37,5 +31,59 @@
 *.out
 *.app
 
-# debug information files
+# Linker files
+*.ilk
+
+# Debugger Files
+*.pdb
+
+# Debug information files
 *.dwo
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+build/
+Testing/
+
+# ROS2 specific
+install/
+log/
+build/
+*.pyc
+*.pyo
+__pycache__/
+
+# Colcon
+.colcon/
+
+# ROS2 generated files
+*.bag
+*.db3
+*.db3-shm
+*.db3-wal
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python (for ROS2 Python nodes)
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.eggs/
+
+# Backup files
+*.bak
+*.backup
