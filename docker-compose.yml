@@ -1,7 +1,7 @@
 services:
-  ros2-kilted:
+  ros2-ws:
     image: osrf/ros:kilted-desktop
-    container_name: ros2-kilted
+    container_name: ros2-ws
     stdin_open: true
     tty: true
     environment:
