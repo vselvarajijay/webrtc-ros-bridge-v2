@@ -1,3 +1,4 @@
+import os
 from setuptools import find_packages, setup
 
 package_name = 'scout_robot_bridge'
@@ -10,9 +11,22 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'config'), ['config/frodobot_params.yaml']),
     ],
-    package_data={'': ['py.typed']},
-    install_requires=['setuptools'],
+    package_data={
+        '': ['py.typed'],
+        'frodobot_rover_sdk': ['static/*'],
+        'scout_robot_bridge': [
+            'robot_sdk/earth-rovers-sdk/*.py',
+        ],
+    },
+    install_requires=[
+        'setuptools',
+        'requests',
+        'pyppeteer',
+        'python-dotenv',
+        'aiohttp',
+    ],
     zip_safe=True,
     maintainer='root',
     maintainer_email='root@todo.todo',
@@ -25,6 +39,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'bridge_node = scout_robot_bridge.bridge_node:main',
+            'arrow_key_teleop = scout_robot_bridge.arrow_key_teleop:main',
         ],
     },
 )

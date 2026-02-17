@@ -69,6 +69,9 @@ __pycache__/
 *.db3-shm
 *.db3-wal
 
+# Local env (secrets); copy .env.example to .env
+.env
+
 # IDE specific
 .vscode/
 .idea/

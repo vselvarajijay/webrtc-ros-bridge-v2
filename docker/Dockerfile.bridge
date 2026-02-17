@@ -1,0 +1,43 @@
+# scout_robot_bridge: ROS 2 Kilted + Python deps for bridge_node
+FROM osrf/ros:kilted-desktop
+
+# Install Google Chrome for Pyppeteer (front camera). More reliable in Docker than chromium-browser.
+# Install Google Chrome for Pyppeteer (front camera). Ubuntu 24.04 uses libasound2t64.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    wget \
+    ca-certificates \
+    fonts-liberation \
+    libasound2t64 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    xdg-utils \
+    && wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get install -y --no-install-recommends /tmp/chrome.deb \
+    && rm /tmp/chrome.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bridge Python deps (colcon does not install setup.py install_requires)
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    requests pyppeteer python-dotenv aiohttp \
+    || python3 -m pip install --no-cache-dir --user \
+    requests pyppeteer python-dotenv aiohttp
+
+# Default for container; override with FRODOBOT_CHROME_EXECUTABLE_PATH or CHROME_EXECUTABLE_PATH in .env
+ENV CHROME_EXECUTABLE_PATH=/usr/bin/google-chrome
+
+# Workspace is mounted at /root/workspace at runtime
+WORKDIR /root/workspace/ros2_ws
+CMD ["bash", "-c", "source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash && exec ros2 run scout_robot_bridge bridge_node"]

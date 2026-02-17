@@ -1,0 +1,15 @@
+# Dev shell: same base + pip deps so teleop/rqt and any node can run
+FROM osrf/ros:kilted-desktop
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    requests pyppeteer python-dotenv aiohttp \
+    || python3 -m pip install --no-cache-dir --user \
+    requests pyppeteer python-dotenv aiohttp
+
+WORKDIR /root/workspace/ros2_ws
+# Interactive shell: source ROS, .env, workspace install (same as cli.sh start)
+CMD ["bash", "-c", "source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash 2>/dev/null || true; exec bash -l"]

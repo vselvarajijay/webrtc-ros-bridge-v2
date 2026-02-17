@@ -1,0 +1,10 @@
+# scout_perception_cpp: ROS 2 Kilted base for perception node
+FROM osrf/ros:kilted-desktop
+
+# Add any apt deps the C++ package needs (e.g. OpenCV, cv_bridge are in desktop)
+# Workspace is mounted at /root/workspace at runtime
+WORKDIR /root/workspace/ros2_ws
+
+# Placeholder until perception node exists: keep container running
+# Replace with: source install/setup.bash && ros2 run scout_perception_cpp <node_name>
+CMD ["bash", "-c", "source /opt/ros/kilted/setup.bash && source install/setup.bash 2>/dev/null || true; exec tail -f /dev/null"]

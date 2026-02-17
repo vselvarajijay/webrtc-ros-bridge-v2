@@ -7,7 +7,18 @@ cd "$SCRIPT_DIR"
 cmd="${1:-}"
 shift || true
 
+# Shared env for compose (macOS X11)
+export COMPOSE_DISPLAY="${DISPLAY:-host.docker.internal:0}"
+
 case "$cmd" in
+  build)
+    echo "Building Docker images..."
+    docker compose build
+    echo "Building ROS 2 workspace in container..."
+    docker compose run --rm scout_bridge bash -c \
+      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
+    echo "Build complete. Run ./cli.sh start to start services and open a shell."
+    ;;
   start)
     USE_XTERM=false
     for arg in "$@"; do
@@ -17,7 +28,6 @@ case "$cmd" in
       fi
     done
 
-    # On macOS, allow X11 connections from Docker VM (XQuartz: Preferences → Security → "Allow connections from network clients")
     if [[ "$(uname)" == Darwin ]]; then
       if command -v xhost &>/dev/null; then
         xhost + 127.0.0.1 2>/dev/null || true
@@ -29,27 +39,21 @@ case "$cmd" in
       fi
     fi
 
-    CONTAINER_RUNNING=$(docker compose ps -q ros2-ws 2>/dev/null | head -n 1)
-
-    if [ -n "$CONTAINER_RUNNING" ] && [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_RUNNING" 2>/dev/null)" = "true" ]; then
-      echo "Attaching to existing container ros2-ws..."
-      RUN_CMD="docker compose exec ros2-ws bash -c 'source /opt/ros/kilted/setup.bash && exec bash -l'"
+    echo "Starting scout_bridge and scout_perception..."
+    if [[ "$(uname)" == Darwin ]]; then
+      DISPLAY=host.docker.internal:0 docker compose up -d scout_bridge scout_perception
     else
-      echo "Starting container ros2-ws..."
-      if [[ "$(uname)" == Darwin ]]; then
-        DISPLAY=host.docker.internal:0 docker compose up -d ros2-ws
-      else
-        docker compose up -d ros2-ws
-      fi
-      sleep 1
-      RUN_CMD="docker compose exec ros2-ws bash -c 'source /opt/ros/kilted/setup.bash && exec bash -l'"
+      docker compose up -d scout_bridge scout_perception
     fi
+    sleep 1
 
+    echo "Opening dev shell (scout_shell)..."
+    RUN_CMD="docker compose --profile shell run --rm -it scout_shell bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash 2>/dev/null || true; exec bash -l'"
     if [[ "$USE_XTERM" == true ]]; then
       if command -v xterm &>/dev/null; then
         xterm -e "$RUN_CMD"
       else
-        echo "xterm not found; running in current terminal. Install xterm for a separate window."
+        echo "xterm not found; running in current terminal."
         eval "$RUN_CMD"
       fi
     else
@@ -57,17 +61,18 @@ case "$cmd" in
     fi
     ;;
   stop)
-    echo "Stopping container ros2-ws..."
-    docker compose stop ros2-ws
-    echo "Container stopped. Run ./cli.sh start to start it again."
+    echo "Stopping scout_bridge and scout_perception..."
+    docker compose stop scout_bridge scout_perception
+    echo "Stopped. Run ./cli.sh start to start again."
     ;;
   *)
-    echo "Usage: $0 {start|stop} [options]"
+    echo "Usage: $0 {build|start|stop} [options]"
     echo ""
     echo "Commands:"
-    echo "  start        Start (or attach to) the ros2-ws container and open a shell with ROS 2 sourced"
+    echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
+    echo "  start       Start scout_bridge and scout_perception, then open a dev shell"
     echo "               Options: --xterm  Open the shell in a separate xterm window"
-    echo "  stop         Stop the ros2-ws container"
+    echo "  stop        Stop scout_bridge and scout_perception"
     exit 1
     ;;
 esac
