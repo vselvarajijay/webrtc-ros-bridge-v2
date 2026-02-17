@@ -13,7 +13,8 @@ export COMPOSE_DISPLAY="${DISPLAY:-host.docker.internal:0}"
 case "$cmd" in
   build)
     echo "Building Docker images..."
-    docker compose build
+    # Try --remove-orphans, fall back if not supported
+    docker compose build --remove-orphans 2>/dev/null || docker compose build
     echo "Building ROS 2 workspace in container..."
     docker compose run --rm scout_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
@@ -40,9 +41,12 @@ case "$cmd" in
     fi
 
     echo "Starting scout_bridge and scout_perception..."
+    # Try --remove-orphans, fall back if not supported
     if [[ "$(uname)" == Darwin ]]; then
+      DISPLAY=host.docker.internal:0 docker compose up -d --remove-orphans scout_bridge scout_perception 2>/dev/null || \
       DISPLAY=host.docker.internal:0 docker compose up -d scout_bridge scout_perception
     else
+      docker compose up -d --remove-orphans scout_bridge scout_perception 2>/dev/null || \
       docker compose up -d scout_bridge scout_perception
     fi
     sleep 1
@@ -65,13 +69,18 @@ case "$cmd" in
     docker compose stop scout_bridge scout_perception
     echo "Stopped. Run ./cli.sh start to start again."
     ;;
+  clean)
+    echo "Removing orphaned containers..."
+    docker compose down --remove-orphans
+    echo "Orphaned containers removed."
+    ;;
   teleop)
     echo "Running teleop_node in scout_bridge container..."
     docker compose exec scout_bridge bash -c \
       'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
     ;;
   *)
-    echo "Usage: $0 {build|start|stop|teleop} [options]"
+    echo "Usage: $0 {build|start|stop|teleop|clean} [options]"
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
@@ -79,6 +88,7 @@ case "$cmd" in
     echo "               Options: --xterm  Open the shell in a separate xterm window"
     echo "  stop        Stop scout_bridge and scout_perception"
     echo "  teleop      Run teleop_node in scout_bridge container (arrow key control)"
+    echo "  clean       Remove orphaned containers (ros2-ws, ros2-kilted, etc.)"
     exit 1
     ;;
 esac

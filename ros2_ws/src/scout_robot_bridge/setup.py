@@ -26,6 +26,9 @@ setup(
         'pyppeteer',
         'python-dotenv',
         'aiohttp',
+        'keyboard',  # For key release event detection
+        # Note: pynput removed - not needed for direct robot control
+        # Terminal input works fine without X11 dependencies
     ],
     zip_safe=True,
     maintainer='root',

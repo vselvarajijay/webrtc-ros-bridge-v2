@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Optional
 
 import requests
@@ -8,9 +9,11 @@ from scout_robot_bridge.core.constants import (
     MAX_VELOCITY,
     MIN_VELOCITY,
     SDK_CHECK_TIMEOUT,
+    SDK_DATA_ENDPOINT,
     SDK_LOCAL_ENDPOINT,
 )
 from scout_robot_bridge.core.exceptions import AuthenticationError, SDKConnectionError
+from scout_robot_bridge.core.models.telemetry import TelemetryFrame
 from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.robot_sdk.earth_rovers_sdk import BrowserService, RtmClient
 from scout_robot_bridge.utils import base64_to_bytes, fetch_auth_sync
@@ -31,6 +34,8 @@ class EarthRoversRobot(RobotBase):
         self._browser_service: Optional[BrowserService] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._camera_disabled = False
+        self._last_telemetry_warning_time = 0.0
+        self._telemetry_warning_interval = 5.0  # Only log warning every 5 seconds
         
         try:
             auth = fetch_auth_sync()
@@ -59,6 +64,7 @@ class EarthRoversRobot(RobotBase):
             self._logger.warning("Cannot send velocity command: RTM client not initialized")
             return
         
+        self._logger.debug(f"Sending velocity command: linear={linear:.3f}, angular={angular:.3f}")
         self._rtm_client.send_message({
             "linear": linear,
             "angular": angular,
@@ -135,6 +141,53 @@ class EarthRoversRobot(RobotBase):
             self._browser_service = None
             error_msg = f"Failed to get camera frame: {e}"
             self._logger.warning(error_msg)
+            return None
+
+    def get_telemetry(self) -> Optional[TelemetryFrame]:
+        """
+        Get latest telemetry data from the robot.
+        
+        Fetches sensor data from the SDK's /data endpoint, including:
+        - Battery level, signal strength, speed, lamp state
+        - GPS coordinates and signal quality
+        - Compass orientation
+        - IMU data (accelerometer, gyroscope, magnetometer)
+        - Wheel RPMs for all four wheels
+        
+        Returns:
+            TelemetryFrame containing sensor data, or None if unavailable.
+        """
+        try:
+            r = requests.get(SDK_DATA_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
+            r.raise_for_status()
+            data = r.json()
+            
+            # Create TelemetryFrame from JSON response
+            return TelemetryFrame(
+                battery=data.get("battery", 0.0),
+                signal_level=data.get("signal_level", 0),
+                speed=data.get("speed", 0.0),
+                lamp=data.get("lamp", 0),
+                latitude=data.get("latitude", 0.0),
+                longitude=data.get("longitude", 0.0),
+                gps_signal=data.get("gps_signal", 0.0),
+                orientation=data.get("orientation", 0),
+                vibration=data.get("vibration"),
+                accels=data.get("accels", []),
+                gyros=data.get("gyros", []),
+                mags=data.get("mags", []),
+                rpms=data.get("rpms", []),
+                timestamp=data.get("timestamp", 0.0),
+            )
+        except Exception as e:
+            # Rate-limit warnings to avoid spam when SDK is unavailable
+            now = time.monotonic()
+            if now - self._last_telemetry_warning_time >= self._telemetry_warning_interval:
+                self._logger.debug(
+                    f"Telemetry unavailable (SDK not running?): {type(e).__name__}. "
+                    f"Will retry silently. Start SDK at {SDK_DATA_ENDPOINT} to enable telemetry."
+                )
+                self._last_telemetry_warning_time = now
             return None
 
     def cleanup(self) -> None:

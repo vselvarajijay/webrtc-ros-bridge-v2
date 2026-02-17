@@ -153,14 +153,26 @@ def main(args=None):
         setup_camera_publisher(node, robot)
 
         # Run node
-        rclpy.spin(node)
+        try:
+            rclpy.spin(node)
+        except KeyboardInterrupt:
+            node.get_logger().info("Received interrupt signal, shutting down...")
+        except Exception as e:
+            node.get_logger().error(f"Error during spin: {e}")
     finally:
         # Cleanup
-        if hasattr(node, 'robot') and node.robot is not None:
-            if hasattr(node.robot, 'cleanup'):
-                node.robot.cleanup()
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            if hasattr(node, 'robot') and node.robot is not None:
+                if hasattr(node.robot, 'cleanup'):
+                    node.robot.cleanup()
+            node.destroy_node()
+        except Exception as e:
+            node.get_logger().warning(f"Error during node cleanup: {e}")
+        finally:
+            try:
+                rclpy.shutdown()
+            except Exception:
+                pass  # Ignore shutdown errors if already shut down
 
 
 if __name__ == '__main__':

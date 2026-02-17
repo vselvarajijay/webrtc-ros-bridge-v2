@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from scout_robot_bridge.core.models.telemetry import TelemetryFrame
+
 
 class RobotBase(ABC):
     """Abstract base for robot implementations. Bridge uses this interface only."""
@@ -54,4 +56,14 @@ class RobotBase(ABC):
     @abstractmethod
     def get_front_camera_frame(self) -> Optional[bytes]:
         """Return latest front camera frame as raw bytes, or None if unavailable."""
+        pass
+
+    @abstractmethod
+    def get_telemetry(self) -> Optional[TelemetryFrame]:
+        """
+        Get latest telemetry data from the robot.
+        
+        Returns:
+            TelemetryFrame containing sensor data, or None if unavailable.
+        """
         pass

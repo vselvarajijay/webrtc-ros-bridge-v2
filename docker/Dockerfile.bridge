@@ -31,9 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Bridge Python deps (colcon does not install setup.py install_requires)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    requests pyppeteer python-dotenv aiohttp \
+    requests pyppeteer python-dotenv aiohttp keyboard \
     || python3 -m pip install --no-cache-dir --user \
-    requests pyppeteer python-dotenv aiohttp
+    requests pyppeteer python-dotenv aiohttp keyboard
 
 # Default for container; override with FRODOBOT_CHROME_EXECUTABLE_PATH or CHROME_EXECUTABLE_PATH in .env
 ENV CHROME_EXECUTABLE_PATH=/usr/bin/google-chrome
