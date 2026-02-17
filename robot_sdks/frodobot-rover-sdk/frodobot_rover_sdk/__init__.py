@@ -1,1 +1,0 @@
-# FrodoBots Earth Rover SDK
