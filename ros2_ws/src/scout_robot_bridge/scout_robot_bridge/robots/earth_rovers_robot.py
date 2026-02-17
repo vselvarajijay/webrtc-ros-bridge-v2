@@ -4,14 +4,14 @@ from typing import Optional
 
 import requests
 
-from scout_robot_bridge.constants import (
+from scout_robot_bridge.core.constants import (
     MAX_VELOCITY,
     MIN_VELOCITY,
     SDK_CHECK_TIMEOUT,
     SDK_LOCAL_ENDPOINT,
 )
-from scout_robot_bridge.exceptions import AuthenticationError, SDKConnectionError
-from scout_robot_bridge.robot_base import RobotBase
+from scout_robot_bridge.core.exceptions import AuthenticationError, SDKConnectionError
+from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.robot_sdk.earth_rovers_sdk import BrowserService, RtmClient
 from scout_robot_bridge.utils import base64_to_bytes, fetch_auth_sync
 

@@ -52,7 +52,7 @@ The workspace is mounted in all containers, so one `./cli.sh build` is shared by
 **Arrow keys (recommended):**
 
 ```bash
-ros2 run scout_robot_bridge arrow_key_teleop
+ros2 run scout_robot_bridge teleop_node
 ```
 
 Use **Up** (forward), **Down** (back), **Left** / **Right** (turn). Ctrl+C to quit.
@@ -66,7 +66,7 @@ The bridge subscribes to `/cmd_vel` and maps Twist to discrete move commands, th
 - **Run teleop in the same container as the bridge** so ROS 2 discovery works. In a **new terminal** on the host:
 
   ```bash
-  docker compose exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge arrow_key_teleop'
+  docker compose exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
   ```
 
   Watch bridge logs in another terminal: `docker compose logs -f scout_bridge` — you should see `cmd_vel received: linear.x=...` for each keypress.

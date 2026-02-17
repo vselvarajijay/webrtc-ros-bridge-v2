@@ -1,6 +1,6 @@
 from typing import Optional
 
-from scout_robot_bridge.robot_base import RobotBase
+from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.robots.earth_rovers_robot import EarthRoversRobot
 
 

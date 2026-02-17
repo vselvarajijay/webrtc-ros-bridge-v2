@@ -39,8 +39,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'bridge_node = scout_robot_bridge.bridge_node:main',
-            'arrow_key_teleop = scout_robot_bridge.arrow_key_teleop:main',
+            'bridge_node = scout_robot_bridge.nodes.bridge_node:main',
+            'teleop_node = scout_robot_bridge.nodes.teleop_node:main',
         ],
     },
 )

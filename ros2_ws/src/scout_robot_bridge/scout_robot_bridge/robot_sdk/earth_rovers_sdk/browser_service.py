@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from pyppeteer import launch
 
 try:
-    from scout_robot_bridge.constants import (
+    from scout_robot_bridge.core.constants import (
         BROWSER_ERROR_LOG_INTERVAL,
         CHROME_FALLBACK_PATHS,
         DEFAULT_CHROME_PATH,

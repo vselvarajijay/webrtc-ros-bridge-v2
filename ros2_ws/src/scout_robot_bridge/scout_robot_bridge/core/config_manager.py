@@ -5,7 +5,7 @@ from typing import Optional
 
 from rclpy.node import Node
 
-from scout_robot_bridge.constants import DEFAULT_MAP_ZOOM_LEVEL
+from scout_robot_bridge.core.constants import DEFAULT_MAP_ZOOM_LEVEL
 
 # Mapping: ROS 2 parameter name (FRODOBOT_*) -> SDK env var name
 FRODOBOT_PARAM_TO_ENV = {

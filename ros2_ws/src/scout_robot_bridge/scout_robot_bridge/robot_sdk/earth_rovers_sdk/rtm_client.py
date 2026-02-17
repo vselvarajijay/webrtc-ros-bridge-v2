@@ -4,7 +4,7 @@ from typing import Optional
 
 import requests
 
-from scout_robot_bridge.exceptions import ConfigurationError
+from scout_robot_bridge.core.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 

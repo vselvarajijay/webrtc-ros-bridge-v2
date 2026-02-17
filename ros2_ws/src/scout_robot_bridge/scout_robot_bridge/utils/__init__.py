@@ -6,12 +6,12 @@ from typing import Optional
 
 import requests
 
-from scout_robot_bridge.constants import (
+from scout_robot_bridge.core.constants import (
     AUTH_TIMEOUT,
     FRODOBOTS_API_URL,
     REQUIRED_AUTH_KEYS,
 )
-from scout_robot_bridge.exceptions import AuthenticationError, SDKConnectionError
+from scout_robot_bridge.core.exceptions import AuthenticationError, SDKConnectionError
 
 
 def fetch_auth_sync() -> dict:

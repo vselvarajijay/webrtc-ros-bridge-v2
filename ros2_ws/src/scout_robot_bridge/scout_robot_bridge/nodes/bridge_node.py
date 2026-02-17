@@ -6,8 +6,8 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
 
-from scout_robot_bridge.config_manager import ConfigManager
-from scout_robot_bridge.constants import (
+from scout_robot_bridge.core.config_manager import ConfigManager
+from scout_robot_bridge.core.constants import (
     CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
@@ -19,8 +19,8 @@ from scout_robot_bridge.constants import (
     MAX_VELOCITY,
     MIN_VELOCITY,
 )
-from scout_robot_bridge.robot_base import RobotBase
-from scout_robot_bridge.robot_factory import create_robot
+from scout_robot_bridge.core.robot_base import RobotBase
+from scout_robot_bridge.core.robot_factory import create_robot
 
 
 def setup_robot_config(node: Node) -> str:
