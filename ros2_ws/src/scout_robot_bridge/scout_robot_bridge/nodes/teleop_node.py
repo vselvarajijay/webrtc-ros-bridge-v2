@@ -22,7 +22,7 @@ from geometry_msgs.msg import Twist
 
 # ── Tuning constants ────────────────────────────────────────────────────────
 LINEAR_MAX   = 0.3          # m/s
-ANGULAR_MAX  = 0.3          # rad/s
+ANGULAR_MAX  = 0.6          # rad/s (doubled for faster rotation)
 RAMP_UP_SEC  = 0.25         # seconds to reach full speed from zero
 RAMP_DN_SEC  = 0.15         # seconds to reach zero from full speed (quicker stop)
 DECAY_ALPHA  = 0.85         # exponential decay per tick when no key held (0–1, higher = longer coast)
