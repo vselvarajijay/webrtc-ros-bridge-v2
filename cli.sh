@@ -65,14 +65,20 @@ case "$cmd" in
     docker compose stop scout_bridge scout_perception
     echo "Stopped. Run ./cli.sh start to start again."
     ;;
+  teleop)
+    echo "Running teleop_node in scout_bridge container..."
+    docker compose exec scout_bridge bash -c \
+      'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
+    ;;
   *)
-    echo "Usage: $0 {build|start|stop} [options]"
+    echo "Usage: $0 {build|start|stop|teleop} [options]"
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
     echo "  start       Start scout_bridge and scout_perception, then open a dev shell"
     echo "               Options: --xterm  Open the shell in a separate xterm window"
     echo "  stop        Stop scout_bridge and scout_perception"
+    echo "  teleop      Run teleop_node in scout_bridge container (arrow key control)"
     exit 1
     ;;
 esac
