@@ -65,8 +65,8 @@ class SmoothTeleop(Node):
         target_angular = 0.0
         if "up"    in held: target_linear  += LINEAR_MAX
         if "down"  in held: target_linear  -= LINEAR_MAX
-        if "right" in held: target_angular += ANGULAR_MAX
-        if "left"  in held: target_angular -= ANGULAR_MAX
+        if "right" in held: target_angular -= ANGULAR_MAX  # Right turn = negative angular (clockwise)
+        if "left"  in held: target_angular += ANGULAR_MAX  # Left turn = positive angular (counter-clockwise)
 
         # ── Normalize diagonal movement to prevent faster diagonal speed
         # When both linear and angular are non-zero, apply normalization factor
