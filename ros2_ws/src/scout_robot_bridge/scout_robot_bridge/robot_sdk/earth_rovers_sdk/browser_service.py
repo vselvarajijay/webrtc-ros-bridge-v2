@@ -1,45 +1,115 @@
+import logging
 import os
 import time
-from pyppeteer import launch
+from typing import Optional
+
 from dotenv import load_dotenv
+from pyppeteer import launch
+
+try:
+    from scout_robot_bridge.constants import (
+        BROWSER_ERROR_LOG_INTERVAL,
+        CHROME_FALLBACK_PATHS,
+        DEFAULT_CHROME_PATH,
+        DEFAULT_IMAGE_FORMAT,
+        DEFAULT_IMAGE_QUALITY,
+        DEFAULT_VIEWPORT,
+        SDK_LOCAL_ENDPOINT,
+        VALID_IMAGE_FORMATS,
+    )
+except ImportError:
+    # Fallback if constants module not available (e.g., when SDK used standalone)
+    BROWSER_ERROR_LOG_INTERVAL = 10.0
+    CHROME_FALLBACK_PATHS = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ]
+    DEFAULT_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    DEFAULT_VIEWPORT = {"width": 3840, "height": 2160}
+    SDK_LOCAL_ENDPOINT = "http://127.0.0.1:8000/sdk"
+    VALID_IMAGE_FORMATS = ["png", "jpeg", "webp"]
+    DEFAULT_IMAGE_FORMAT = "png"
+    DEFAULT_IMAGE_QUALITY = 1.0
 
 load_dotenv()
 
-# Throttle "Error initializing browser" to avoid log spam (e.g. when Chrome missing or SDK URL unreachable)
+logger = logging.getLogger(__name__)
+
+# Throttle "Error initializing browser" to avoid log spam
 _last_browser_error_log = 0.0
-_BROWSER_ERROR_LOG_INTERVAL = 10.0
-
-# Configuration from environment variables with defaults
-FORMAT = os.getenv("IMAGE_FORMAT", "png")
-QUALITY = float(os.getenv("IMAGE_QUALITY", "1.0"))
-HAS_REAR_CAMERA = os.getenv("HAS_REAR_CAMERA", "False").lower() == "true"
-
-if FORMAT not in ["png", "jpeg", "webp"]:
-    raise ValueError("Invalid image format. Supported formats: png, jpeg, webp")
-
-if QUALITY < 0 or QUALITY > 1:
-    raise ValueError("Invalid image quality. Quality should be between 0 and 1")
 
 
 class BrowserService:
-    def __init__(self):
+    """Service for interacting with browser-based SDK interface."""
+
+    def __init__(
+        self,
+        image_format: Optional[str] = None,
+        image_quality: Optional[float] = None,
+        viewport: Optional[dict] = None,
+    ):
+        """
+        Initialize browser service.
+        
+        Args:
+            image_format: Image format (png, jpeg, webp). Defaults to env var or "png"
+            image_quality: Image quality (0.0-1.0). Defaults to env var or 1.0
+            viewport: Viewport dimensions dict with 'width' and 'height'. Defaults to 3840x2160
+        """
         self.browser = None
         self.page = None
-        self.default_viewport = {"width": 3840, "height": 2160}
+        
+        # Configuration from parameters or environment variables
+        self.image_format = image_format or os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
+        self.image_quality = image_quality or float(os.getenv("IMAGE_QUALITY", str(DEFAULT_IMAGE_QUALITY)))
+        self.default_viewport = viewport or DEFAULT_VIEWPORT.copy()
+        
+        # Validate configuration
+        if self.image_format not in VALID_IMAGE_FORMATS:
+            raise ValueError(
+                f"Invalid image format: {self.image_format}. "
+                f"Supported formats: {', '.join(VALID_IMAGE_FORMATS)}"
+            )
+        
+        if not 0 <= self.image_quality <= 1:
+            raise ValueError(
+                f"Invalid image quality: {self.image_quality}. "
+                "Quality should be between 0 and 1"
+            )
+
+    def _find_chrome_executable(self) -> str:
+        """
+        Find Chrome executable path, checking configured path and fallbacks.
+        
+        Returns:
+            Path to Chrome executable
+            
+        Raises:
+            RuntimeError: If no Chrome executable found
+        """
+        executable_path = os.getenv("CHROME_EXECUTABLE_PATH", DEFAULT_CHROME_PATH)
+        
+        # Check configured path first
+        if os.path.isfile(executable_path) and os.access(executable_path, os.X_OK):
+            return executable_path
+        
+        # Try fallback paths
+        for fallback in CHROME_FALLBACK_PATHS:
+            if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
+                logger.debug(f"Using Chrome fallback path: {fallback}")
+                return fallback
+        
+        raise RuntimeError(
+            f"Chrome executable not found. Tried: {executable_path} and fallbacks: {CHROME_FALLBACK_PATHS}"
+        )
 
     async def initialize_browser(self):
+        """Initialize browser and navigate to SDK page."""
         if not self.browser:
             try:
-                executable_path = os.getenv(
-                    "CHROME_EXECUTABLE_PATH",
-                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                )
-                # If configured path missing (e.g. .env says chromium but image has google-chrome), try fallbacks
-                if not os.path.isfile(executable_path) or not os.access(executable_path, os.X_OK):
-                    for fallback in ("/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"):
-                        if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
-                            executable_path = fallback
-                            break
+                executable_path = self._find_chrome_executable()
+                
                 self.browser = await launch(
                     executablePath=executable_path,
                     headless=True,
@@ -62,7 +132,7 @@ class BrowserService:
                     {"Accept-Language": "en-US,en;q=0.9"}
                 )
                 await self.page.goto(
-                    "http://127.0.0.1:8000/sdk", {"waitUntil": "networkidle2"}
+                    SDK_LOCAL_ENDPOINT, {"waitUntil": "networkidle2"}
                 )
                 await self.page.click("#join")
                 await self.page.waitForSelector("video")
@@ -71,18 +141,20 @@ class BrowserService:
 
                 await self.page.waitFor(2000)
 
+                # Initialize image parameters
                 call = f"""() => {{
                     window.initializeImageParams({{
-                        imageFormat: "{FORMAT}",
-                        imageQuality: {QUALITY}
+                        imageFormat: "{self.image_format}",
+                        imageQuality: {self.image_quality}
                     }});
                 }}"""
                 await self.page.evaluate(call)
+                
             except Exception as e:
                 global _last_browser_error_log
                 now = time.time()
-                if now - _last_browser_error_log >= _BROWSER_ERROR_LOG_INTERVAL:
-                    print(f"Error initializing browser: {e}")
+                if now - _last_browser_error_log >= BROWSER_ERROR_LOG_INTERVAL:
+                    logger.error(f"Error initializing browser: {e}")
                     _last_browser_error_log = now
                 self.browser = None
                 self.page = None
@@ -122,12 +194,12 @@ class BrowserService:
                     elapsed_time = (
                         end_time - start_time
                     ) * 1000  # Convert to milliseconds
-                    print(f"Screenshot for {name} took {elapsed_time:.2f} ms")
+                    logger.debug(f"Screenshot for {name} took {elapsed_time:.2f} ms")
                     screenshots[name] = output_path
                 else:
-                    print(f"Element {element_id} not found")
+                    logger.warning(f"Element {element_id} not found")
             else:
-                print(f"Invalid element name: {name}")
+                logger.warning(f"Invalid element name: {name}")
 
         return screenshots
 

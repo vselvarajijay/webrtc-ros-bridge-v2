@@ -1,152 +1,171 @@
 import asyncio
-import base64
-import os
-import sys
+import logging
 from typing import Optional
 
 import requests
 
+from scout_robot_bridge.constants import (
+    MAX_VELOCITY,
+    MIN_VELOCITY,
+    SDK_CHECK_TIMEOUT,
+    SDK_LOCAL_ENDPOINT,
+)
+from scout_robot_bridge.exceptions import AuthenticationError, SDKConnectionError
 from scout_robot_bridge.robot_base import RobotBase
 from scout_robot_bridge.robot_sdk.earth_rovers_sdk import BrowserService, RtmClient
-
-FRODOBOTS_API_URL = os.getenv(
-    "FRODOBOTS_API_URL", "https://frodobots-web-api.onrender.com/api/v1"
-)
-
-
-def _fetch_auth_sync() -> Optional[dict]:
-    """Fetch auth data from FrodoBots API (sync). Returns dict for RtmClient or None."""
-    auth_header = os.getenv("SDK_API_TOKEN")
-    bot_slug = os.getenv("BOT_SLUG")
-    mission_slug = os.getenv("MISSION_SLUG")
-    if not auth_header or not bot_slug:
-        return None
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {auth_header}",
-    }
-    try:
-        if mission_slug:
-            resp = requests.post(
-                f"{FRODOBOTS_API_URL}/sdk/start_ride",
-                headers=headers,
-                json={"bot_slug": bot_slug, "mission_slug": mission_slug},
-                timeout=15,
-            )
-        else:
-            resp = requests.post(
-                f"{FRODOBOTS_API_URL}/sdk/token",
-                headers=headers,
-                json={"bot_slug": bot_slug},
-                timeout=15,
-            )
-        if resp.status_code != 200:
-            return None
-        data = resp.json()
-        auth = {
-            "CHANNEL_NAME": data.get("CHANNEL_NAME"),
-            "RTM_TOKEN": data.get("RTM_TOKEN"),
-            "USERID": data.get("USERID"),
-            "APP_ID": data.get("APP_ID"),
-            "BOT_UID": data.get("BOT_UID"),
-        }
-        if all(auth.get(k) for k in ("CHANNEL_NAME", "RTM_TOKEN", "USERID", "APP_ID")):
-            return auth
-        return None
-    except Exception:
-        return None
-
-
-def _base64_to_bytes(data_url_or_b64: Optional[str]) -> Optional[bytes]:
-    """Convert front() result (data URL or raw base64) to bytes."""
-    if not data_url_or_b64:
-        return None
-    s = data_url_or_b64.strip()
-    if s.startswith("data:"):
-        # e.g. data:image/png;base64,<payload>
-        idx = s.find("base64,")
-        if idx == -1:
-            return None
-        s = s[idx + 7 :]
-    try:
-        return base64.b64decode(s)
-    except Exception:
-        return None
+from scout_robot_bridge.utils import base64_to_bytes, fetch_auth_sync
 
 
 class EarthRoversRobot(RobotBase):
     """Robot implementation using Earth Rovers (FrodoBot) SDK."""
 
-    def __init__(self) -> None:
-        auth = _fetch_auth_sync()
-        self._rtm_client: Optional[RtmClient] = RtmClient(auth) if auth else None
+    def __init__(self, logger: Optional[logging.Logger] = None) -> None:
+        """
+        Initialize Earth Rovers robot.
+        
+        Args:
+            logger: Optional logger instance. If None, uses default logger.
+        """
+        self._logger = logger or logging.getLogger(__name__)
+        self._rtm_client: Optional[RtmClient] = None
         self._browser_service: Optional[BrowserService] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._camera_disabled = False
+        
+        try:
+            auth = fetch_auth_sync()
+            self._rtm_client = RtmClient(auth)
+        except AuthenticationError as e:
+            self._logger.warning(f"Failed to authenticate: {e}. Robot will operate without RTM client.")
+            self._rtm_client = None
 
     def _ensure_loop(self) -> asyncio.AbstractEventLoop:
+        """Ensure event loop exists and is set."""
         if self._loop is None:
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
         return self._loop
 
+    def _send_velocity_command(self, linear: float, angular: float, lamp: int = 0) -> None:
+        """
+        Internal method to send velocity commands to the robot.
+        
+        Args:
+            linear: Forward/backward speed (-1.0 to 1.0)
+            angular: Rotation speed left/right (-1.0 to 1.0)
+            lamp: Lamp value (default: 0)
+        """
+        if self._rtm_client is None:
+            self._logger.warning("Cannot send velocity command: RTM client not initialized")
+            return
+        
+        self._rtm_client.send_message({
+            "linear": linear,
+            "angular": angular,
+            "lamp": lamp
+        })
+
     def move_forward(self) -> None:
-        if self._rtm_client:
-            self._rtm_client.send_message({"linear": 1, "angular": 0, "lamp": 0})
+        """Move robot forward."""
+        self._send_velocity_command(linear=1.0, angular=0.0)
 
     def move_backward(self) -> None:
-        if self._rtm_client:
-            self._rtm_client.send_message({"linear": -1, "angular": 0, "lamp": 0})
+        """Move robot backward."""
+        self._send_velocity_command(linear=-1.0, angular=0.0)
 
     def move_left(self) -> None:
-        if self._rtm_client:
-            self._rtm_client.send_message({"linear": 0, "angular": 1, "lamp": 0})
+        """Rotate robot left."""
+        self._send_velocity_command(linear=0.0, angular=1.0)
 
     def move_right(self) -> None:
-        if self._rtm_client:
-            self._rtm_client.send_message({"linear": 0, "angular": -1, "lamp": 0})
+        """Rotate robot right."""
+        self._send_velocity_command(linear=0.0, angular=-1.0)
 
     def stop(self) -> None:
         """Stop the robot by sending zero velocity commands."""
-        if self._rtm_client:
-            self._rtm_client.send_message({"linear": 0, "angular": 0, "lamp": 0})
+        self._send_velocity_command(linear=0.0, angular=0.0)
 
     def send_velocity(self, linear: float, angular: float) -> None:
         """
         Send continuous velocity commands to the robot.
-        linear: forward/backward speed (-1.0 to 1.0)
-        angular: rotation speed left/right (-1.0 to 1.0)
         
+        Args:
+            linear: Forward/backward speed (-1.0 to 1.0)
+            angular: Rotation speed left/right (-1.0 to 1.0)
+            
         Clamps values to [-1.0, 1.0] range as per Frodobots SDK spec.
         """
-        if self._rtm_client:
-            # Clamp values to valid range [-1.0, 1.0]
-            linear_clamped = max(-1.0, min(1.0, linear))
-            angular_clamped = max(-1.0, min(1.0, angular))
-            self._rtm_client.send_message({
-                "linear": linear_clamped,
-                "angular": angular_clamped,
-                "lamp": 0
-            })
+        # Clamp values to valid range [-1.0, 1.0]
+        linear_clamped = max(MIN_VELOCITY, min(MAX_VELOCITY, linear))
+        angular_clamped = max(MIN_VELOCITY, min(MAX_VELOCITY, angular))
+        self._send_velocity_command(linear=linear_clamped, angular=angular_clamped)
 
     def get_front_camera_frame(self) -> Optional[bytes]:
+        """
+        Get latest front camera frame as raw bytes.
+        
+        Returns:
+            Camera frame bytes, or None if unavailable or disabled.
+        """
         if self._camera_disabled:
             return None
+        
         if self._browser_service is None:
             # Do not launch browser when SDK is unreachable; avoids pyppeteer cleanup crash
             try:
-                r = requests.get("http://127.0.0.1:8000/sdk", timeout=1)
+                r = requests.get(SDK_LOCAL_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
                 r.raise_for_status()
-            except Exception:
+            except Exception as e:
                 self._camera_disabled = True
-                print("Front camera disabled: SDK not reachable at http://127.0.0.1:8000 (run Earth Rovers SDK there to enable)", file=sys.stderr)
+                error_msg = (
+                    f"Front camera disabled: SDK not reachable at {SDK_LOCAL_ENDPOINT} "
+                    "(run Earth Rovers SDK there to enable)"
+                )
+                self._logger.warning(error_msg)
                 return None
+            
             self._browser_service = BrowserService()
+        
         loop = self._ensure_loop()
         try:
             result = loop.run_until_complete(self._browser_service.front())
-            return _base64_to_bytes(result)
-        except Exception:
+            return base64_to_bytes(result)
+        except Exception as e:
             self._camera_disabled = True
             self._browser_service = None
+            error_msg = f"Failed to get camera frame: {e}"
+            self._logger.warning(error_msg)
             return None
+
+    def cleanup(self) -> None:
+        """
+        Clean up resources (browser service, event loop).
+        
+        Should be called when robot is no longer needed.
+        """
+        if self._browser_service is not None:
+            try:
+                loop = self._ensure_loop()
+                loop.run_until_complete(self._browser_service.close_browser())
+            except Exception as e:
+                self._logger.warning(f"Error closing browser service: {e}")
+            finally:
+                self._browser_service = None
+        
+        if self._loop is not None:
+            try:
+                if not self._loop.is_closed():
+                    self._loop.close()
+            except Exception as e:
+                self._logger.warning(f"Error closing event loop: {e}")
+            finally:
+                self._loop = None
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - cleanup resources."""
+        self.cleanup()
+        return False
