@@ -15,6 +15,8 @@ def print_hud(
     telemetry: Optional[TelemetryFrame],
     linear_vel: float,
     angular_vel: float,
+    speed_mode: int = 3,
+    speed_mode_max: int = 5,
 ) -> None:
     """
     Print HUD overlay showing live telemetry status.
@@ -23,11 +25,14 @@ def print_hud(
         telemetry: Current telemetry frame (None if unavailable)
         linear_vel: Current linear velocity command
         angular_vel: Current angular velocity command
+        speed_mode: Current speed mode (1=slowest, 5=fastest)
+        speed_mode_max: Max speed mode (e.g. 5)
     """
+    speed_str = f" S{speed_mode}/{speed_mode_max}"
     if telemetry is None:
         print(
             f"\r🔋-- | 📡-- | 🧭--° | GPS(?) | "
-            f"v={linear_vel:.2f} a={angular_vel:.2f}    ",
+            f"v={linear_vel:.2f} a={angular_vel:.2f}{speed_str}    ",
             end="",
             flush=True,
         )
@@ -62,7 +67,7 @@ def print_hud(
     print(
         f"\r🔋{telemetry.battery:.0f}% | 📡{telemetry.signal_level} | "
         f"🧭{orientation_deg:.0f}° | GPS({gps_indicator}) | "
-        f"v={telemetry.speed:.2f} cmd=({linear_vel:.2f},{angular_vel:.2f}){stuck_warn}    ",
+        f"v={telemetry.speed:.2f} cmd=({linear_vel:.2f},{angular_vel:.2f}){speed_str}{stuck_warn}    ",
         end="",
         flush=True,
     )

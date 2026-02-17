@@ -39,12 +39,15 @@ from scout_robot_bridge.core.teleop_controller import TeleopController
 from scout_robot_bridge.core.teleop_utils import print_hud
 
 # ── Tuning constants ────────────────────────────────────────────────────────
-LINEAR_MAX   = 0.3          # m/s
-ANGULAR_MAX  = 0.6          # rad/s (doubled for faster rotation)
+LINEAR_MAX   = 0.3          # m/s (mode 5)
+ANGULAR_MAX  = 0.6          # rad/s (mode 5)
 RAMP_UP_SEC  = 0.1          # seconds to reach full speed from zero (faster response)
 RAMP_DN_SEC  = 0.15         # seconds to reach zero from full speed (quicker stop)
 DECAY_ALPHA  = 0.85         # exponential decay per tick when no key held (0–1, higher = longer coast)
 CONTROL_HZ   = 50           # timer frequency for velocity updates
+SPEED_MODE_MIN = 1          # keys 1–5: 1 = slowest
+SPEED_MODE_MAX = 5          # 5 = fastest
+SPEED_MODE_DEFAULT = 3      # default speed mode on startup
 # ────────────────────────────────────────────────────────────────────────────
 
 
@@ -104,12 +107,20 @@ class SmoothTeleop(Node):
         self._held: set[str] = set()   # {"up", "down", "left", "right"}
         self._quit = threading.Event()
 
+        # Speed mode 1–5 (1=slowest, 5=fastest); keys 1–5 set this, state persists
+        self._speed_mode = SPEED_MODE_DEFAULT
+
         # Control loop timer (50 Hz)
         dt = 1.0 / CONTROL_HZ
         self.create_timer(dt, self._control_tick)
 
         # HUD display timer (10 Hz - slower to avoid terminal flicker)
         self.create_timer(0.1, self._hud_tick)
+
+    def _get_speed_limits(self) -> tuple[float, float]:
+        """Return (linear_max, angular_max) for current speed mode (1–5). Mode 5 = 100%."""
+        scale = self._speed_mode / float(SPEED_MODE_MAX)
+        return (LINEAR_MAX * scale, ANGULAR_MAX * scale)
 
     # ── Control loop (runs at CONTROL_HZ) ───────────────────────────────────
 
@@ -121,13 +132,15 @@ class SmoothTeleop(Node):
         with self._lock:
             held = set(self._held)  # snapshot
 
-        # ── Compute target velocities from held keys
+        linear_max_i, angular_max_i = self._get_speed_limits()
+
+        # ── Compute target velocities from held keys (scaled by speed mode)
         target_linear  = 0.0
         target_angular = 0.0
-        if "up"    in held: target_linear  += LINEAR_MAX
-        if "down"  in held: target_linear  -= LINEAR_MAX
-        if "right" in held: target_angular -= ANGULAR_MAX  # Right turn = negative angular (clockwise)
-        if "left"  in held: target_angular += ANGULAR_MAX  # Left turn = positive angular (counter-clockwise)
+        if "up"    in held: target_linear  += linear_max_i
+        if "down"  in held: target_linear  -= linear_max_i
+        if "right" in held: target_angular -= angular_max_i  # Right turn = negative angular (clockwise)
+        if "left"  in held: target_angular += angular_max_i  # Left turn = positive angular (counter-clockwise)
 
         # ── Normalize diagonal movement to prevent faster diagonal speed
         # When both linear and angular are non-zero, apply normalization factor
@@ -182,14 +195,16 @@ class SmoothTeleop(Node):
 
     def _hud_tick(self):
         """Update HUD display with telemetry (runs at 10 Hz)."""
+        with self._lock:
+            speed_mode = self._speed_mode
         if self._use_direct_control:
             telemetry = self.controller.get_last_telemetry()
             linear, angular = self.controller.get_current_velocities()
-            print_hud(telemetry, linear, angular)
+            print_hud(telemetry, linear, angular, speed_mode=speed_mode, speed_mode_max=SPEED_MODE_MAX)
         else:
             # Fallback: show basic info without telemetry
             print(
-                f"\rROS mode: v={self.cur_linear:.2f} a={self.cur_angular:.2f}    ",
+                f"\rROS mode: v={self.cur_linear:.2f} a={self.cur_angular:.2f} S{speed_mode}/{SPEED_MODE_MAX}    ",
                 end="",
                 flush=True,
             )
@@ -230,17 +245,18 @@ class SmoothTeleop(Node):
             
             self.get_logger().info(f"held_snapshot: {held_snapshot}")
             
+            linear_max_i, angular_max_i = self._get_speed_limits()
             target_linear = 0.0
             target_angular = 0.0
             
             if "up" in held_snapshot:
-                target_linear += LINEAR_MAX
+                target_linear += linear_max_i
             if "down" in held_snapshot:
-                target_linear -= LINEAR_MAX
+                target_linear -= linear_max_i
             if "right" in held_snapshot:
-                target_angular -= ANGULAR_MAX
+                target_angular -= angular_max_i
             if "left" in held_snapshot:
-                target_angular += ANGULAR_MAX
+                target_angular += angular_max_i
             
             # Normalize diagonal
             if abs(target_linear) > 0.01 and abs(target_angular) > 0.01:
@@ -346,6 +362,12 @@ class SmoothTeleop(Node):
             try:
                 if event.event_type == keyboard.KEY_DOWN:
                     key_name = event.name.lower()
+                    # Speed mode 1–5: persist in state, do not add to _held
+                    if key_name in ("1", "2", "3", "4", "5"):
+                        with self._lock:
+                            self._speed_mode = int(key_name)
+                        self.get_logger().info(f"Speed mode set to {self._speed_mode}/{SPEED_MODE_MAX}")
+                        return
                     if key_name in key_map:
                         mapped_key = key_map[key_name]
                         with self._lock:
@@ -439,6 +461,13 @@ class SmoothTeleop(Node):
                         self.get_logger().info(f"Keys released (stop): {cleared_keys}")
                         # Immediately stop when space/s is pressed
                         self._trigger_immediate_tick(None)
+                    continue
+
+                # Speed mode 1–5: persist in state
+                if ch in ("1", "2", "3", "4", "5"):
+                    with self._lock:
+                        self._speed_mode = int(ch)
+                    self.get_logger().info(f"Speed mode set to {self._speed_mode}/{SPEED_MODE_MAX}")
                     continue
 
                 if ch == "\x1b":
@@ -535,13 +564,12 @@ def main(args=None):
         return
 
     node.get_logger().info(
-        "Smooth teleop ready. Arrow keys to move, Space/s to stop, Ctrl+C to quit."
+        "Smooth teleop ready. Arrow keys to move, 1-5 speed mode, Space/s to stop, Ctrl+C to quit."
     )
     node.get_logger().info(
         f"Ramp up: {RAMP_UP_SEC}s  |  Ramp down: {RAMP_DN_SEC}s  |  "
-        f"Max linear: {LINEAR_MAX} m/s  |  Max angular: {ANGULAR_MAX} rad/s"
+        f"Max linear: {LINEAR_MAX} m/s  |  Max angular: {ANGULAR_MAX} rad/s (keys 1-5 scale speed)"
     )
-    node.get_logger().info("Arrow keys to move, Space/s to stop, Ctrl+C to quit")
 
     keyboard_thread = threading.Thread(
         target=node.run_keyboard_listener, daemon=True, name="keyboard_listener"
