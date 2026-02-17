@@ -106,6 +106,29 @@ class EarthRoversRobot(RobotBase):
         if self._rtm_client:
             self._rtm_client.send_message({"linear": 0, "angular": -1, "lamp": 0})
 
+    def stop(self) -> None:
+        """Stop the robot by sending zero velocity commands."""
+        if self._rtm_client:
+            self._rtm_client.send_message({"linear": 0, "angular": 0, "lamp": 0})
+
+    def send_velocity(self, linear: float, angular: float) -> None:
+        """
+        Send continuous velocity commands to the robot.
+        linear: forward/backward speed (-1.0 to 1.0)
+        angular: rotation speed left/right (-1.0 to 1.0)
+        
+        Clamps values to [-1.0, 1.0] range as per Frodobots SDK spec.
+        """
+        if self._rtm_client:
+            # Clamp values to valid range [-1.0, 1.0]
+            linear_clamped = max(-1.0, min(1.0, linear))
+            angular_clamped = max(-1.0, min(1.0, angular))
+            self._rtm_client.send_message({
+                "linear": linear_clamped,
+                "angular": angular_clamped,
+                "lamp": 0
+            })
+
     def get_front_camera_frame(self) -> Optional[bytes]:
         if self._camera_disabled:
             return None

@@ -1,11 +1,11 @@
 # Scout robot bridge parameters.
-# robot_type selects which SDK to use (e.g. earth-rovers-sdk); other SDKs may be added later.
-# FRODOBOT_* parameters are mapped to the SDK env vars when robot_type is earth-rovers-sdk.
+# robot_type selects which SDK to use (e.g. earth_rovers_sdk); other SDKs may be added later.
+# FRODOBOT_* parameters are mapped to the SDK env vars when robot_type is earth_rovers_sdk.
 # Set FRODOBOT_SDK_API_TOKEN securely (e.g. from env in launch, or a protected param file).
 # camera_publish_rate: Hz for /camera/front/compressed. cmd_vel_threshold: min |linear.x|/|angular.z| to trigger move.
 bridge_node:
   ros__parameters:
-    robot_type: "earth-rovers-sdk"
+    robot_type: "earth_rovers_sdk"
     FRODOBOT_SDK_API_TOKEN: ""
     FRODOBOT_BOT_SLUG: ""
     FRODOBOT_CHROME_EXECUTABLE_PATH: ""

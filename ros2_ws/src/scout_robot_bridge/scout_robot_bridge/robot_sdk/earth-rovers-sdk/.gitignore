@@ -1,7 +1,0 @@
-.DS_Store
-.env
-__pycache__/
-.vscode/
-
-node_modules/
-screenshots/*.png

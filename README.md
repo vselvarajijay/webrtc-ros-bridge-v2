@@ -88,7 +88,7 @@ Error initializing browser: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:8000
 then nothing is serving that URL. The bridge expects the **Earth Rovers SDK web app** to be running at `http://127.0.0.1:8000`. With `network_mode: host`, the container uses the host’s network, so run the SDK server on the host (or in another container with port 8000 published to the host). For example, from the repo:
 
 ```bash
-cd ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robot_sdk/earth-rovers-sdk
+cd ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robot_sdk/earth_rovers_sdk
 pip install -r requirements.txt   # or install deps as needed
 python main.py
 ```

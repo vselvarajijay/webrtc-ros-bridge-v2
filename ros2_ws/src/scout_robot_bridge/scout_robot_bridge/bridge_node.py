@@ -22,10 +22,10 @@ def main(args=None):
     rclpy.init(args=args)
     node = Node('bridge_node')
 
-    node.declare_parameter('robot_type', 'earth-rovers-sdk')
+    node.declare_parameter('robot_type', 'earth_rovers_sdk')
     robot_type = node.get_parameter('robot_type').value
 
-    if robot_type == 'earth-rovers-sdk':
+    if robot_type == 'earth_rovers_sdk':
         for ros_param, sdk_env in FRODOBOT_PARAM_TO_ENV.items():
             default = '18' if sdk_env == 'MAP_ZOOM_LEVEL' else ''
             node.declare_parameter(ros_param, default)
@@ -42,35 +42,38 @@ def main(args=None):
     if robot is None:
         node.get_logger().warn('Unknown robot_type "%s"; running without robot.', robot_type)
 
-    # Control: /cmd_vel -> discrete move commands
-    node.declare_parameter('cmd_vel_threshold', 0.1)
-    threshold = node.get_parameter('cmd_vel_threshold').value
+    # Control: /cmd_vel -> continuous velocity commands
+    node.declare_parameter('max_linear_speed', 1.0)
+    node.declare_parameter('max_angular_speed', 1.0)
+    max_linear = node.get_parameter('max_linear_speed').value
+    max_angular = node.get_parameter('max_angular_speed').value
 
     def on_cmd_vel(msg: Twist) -> None:
-        # Log every cmd_vel so we can see when control commands arrive
-        node.get_logger().info(
-            'cmd_vel received: linear.x=%.2f angular.z=%.2f' % (msg.linear.x, msg.angular.z),
-        )
         if node.robot is None:
             node.get_logger().warn('cmd_vel received but no robot (robot is None); check auth/env.')
             return
+        
+        # Convert ROS Twist to Frodobots SDK format
+        # ROS linear.x: forward/backward (m/s), angular.z: rotation (rad/s)
+        # Frodobots: linear: -1.0 to 1.0, angular: -1.0 to 1.0
         linear_x = msg.linear.x
         angular_z = msg.angular.z
-        if linear_x > threshold:
-            node.robot.move_forward()
-            node.get_logger().info('cmd_vel: forward')
-        elif linear_x < -threshold:
-            node.robot.move_backward()
-            node.get_logger().info('cmd_vel: backward')
-        elif angular_z > threshold:
-            node.robot.move_right()
-            node.get_logger().info('cmd_vel: right')
-        elif angular_z < -threshold:
-            node.robot.move_left()
-            node.get_logger().info('cmd_vel: left')
+        
+        # Normalize to [-1.0, 1.0] range using max speeds
+        linear_normalized = max(-1.0, min(1.0, linear_x / max_linear)) if max_linear > 0 else 0.0
+        angular_normalized = max(-1.0, min(1.0, angular_z / max_angular)) if max_angular > 0 else 0.0
+        
+        # Send continuous velocity command for smooth control
+        node.robot.send_velocity(linear_normalized, angular_normalized)
+        
+        # Log periodically (not every message to reduce spam)
+        if abs(linear_x) > 0.01 or abs(angular_z) > 0.01:
+            node.get_logger().debug(
+                f'cmd_vel: linear={linear_x:.2f} (norm={linear_normalized:.2f}) angular={angular_z:.2f} (norm={angular_normalized:.2f})'
+            )
 
     node.create_subscription(Twist, '/cmd_vel', on_cmd_vel, 10)
-    node.get_logger().info('Subscribed to /cmd_vel (threshold=%.2f); bridge ready.' % threshold)
+    node.get_logger().info(f'Subscribed to /cmd_vel (max_linear={max_linear:.2f}, max_angular={max_angular:.2f}); bridge ready.')
 
     # Video: timer -> get_front_camera_frame -> /camera/front/compressed
     node.declare_parameter('camera_publish_rate', 5.0)
