@@ -1,6 +1,7 @@
+import os
 from setuptools import find_packages, setup
 
-package_name = 'scout_controller'
+package_name = 'scout_teleop'
 
 setup(
     name=package_name,
@@ -12,11 +13,18 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     package_data={'': ['py.typed']},
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'numpy',
+        'av',
+        'aiortc',
+        'opencv-python-headless',
+        'websockets',
+    ],
     zip_safe=True,
     maintainer='root',
     maintainer_email='root@todo.todo',
-    description='TODO: Package description',
+    description='Teleop connection layer: WebRTC and keyboard nodes that route to controllers.',
     license='Apache-2.0',
     extras_require={
         'test': [
@@ -25,8 +33,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'controller_node = scout_controller.nodes.controller_node:main',
-            'manual_controller = scout_controller.nodes.manual_controller:main',
+            'webrtc_node = scout_teleop.nodes.webrtc_node:main',
+            'keyboard_node = scout_teleop.nodes.keyboard_node:main',
         ],
     },
 )

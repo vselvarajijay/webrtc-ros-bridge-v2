@@ -26,7 +26,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Int32, String
 
-from scout_robot_bridge.core.constants import (
+from scout_teleop.constants import (
     CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
@@ -36,7 +36,7 @@ from scout_robot_bridge.core.constants import (
     VIDEO_OUTPUT_HEIGHT,
     VIDEO_OUTPUT_WIDTH,
 )
-from scout_robot_bridge.core.webrtc_config import get_ice_servers_dict
+from scout_teleop.webrtc_config import get_ice_servers_dict
 
 # Optional OpenCV for decoding; fallback to raw frame handling if unavailable
 try:

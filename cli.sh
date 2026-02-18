@@ -71,7 +71,7 @@ case "$cmd" in
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
     if [[ "$RUN_TELEOP" == true ]]; then
       echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."
-      RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && exec ros2 run scout_robot_bridge teleop_node'"
+      RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && (ros2 run scout_controller manual_controller &) && sleep 0.5 && exec ros2 run scout_teleop keyboard_node'"
       if [[ "$USE_XTERM" == true ]]; then
         if command -v xterm &>/dev/null; then
           xterm -e "$RUN_CMD"
@@ -120,9 +120,9 @@ case "$cmd" in
     echo "Orphaned containers removed."
     ;;
   teleop)
-    echo "Running teleop_node in scout_bridge container..."
-    docker compose --profile webrtc exec scout_bridge bash -c \
-      'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
+    echo "Running manual_controller + keyboard_node in scout_bridge container..."
+    docker compose --profile webrtc exec -it scout_bridge bash -c \
+      'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && (ros2 run scout_controller manual_controller &) && sleep 0.5 && exec ros2 run scout_teleop keyboard_node'
     ;;
   test)
     echo "Running all tests in ROS 2 workspace..."
@@ -168,7 +168,7 @@ case "$cmd" in
     echo "               Options: --teleop  Also run CLI keyboard teleop (don't use with web UI at same time)"
     echo "                        --xterm   Run teleop in a separate xterm window (implies --teleop)"
     echo "  stop        Stop app, scout_turn, scout_sdk, scout_bridge, scout_perception, and any process on port 8000/8001"
-    echo "  teleop      Run teleop_node in scout_bridge container (arrow key control)"
+    echo "  teleop      Run manual_controller + keyboard_node in scout_bridge (arrow key control)"
     echo "  test        Run all ROS 2 workspace tests (colcon test in scout_bridge container)"
     echo "  logs        Follow container logs. Run in another terminal while start is running."
     echo "               $0 logs [webrtc|app|turn|sdk|bridge|perception|all]  (default: webrtc)"

@@ -94,29 +94,6 @@
       50% { opacity: 0.9; box-shadow: 0 0 0 6px rgba(57, 255, 20, 0); }
     }
     .status.error { background: var(--estop); }
-    .header-battery-bar {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.85rem;
-      color: var(--muted);
-      font-family: var(--font-mono);
-    }
-    .header-battery-bar .battery-bar-wrap {
-      width: 32px;
-      height: 12px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .header-battery-bar .battery-bar-fill {
-      height: 100%;
-      background: var(--ok);
-      transition: width 0.2s ease;
-    }
-    .header-battery-bar .battery-bar-fill.low { background: var(--warn); }
-    .header-battery-bar .battery-bar-fill.critical { background: var(--estop); }
     main {
       flex: 1;
       display: flex;
@@ -513,7 +490,13 @@
       gap: 0.5rem;
     }
     .imu-group .metric-card { min-width: 0; }
-    .imu-group .value { font-size: 0.85rem; }
+    .imu-group .value {
+      font-size: 0.85rem;
+      min-width: 7ch;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      display: block;
+    }
     .lamp-badge {
       display: inline-block;
       padding: 0.2rem 0.5rem;
@@ -694,7 +677,6 @@
       pointer-events: none;
       transition: transform 0.08s ease-out;
     }
-    .header-battery { margin-left: auto; }
     .speed-delta {
       font-size: 0.8rem;
       font-family: var(--font-mono);
@@ -819,10 +801,6 @@
   <header>
     <span class="status" id="status" title="Connection"></span>
     <span id="statusText">Disconnected</span>
-    <span class="header-battery-bar header-battery" id="headerBatteryWrap">
-      <span class="battery-bar-wrap"><span class="battery-bar-fill no-data" id="headerBatteryBar" style="width:0%"></span></span>
-      <span id="headerBattery">Battery —</span>
-    </span>
     <button type="button" class="estop-btn" id="estopBtn" title="Emergency stop (Spacebar)">E-STOP</button>
   </header>
   <main>
@@ -993,17 +971,6 @@
         </div>
       </div>
     </section>
-    <section class="map-section collapsed" id="mapSection">
-      <h2>Robot position</h2>
-      <div class="map-placeholder-tactical" id="mapPlaceholderTactical">Tactical map — awaiting GPS fix</div>
-      <div class="map-container-wrap" id="mapContainerWrap">
-        <div class="map-gps-overlay visible" id="mapGpsOverlay"><span class="map-gps-overlay-text">GPS No Fix — position unavailable</span></div>
-        <div class="map-uncertainty-legend" id="mapUncertaintyLegend" aria-hidden="true" style="display: none;">Red circle: position uncertainty (~0.25 mi)</div>
-        <div id="mapContainer">
-          <div id="map"></div>
-        </div>
-      </div>
-    </section>
   </main>
   <script>
     (function () {
@@ -1157,22 +1124,11 @@
         };
 
         if (d.battery != null && isFinite(d.battery)) {
-          set('headerBattery', 'Battery ' + Math.round(d.battery) + '%');
           set('keyValBattery', Math.round(d.battery) + '%', true);
           setBar('keyBarBattery', d.battery, 20, 10);
-          var headerBar = document.getElementById('headerBatteryBar');
-          if (headerBar) {
-            headerBar.style.width = Math.min(100, Math.max(0, d.battery)) + '%';
-            headerBar.classList.remove('no-data', 'low', 'critical');
-            if (d.battery <= 10) headerBar.classList.add('critical');
-            else if (d.battery <= 20) headerBar.classList.add('low');
-          }
         } else {
-          set('headerBattery', 'Battery —');
           set('keyValBattery', '—');
           setBar('keyBarBattery', 0);
-          var headerBar = document.getElementById('headerBatteryBar');
-          if (headerBar) { headerBar.style.width = '0%'; headerBar.classList.add('no-data'); }
         }
 
         if (d.signal_level != null && isFinite(d.signal_level)) {
@@ -1279,17 +1235,6 @@
           set('magZ', Number(lastMag[2]).toFixed(0));
         } else { set('magX', '—'); set('magY', '—'); set('magZ', '—'); }
 
-        var gpsOverlay = document.getElementById('mapGpsOverlay');
-        var hasGpsFix = isValidGps(d.latitude, d.longitude);
-        if (gpsOverlay) gpsOverlay.classList.toggle('visible', !hasGpsFix);
-        var legend = document.getElementById('mapUncertaintyLegend');
-        if (legend) {
-          legend.setAttribute('aria-hidden', hasGpsFix ? 'false' : 'true');
-          legend.style.display = hasGpsFix ? 'block' : 'none';
-        }
-        var mapSection = document.getElementById('mapSection');
-        if (mapSection) mapSection.classList.toggle('collapsed', !hasGpsFix);
-        if (hasGpsFix && mapInstance && typeof mapInstance.invalidateSize === 'function') mapInstance.invalidateSize();
       }
 
       function updateSpeedSelectedActual(actualSpeedMs) {

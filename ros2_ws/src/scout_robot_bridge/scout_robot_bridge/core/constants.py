@@ -61,11 +61,3 @@ DEFAULT_MAP_ZOOM_LEVEL = "18"
 
 # Required auth keys
 REQUIRED_AUTH_KEYS = ("CHANNEL_NAME", "RTM_TOKEN", "USERID", "APP_ID")
-
-# Telemetry-aware teleop parameters
-TELEOP_BATTERY_WARNING_THRESHOLD = 20.0  # percent
-TELEOP_BATTERY_SPEED_REDUCTION = 0.5  # multiplier (50% speed when battery low)
-TELEOP_GPS_WARNING_THRESHOLD = 10.0  # GPS signal strength threshold
-TELEOP_GPS_SPEED_REDUCTION = 0.7  # multiplier (70% speed when GPS weak)
-TELEOP_STUCK_VELOCITY_THRESHOLD = 0.3  # min velocity to check for stuck condition
-TELEOP_STUCK_RPM_THRESHOLD = 1.0  # max RPM to consider stuck (when velocity > threshold)
