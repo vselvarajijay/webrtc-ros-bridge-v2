@@ -3,12 +3,6 @@
 import logging
 from typing import Optional
 
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
 from scout_robot_bridge.core.constants import (
     TELEOP_BATTERY_WARNING_THRESHOLD,
     TELEOP_BATTERY_SPEED_REDUCTION,
@@ -255,27 +249,13 @@ class TeleopController:
             )
 
         # Stuck detection: check if commanding motion but wheels aren't responding
-        if abs(linear) > TELEOP_STUCK_VELOCITY_THRESHOLD and telemetry.rpms:
-            # Calculate average RPM across all wheels
-            try:
-                rpm_values = [
-                    abs(rpm[0]) + abs(rpm[1]) + abs(rpm[2]) + abs(rpm[3])
-                    for rpm in telemetry.rpms
-                    if len(rpm) >= 4
-                ]
-                if rpm_values:
-                    if HAS_NUMPY:
-                        avg_rpm = np.mean(rpm_values)
-                    else:
-                        avg_rpm = sum(rpm_values) / len(rpm_values)
-                    if avg_rpm < TELEOP_STUCK_RPM_THRESHOLD:
-                        self._logger.warning(
-                            f"Stuck condition detected: commanded velocity={linear:.2f}, "
-                            f"but average RPM={avg_rpm:.2f} < {TELEOP_STUCK_RPM_THRESHOLD}"
-                        )
-                        result = 0.0  # Cut power completely
-            except (IndexError, ValueError) as e:
-                self._logger.debug(f"Error calculating RPM average: {e}")
+        avg_rpm = telemetry.average_rpm()
+        if abs(linear) > TELEOP_STUCK_VELOCITY_THRESHOLD and avg_rpm is not None and avg_rpm < TELEOP_STUCK_RPM_THRESHOLD:
+            self._logger.warning(
+                f"Stuck condition detected: commanded velocity={linear:.2f}, "
+                f"but average RPM={avg_rpm:.2f} < {TELEOP_STUCK_RPM_THRESHOLD}"
+            )
+            result = 0.0  # Cut power completely
 
         return result
 

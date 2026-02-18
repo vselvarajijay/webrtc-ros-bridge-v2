@@ -31,6 +31,7 @@ from scout_robot_bridge.core.constants import (
     DEFAULT_IMAGE_FORMAT,
     ROBOT_TELEMETRY_TOPIC,
 )
+from scout_robot_bridge.core.webrtc_config import get_ice_servers_dict
 
 # Optional OpenCV for decoding; fallback to raw frame handling if unavailable
 try:
@@ -65,28 +66,40 @@ except ImportError:
 SIGNALING_WS_URL = os.getenv("SIGNALING_WS_URL", "ws://localhost:8000/ws/signaling")
 # Keep only latest frame to minimize latency (no backlog).
 FRAME_QUEUE_MAXSIZE = 1
+FRAME_CLOCK_RATE = 90000
 
 
 def _webrtc_ice_config() -> Optional[RTCConfiguration]:
-    """Build RTCConfiguration from env (STUN + optional TURN)."""
+    """Build RTCConfiguration from shared ICE config (STUN + optional TURN)."""
     if not HAS_AIORTC:
         return None
+    servers_dict = get_ice_servers_dict()
     servers = [
-        RTCIceServer(urls=os.getenv("STUN_URL", "stun:stun.l.google.com:19302")),
-    ]
-    turn_url = os.getenv("TURN_URL")
-    if turn_url:
-        servers.append(
-            RTCIceServer(
-                urls=turn_url,
-                username=os.getenv("TURN_USERNAME", ""),
-                credential=os.getenv("TURN_CREDENTIAL", ""),
-            )
+        RTCIceServer(
+            urls=s["urls"],
+            username=s.get("username", ""),
+            credential=s.get("credential", ""),
         )
+        for s in servers_dict
+    ]
     return RTCConfiguration(iceServers=servers)
+
+
 CMD_VEL_DRAIN_HZ = 50
 TELEMETRY_SEND_INTERVAL = 0.2  # seconds
 LOG = logging.getLogger(__name__)
+
+
+def _put_latest(q: queue.Queue, item) -> None:
+    """Put item in queue; if full, drop oldest then put (keep latest only)."""
+    try:
+        q.put_nowait(item)
+    except queue.Full:
+        try:
+            q.get_nowait()
+        except queue.Empty:
+            pass
+        q.put_nowait(item)
 
 
 def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
@@ -117,12 +130,19 @@ def _decode_compressed_image(data: bytes, fmt: str) -> Optional[np.ndarray]:
 class CameraTrack(VideoStreamTrack):
     """Video track that yields frames from a thread-safe queue (ROS camera topic)."""
 
-    def __init__(self, frame_queue: queue.Queue, clock_rate: int = 90000) -> None:
+    def __init__(
+        self,
+        frame_queue: queue.Queue,
+        clock_rate: int = FRAME_CLOCK_RATE,
+        last_frame_pts_ref: Optional[list] = None,
+    ) -> None:
         super().__init__()
         self._queue = frame_queue
         self._clock_rate = clock_rate
         self._pts = 0
         self._last_frame: Optional[np.ndarray] = None
+        self._last_frame_pts_ref = last_frame_pts_ref
+        self._recv_count = 0
 
     async def recv(self):
         # Prefer latest frame from queue; else reuse last frame to keep stream alive
@@ -133,9 +153,20 @@ class CameraTrack(VideoStreamTrack):
         if self._last_frame is None:
             # No frame yet: yield a tiny black frame to satisfy recv
             self._last_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        if self._recv_count == 0:
+            LOG.info("CameraTrack: first frame sent (from_queue=%s)", self._last_frame is not None)
+        elif self._recv_count < 3 or self._recv_count % 100 == 0:
+            LOG.debug(
+                "CameraTrack recv frame %d pts=%d",
+                self._recv_count,
+                self._pts,
+            )
+        self._recv_count += 1
         frame = VideoFrame.from_ndarray(self._last_frame, format="bgr24")
         frame.pts = self._pts
         frame.time_base = Fraction(1, self._clock_rate)
+        if self._last_frame_pts_ref is not None:
+            self._last_frame_pts_ref[0] = self._pts
         self._pts += 3000  # ~30fps at 90k clock
         return frame
 
@@ -182,14 +213,7 @@ def run_ros_node(
     def on_telemetry(msg: String) -> None:
         if not msg.data:
             return
-        try:
-            telemetry_queue.put_nowait(msg.data)
-        except queue.Full:
-            try:
-                telemetry_queue.get_nowait()
-                telemetry_queue.put_nowait(msg.data)
-            except queue.Empty:
-                pass
+        _put_latest(telemetry_queue, msg.data)
 
     node.create_subscription(
         String,
@@ -201,14 +225,7 @@ def run_ros_node(
     def on_cmd_vel(msg: Twist) -> None:
         """Echo /cmd_vel as telemetry so UI shows speed; only send fields we have (no zeros)."""
         partial = {"speed": float(msg.linear.x), "timestamp": time.time()}
-        try:
-            telemetry_queue.put_nowait(json.dumps(partial))
-        except queue.Full:
-            try:
-                telemetry_queue.get_nowait()
-                telemetry_queue.put_nowait(json.dumps(partial))
-            except queue.Empty:
-                pass
+        _put_latest(telemetry_queue, json.dumps(partial))
 
     node.create_subscription(
         Twist,
@@ -272,41 +289,75 @@ def run_ros_node(
         pass
 
 
+def _is_full_telemetry(obj: dict) -> bool:
+    """True if this looks like full telemetry (has battery, lat/lon, or rpms), not just speed echo."""
+    return (
+        obj.get("battery") is not None
+        or (obj.get("latitude") is not None and obj.get("longitude") is not None)
+        or (
+            obj.get("rpms") is not None
+            and isinstance(obj.get("rpms"), list)
+            and len(obj.get("rpms", [])) > 0
+        )
+    )
+
+
 async def _telemetry_sender_loop(
     ws,
     telemetry_queue: queue.Queue,
     data_channel_ref: list,
     stop_event: threading.Event,
+    last_frame_pts_ref: Optional[list] = None,
 ) -> None:
-    """Send telemetry to app server and browser only when we have real data from the queue.
-    Do not send placeholder/empty payloads so the UI keeps last known values.
-    """
+    """Send telemetry to app server and browser. Drain queue and send the best available (prefer full over partial)."""
     while not stop_event.is_set():
         await asyncio.sleep(TELEMETRY_SEND_INTERVAL)
-        payload_obj = None
         try:
-            data = telemetry_queue.get_nowait()
+            collected = []
             try:
-                payload_obj = json.loads(data) if isinstance(data, str) else data
-            except json.JSONDecodeError:
-                continue
-        except queue.Empty:
-            continue
-        if payload_obj is None:
-            continue
-        payload = {"type": "telemetry", "data": payload_obj}
-        payload_str = json.dumps(payload)
-        try:
-            await ws.send(payload_str)
-        except Exception:
-            break
-        if data_channel_ref and data_channel_ref[0] is not None:
-            try:
-                dc = data_channel_ref[0]
-                if getattr(dc, "readyState", None) == "open":
-                    dc.send(payload_str)
-            except Exception:
+                while True:
+                    data = telemetry_queue.get_nowait()
+                    collected.append(data)
+            except queue.Empty:
                 pass
+            if not collected:
+                continue
+            # Prefer last full telemetry so we don't send only partial (speed echo) when full exists
+            payload_obj = None
+            for data in reversed(collected):
+                try:
+                    obj = json.loads(data) if isinstance(data, str) else data
+                except json.JSONDecodeError:
+                    continue
+                if obj is None:
+                    continue
+                if _is_full_telemetry(obj):
+                    payload_obj = obj
+                    break
+                if payload_obj is None:
+                    payload_obj = obj
+            if payload_obj is None:
+                continue
+            payload = {"type": "telemetry", "data": payload_obj}
+            if last_frame_pts_ref is not None:
+                payload["frame_pts"] = last_frame_pts_ref[0]
+                payload["frame_time_base"] = FRAME_CLOCK_RATE
+            payload_str = json.dumps(payload)
+            # Yield so video track and other coroutines can run before we send
+            await asyncio.sleep(0)
+            try:
+                await ws.send(payload_str)
+            except Exception:
+                break
+            if data_channel_ref and data_channel_ref[0] is not None:
+                try:
+                    dc = data_channel_ref[0]
+                    if getattr(dc, "readyState", None) == "open":
+                        dc.send(payload_str)
+                except Exception:
+                    pass
+        except Exception as e:
+            LOG.debug("Telemetry sender iteration: %s", e)
 
 
 async def run_signaling_and_webrtc(
@@ -334,6 +385,7 @@ async def run_signaling_and_webrtc(
 
                 pc: Optional[RTCPeerConnection] = None
                 data_channel_ref: list = [None]
+                last_frame_pts_ref: list = [0]
 
                 async def recv_loop():
                     nonlocal pc
@@ -354,8 +406,9 @@ async def run_signaling_and_webrtc(
                                 if ice_config
                                 else RTCPeerConnection()
                             )
-                            track = CameraTrack(frame_queue)
+                            track = CameraTrack(frame_queue, last_frame_pts_ref=last_frame_pts_ref)
                             pc.addTrack(track)
+                            LOG.info("Video track added to peer connection (source: %s)", CAMERA_FRONT_COMPRESSED_TOPIC)
 
                             @pc.on("datachannel")
                             def on_datachannel(channel):
@@ -368,21 +421,10 @@ async def run_signaling_and_webrtc(
                                             data = json.loads(message)
                                             twist = _twist_from_control(data)
                                             if twist is not None:
-                                                try:
-                                                    cmd_vel_queue.put_nowait(twist)
-                                                except queue.Full:
-                                                    cmd_vel_queue.get_nowait()
-                                                    cmd_vel_queue.put_nowait(twist)
+                                                _put_latest(cmd_vel_queue, twist)
                                                 # Push partial telemetry so UI shows commanded speed; only fields we have
                                                 partial = {"speed": float(twist.linear.x), "timestamp": time.time()}
-                                                try:
-                                                    telemetry_queue.put_nowait(json.dumps(partial))
-                                                except queue.Full:
-                                                    try:
-                                                        telemetry_queue.get_nowait()
-                                                        telemetry_queue.put_nowait(json.dumps(partial))
-                                                    except queue.Empty:
-                                                        pass
+                                                _put_latest(telemetry_queue, json.dumps(partial))
                                         except json.JSONDecodeError:
                                             pass
 
@@ -415,7 +457,9 @@ async def run_signaling_and_webrtc(
                                     LOG.debug("addIceCandidate: %s", e)
 
                 telemetry_task = asyncio.create_task(
-                    _telemetry_sender_loop(ws, telemetry_queue, data_channel_ref, stop_event)
+                    _telemetry_sender_loop(
+                        ws, telemetry_queue, data_channel_ref, stop_event, last_frame_pts_ref
+                    )
                 )
                 try:
                     await recv_loop()
@@ -432,19 +476,17 @@ async def run_signaling_and_webrtc(
 
 
 def main(args=None) -> None:
+    logging.basicConfig(level=logging.INFO)
     if not HAS_CV2:
-        logging.basicConfig(level=logging.INFO)
         LOG.warning("opencv not available; webrtc_node will not decode camera frames")
     if not HAS_AIORTC or not HAS_WEBSOCKETS:
-        logging.basicConfig(level=logging.INFO)
         LOG.error("Install aiortc and websockets to run webrtc_node")
         return
 
-    logging.basicConfig(level=logging.INFO)
     image_format = os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
     cmd_vel_queue: queue.Queue = queue.Queue(maxsize=64)
-    telemetry_queue: queue.Queue = queue.Queue(maxsize=1)
+    telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
     stop = threading.Event()
 
     ros_thread = threading.Thread(

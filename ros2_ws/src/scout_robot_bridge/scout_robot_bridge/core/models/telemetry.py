@@ -63,3 +63,22 @@ class TelemetryFrame:
     def orientation_degrees(self) -> float:
         """Convert orientation (0-255) to degrees (0-360)."""
         return (self.orientation / 255.0) * 360.0
+
+    def average_rpm(self) -> Optional[float]:
+        """
+        Compute average RPM across all wheel samples (sum of fl, fr, rl, rr per sample).
+        Returns None if no valid samples.
+        """
+        if not self.rpms:
+            return None
+        try:
+            rpm_values = [
+                abs(rpm[0]) + abs(rpm[1]) + abs(rpm[2]) + abs(rpm[3])
+                for rpm in self.rpms
+                if len(rpm) >= 4
+            ]
+            if not rpm_values:
+                return None
+            return sum(rpm_values) / len(rpm_values)
+        except (IndexError, ValueError):
+            return None

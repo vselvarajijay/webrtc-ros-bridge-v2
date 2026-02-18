@@ -33,7 +33,6 @@ except ImportError:
     keyboard = None
 
 from scout_robot_bridge.core.config_manager import ConfigManager
-from scout_robot_bridge.core.constants import DEFAULT_ROBOT_TYPE
 from scout_robot_bridge.core.robot_factory import create_robot
 from scout_robot_bridge.core.teleop_controller import TeleopController
 from scout_robot_bridge.core.teleop_utils import print_hud
@@ -58,12 +57,7 @@ class SmoothTeleop(Node):
         self.pub = self.create_publisher(Twist, "/cmd_vel", 10)
 
         # Set up robot configuration
-        self.declare_parameter('robot_type', DEFAULT_ROBOT_TYPE)
-        robot_type = self.get_parameter('robot_type').value
-
-        if robot_type == 'earth_rovers_sdk':
-            ConfigManager.setup_frodobot_config(self)
-
+        robot_type = ConfigManager.setup_robot_config(self)
         # Create robot instance
         self.robot = create_robot(robot_type)
         self._use_direct_control = self.robot is not None
@@ -243,12 +237,12 @@ class SmoothTeleop(Node):
             return
         
         try:
-            self.get_logger().info(f"_trigger_immediate_tick called (key_pressed={key_pressed})")
+            self.get_logger().debug(f"_trigger_immediate_tick called (key_pressed={key_pressed})")
             # Calculate target velocities from currently held keys
             with self._lock:
                 held_snapshot = set(self._held)
             
-            self.get_logger().info(f"held_snapshot: {held_snapshot}")
+            self.get_logger().debug(f"held_snapshot: {held_snapshot}")
             
             linear_max_i, angular_max_i = self._get_speed_limits()
             target_linear = 0.0
@@ -269,7 +263,7 @@ class SmoothTeleop(Node):
                 target_linear *= factor
                 target_angular *= factor
             
-            self.get_logger().info(f"Calculated targets: linear={target_linear:.3f}, angular={target_angular:.3f}")
+            self.get_logger().debug(f"Calculated targets: linear={target_linear:.3f}, angular={target_angular:.3f}")
             
             # Set target and update current velocities immediately
             self.controller.set_target_velocities(target_linear, target_angular)
@@ -285,33 +279,33 @@ class SmoothTeleop(Node):
                     # Transitioning from linear-only to diagonal: preserve existing linear velocity
                     # Don't modify it - let the controller ramp it toward the diagonal target
                     # This keeps the robot moving smoothly without stopping
-                    self.get_logger().info(f"Preserving linear velocity for diagonal: {self.controller.cur_linear:.3f} (will ramp to {target_linear:.3f})")
+                    self.get_logger().debug(f"Preserving linear velocity for diagonal: {self.controller.cur_linear:.3f} (will ramp to {target_linear:.3f})")
                     # Don't modify cur_linear - keep it at current value
                 else:
                     # Starting from zero or already diagonal: use normal kick
                     self.controller.cur_linear = target_linear * 0.7  # 70% kick
-                    self.get_logger().info(f"Set cur_linear to {self.controller.cur_linear:.3f}")
+                    self.get_logger().debug(f"Set cur_linear to {self.controller.cur_linear:.3f}")
             else:
                 self.controller.cur_linear = 0.0  # Instant stop on key release
-                self.get_logger().info("Set cur_linear to 0.0 (instant stop)")
+                self.get_logger().debug("Set cur_linear to 0.0 (instant stop)")
             
             if abs(target_angular) > 0.001:
                 if is_diagonal and was_moving_angular and not was_moving_linear:
                     # Transitioning from angular-only to diagonal: preserve existing angular velocity
                     # Don't modify it - let the controller ramp it toward the diagonal target
-                    self.get_logger().info(f"Preserving angular velocity for diagonal: {self.controller.cur_angular:.3f} (will ramp to {target_angular:.3f})")
+                    self.get_logger().debug(f"Preserving angular velocity for diagonal: {self.controller.cur_angular:.3f} (will ramp to {target_angular:.3f})")
                     # Don't modify cur_angular - keep it at current value
                 elif is_diagonal and not was_moving_angular:
                     # Adding angular to existing linear: kick-start angular immediately
                     self.controller.cur_angular = target_angular * 0.7  # 70% kick
-                    self.get_logger().info(f"Kick-started angular for diagonal: {self.controller.cur_angular:.3f}")
+                    self.get_logger().debug(f"Kick-started angular for diagonal: {self.controller.cur_angular:.3f}")
                 else:
                     # Starting from zero or already diagonal: use normal kick
                     self.controller.cur_angular = target_angular * 0.7  # 70% kick
-                    self.get_logger().info(f"Set cur_angular to {self.controller.cur_angular:.3f}")
+                    self.get_logger().debug(f"Set cur_angular to {self.controller.cur_angular:.3f}")
             else:
                 self.controller.cur_angular = 0.0  # Instant stop on key release
-                self.get_logger().info("Set cur_angular to 0.0 (instant stop)")
+                self.get_logger().debug("Set cur_angular to 0.0 (instant stop)")
             
             # Send command immediately without calling tick() to avoid double updates
             # The periodic _control_tick will handle regular updates
@@ -320,7 +314,7 @@ class SmoothTeleop(Node):
             linear_normalized = max(-1.0, min(1.0, linear_normalized))
             angular_normalized = max(-1.0, min(1.0, angular_normalized))
             self.controller.robot.send_velocity(linear_normalized, angular_normalized)
-            self.get_logger().info(f"Sent immediate velocity: linear={linear_normalized:.3f}, angular={angular_normalized:.3f}")
+            self.get_logger().debug(f"Sent immediate velocity: linear={linear_normalized:.3f}, angular={angular_normalized:.3f}")
             # Publish to /cmd_vel so webrtc_node can show speed in UI telemetry
             msg = Twist()
             msg.linear.x = self.controller.cur_linear
@@ -376,7 +370,7 @@ class SmoothTeleop(Node):
                     if key_name in ("1", "2", "3", "4", "5"):
                         with self._lock:
                             self._speed_mode = int(key_name)
-                        self.get_logger().info(f"Speed mode set to {self._speed_mode}/{SPEED_MODE_MAX}")
+                        self.get_logger().debug(f"Speed mode set to {self._speed_mode}/{SPEED_MODE_MAX}")
                         return
                     if key_name in key_map:
                         mapped_key = key_map[key_name]
@@ -384,7 +378,7 @@ class SmoothTeleop(Node):
                             was_new = mapped_key not in self._held
                             self._held.add(mapped_key)
                         if was_new:
-                            self.get_logger().info(f"Key pressed: {mapped_key}")
+                            self.get_logger().debug(f"Key pressed: {mapped_key}")
                             # Trigger immediate tick for instant response (outside lock to avoid deadlock)
                             self._trigger_immediate_tick(mapped_key)
                 
@@ -398,7 +392,7 @@ class SmoothTeleop(Node):
                                 self._held.discard(mapped_key)
                                 released = True
                         if released:
-                            self.get_logger().info(f"Key released: {mapped_key}")
+                            self.get_logger().debug(f"Key released: {mapped_key}")
                             # Immediately update when key is released (outside lock to avoid deadlock)
                             self._trigger_immediate_tick(None)
             except Exception as e:
@@ -447,7 +441,7 @@ class SmoothTeleop(Node):
                         # Log and trigger immediate update when keys expire (released)
                         if expired:
                             for k in expired:
-                                self.get_logger().info(f"Key released (timeout): {k} (held: {list(self._held)})")
+                                self.get_logger().debug(f"Key released (timeout): {k} (held: {list(self._held)})")
                             # Immediately update velocity when keys are released
                             self._trigger_immediate_tick(None)
                         continue
@@ -468,7 +462,7 @@ class SmoothTeleop(Node):
                         self._held.clear()
                     last_seen.clear()
                     if cleared_keys:
-                        self.get_logger().info(f"Keys released (stop): {cleared_keys}")
+                        self.get_logger().debug(f"Keys released (stop): {cleared_keys}")
                         # Immediately stop when space/s is pressed
                         self._trigger_immediate_tick(None)
                     continue
@@ -477,7 +471,7 @@ class SmoothTeleop(Node):
                 if ch in ("1", "2", "3", "4", "5"):
                     with self._lock:
                         self._speed_mode = int(ch)
-                    self.get_logger().info(f"Speed mode set to {self._speed_mode}/{SPEED_MODE_MAX}")
+                    self.get_logger().debug(f"Speed mode set to {self._speed_mode}/{SPEED_MODE_MAX}")
                     continue
 
                 if ch == "\x1b":
@@ -531,7 +525,7 @@ class SmoothTeleop(Node):
 
                                 # Log conflicting key release if it happened
                                 if conflicting_removed:
-                                    self.get_logger().info(f"Key released (conflicting): {conflicting_key}")
+                                    self.get_logger().debug(f"Key released (conflicting): {conflicting_key}")
 
                                 # Only trigger immediate tick if:
                                 # 1. Key is new (was_new), OR
@@ -540,14 +534,13 @@ class SmoothTeleop(Node):
                                 
                                 if should_trigger:
                                     if was_new:
-                                        self.get_logger().info(f"Key pressed: {key} (held: {list(self._held)})")
+                                        self.get_logger().debug(f"Key pressed: {key} (held: {list(self._held)})")
                                     else:
-                                        self.get_logger().info(f"Key added for diagonal: {key} (held: {list(self._held)})")
+                                        self.get_logger().debug(f"Key added for diagonal: {key} (held: {list(self._held)})")
                                     self._trigger_immediate_tick(key)
                                 else:
                                     # Key repeat - still refresh all held keys to prevent expiration
-                                    # Log at info level to verify keys are being refreshed during multi-key input
-                                    self.get_logger().info(f"Key repeat: {key} - refreshed all held keys: {refreshed_keys} (held: {list(self._held)})")
+                                    self.get_logger().debug(f"Key repeat: {key} - refreshed all held keys: {refreshed_keys} (held: {list(self._held)})")
                     except Exception as e:
                         # If reading fails, log the error instead of silently continuing
                         self.get_logger().error(f"Error reading arrow key sequence: {e}")

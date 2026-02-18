@@ -187,6 +187,7 @@ class EarthRoversRobot(RobotBase):
     def cleanup(self) -> None:
         """
         Clean up resources. Call when robot is no longer needed.
+        Intentionally no-op for now; RTM connection is not explicitly closed.
         """
         pass
 

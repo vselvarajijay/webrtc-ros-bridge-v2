@@ -2,12 +2,10 @@
 
 from typing import Optional
 
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
+from scout_robot_bridge.core.constants import (
+    TELEOP_STUCK_RPM_THRESHOLD,
+    TELEOP_STUCK_VELOCITY_THRESHOLD,
+)
 from scout_robot_bridge.core.models.telemetry import TelemetryFrame
 
 
@@ -40,22 +38,9 @@ def print_hud(
 
     # Calculate stuck warning
     stuck_warn = ""
-    if telemetry.rpms:
-        try:
-            rpm_values = [
-                abs(rpm[0]) + abs(rpm[1]) + abs(rpm[2]) + abs(rpm[3])
-                for rpm in telemetry.rpms
-                if len(rpm) >= 4
-            ]
-            if rpm_values:
-                if HAS_NUMPY:
-                    avg_rpm = np.mean(rpm_values)
-                else:
-                    avg_rpm = sum(rpm_values) / len(rpm_values)
-                if avg_rpm < 1.0 and abs(linear_vel) > 0.3:
-                    stuck_warn = " ⚠️  STUCK"
-        except (IndexError, ValueError):
-            pass
+    avg_rpm = telemetry.average_rpm()
+    if avg_rpm is not None and avg_rpm < TELEOP_STUCK_RPM_THRESHOLD and abs(linear_vel) > TELEOP_STUCK_VELOCITY_THRESHOLD:
+        stuck_warn = " ⚠️  STUCK"
 
     # Convert orientation to degrees
     orientation_deg = telemetry.orientation_degrees()

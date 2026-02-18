@@ -1,11 +1,11 @@
 import logging
-import os
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 
+from .ice_servers import get_ice_servers
 from .signaling import handle_signaling_websocket
 
 logging.basicConfig(level=logging.INFO)
@@ -35,24 +35,10 @@ def health():
     return {"status": "ok"}
 
 
-def _ice_servers():
-    """Build ICE server list from env for WebRTC (STUN + optional TURN)."""
-    servers = [{"urls": os.getenv("STUN_URL", "stun:stun.l.google.com:19302")}]
-    turn_url = os.getenv("TURN_URL")
-    if turn_url:
-        entry = {"urls": turn_url}
-        if os.getenv("TURN_USERNAME"):
-            entry["username"] = os.getenv("TURN_USERNAME")
-        if os.getenv("TURN_CREDENTIAL"):
-            entry["credential"] = os.getenv("TURN_CREDENTIAL")
-        servers.append(entry)
-    return servers
-
-
 @app.get("/api/config")
 def api_config():
     """WebRTC config: ICE servers (STUN + optional TURN from env)."""
-    return {"iceServers": _ice_servers()}
+    return {"iceServers": get_ice_servers()}
 
 
 @app.get("/v2/front")

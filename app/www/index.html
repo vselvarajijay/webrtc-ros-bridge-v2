@@ -145,6 +145,10 @@
       const telemetryGridEl = document.getElementById('telemetryGrid');
 
       var lastTelemetry = {};
+      var telemetryBuffer = [];
+      var TELEMETRY_BUFFER_MAX = 100;
+      var FRAME_TIME_BASE = 90000;
+      var videoTimeUpdateHandle = null;
 
       function setStatus(connected, error, connecting) {
         if (error) {
@@ -167,9 +171,13 @@
       }
 
       function isRealTelemetry(data) {
-        return (data.battery != null && data.battery > 0) ||
+        return (data.battery != null) ||
           (data.latitude != null && data.longitude != null) ||
-          (data.rpms != null && Array.isArray(data.rpms) && data.rpms.length > 0);
+          (data.rpms != null && Array.isArray(data.rpms) && data.rpms.length > 0) ||
+          (data.accels != null && Array.isArray(data.accels) && data.accels.length > 0) ||
+          (data.gyros != null && Array.isArray(data.gyros) && data.gyros.length > 0) ||
+          (data.mags != null && Array.isArray(data.mags) && data.mags.length > 0) ||
+          (data.signal_level != null) || (data.gps_signal != null) || (data.timestamp != null);
       }
 
       function renderTelemetry(data) {
@@ -177,15 +185,20 @@
         var merged = Object.assign({}, lastTelemetry);
         var real = isRealTelemetry(data);
         if (real) {
-          if (data.battery != null && data.battery > 0) merged.battery = data.battery;
+          if (data.battery != null) merged.battery = data.battery;
+          if (data.signal_level != null) merged.signal_level = data.signal_level;
           if (data.speed != null) merged.speed = data.speed;
+          if (data.lamp != null) merged.lamp = data.lamp;
           if (data.latitude != null) merged.latitude = data.latitude;
           if (data.longitude != null) merged.longitude = data.longitude;
           if (data.gps_signal != null) merged.gps_signal = data.gps_signal;
           if (data.orientation != null) merged.orientation = data.orientation;
-          if (data.lamp != null) merged.lamp = data.lamp;
           if (data.timestamp != null) merged.timestamp = data.timestamp;
-          if (data.rpms != null && Array.isArray(data.rpms) && data.rpms.length > 0) merged.rpms = data.rpms;
+          if (data.vibration != null) merged.vibration = data.vibration;
+          if (data.accels != null && Array.isArray(data.accels)) merged.accels = data.accels;
+          if (data.gyros != null && Array.isArray(data.gyros)) merged.gyros = data.gyros;
+          if (data.mags != null && Array.isArray(data.mags)) merged.mags = data.mags;
+          if (data.rpms != null && Array.isArray(data.rpms)) merged.rpms = data.rpms;
         } else {
           if (data.speed != null) merged.speed = data.speed;
           if (data.timestamp != null) merged.timestamp = data.timestamp;
@@ -224,6 +237,36 @@
         ).join('');
       }
 
+      function updateTelemetryForVideoTime() {
+        if (!remoteVideo || !remoteVideo.srcObject) return;
+        var currentTime = remoteVideo.currentTime;
+        if (currentTime < 0 || !isFinite(currentTime)) return;
+        var currentPts = currentTime * FRAME_TIME_BASE;
+        if (telemetryBuffer.length === 0) return;
+        var best = telemetryBuffer[0];
+        var bestDiff = Math.abs(best.frame_pts - currentPts);
+        for (var i = 1; i < telemetryBuffer.length; i++) {
+          var diff = Math.abs(telemetryBuffer[i].frame_pts - currentPts);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            best = telemetryBuffer[i];
+          }
+        }
+        renderTelemetry(best.data);
+      }
+
+      function pushTelemetryWithPts(frame_pts, frame_time_base, data) {
+        telemetryBuffer.push({
+          frame_pts: frame_pts,
+          frame_time_base: frame_time_base || FRAME_TIME_BASE,
+          data: data,
+        });
+        if (telemetryBuffer.length > TELEMETRY_BUFFER_MAX) {
+          telemetryBuffer.shift();
+        }
+        updateTelemetryForVideoTime();
+      }
+
       const wsScheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${wsScheme}//${location.host}/ws/signaling`;
       const defaultIceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -236,6 +279,15 @@
       function disconnect() {
         setStatus(false, false, false);
         lastTelemetry = {};
+        telemetryBuffer = [];
+        if (videoTimeUpdateHandle != null) {
+          if (typeof remoteVideo.cancelVideoFrameCallback === 'function') {
+            remoteVideo.cancelVideoFrameCallback(videoTimeUpdateHandle);
+          } else {
+            clearInterval(videoTimeUpdateHandle);
+          }
+          videoTimeUpdateHandle = null;
+        }
         if (pc) {
           pc.close();
           pc = null;
@@ -265,6 +317,7 @@
         };
 
         pc.ontrack = function (event) {
+          console.log('[video] ontrack: kind=', event.track.kind, 'id=', event.track.id, 'streams=', event.streams ? event.streams.length : 0);
           videoPlaceholder.hidden = true;
           var stream = event.streams && event.streams[0];
           if (!stream && event.track) {
@@ -272,7 +325,29 @@
           }
           if (stream) {
             remoteVideo.srcObject = stream;
-            remoteVideo.play().catch(function () {});
+            console.log('[video] srcObject set, track enabled=', event.track.enabled);
+            remoteVideo.addEventListener('loadedmetadata', function onMeta() {
+              console.log('[video] loadedmetadata: width=', remoteVideo.videoWidth, 'height=', remoteVideo.videoHeight);
+            }, { once: true });
+            remoteVideo.addEventListener('error', function (e) {
+              console.error('[video] element error:', remoteVideo.error ? (remoteVideo.error.code + ' ' + remoteVideo.error.message) : e);
+            }, { once: true });
+            remoteVideo.play().then(function () {
+              console.log('[video] play() started');
+            }).catch(function (err) {
+              console.error('[video] play() failed:', err);
+            });
+            function onVideoFrame() {
+              updateTelemetryForVideoTime();
+              if (remoteVideo && typeof remoteVideo.requestVideoFrameCallback === 'function') {
+                videoTimeUpdateHandle = remoteVideo.requestVideoFrameCallback(onVideoFrame);
+              }
+            }
+            if (typeof remoteVideo.requestVideoFrameCallback === 'function') {
+              videoTimeUpdateHandle = remoteVideo.requestVideoFrameCallback(onVideoFrame);
+            } else {
+              videoTimeUpdateHandle = setInterval(updateTelemetryForVideoTime, 100);
+            }
           }
         };
 
@@ -292,7 +367,13 @@
         dataChannel.onmessage = function (event) {
           try {
             var msg = JSON.parse(event.data);
-            if (msg.type === 'telemetry' && msg.data) renderTelemetry(msg.data);
+            if (msg.type === 'telemetry' && msg.data) {
+              if (msg.frame_pts != null) {
+                pushTelemetryWithPts(msg.frame_pts, msg.frame_time_base, msg.data);
+              } else {
+                renderTelemetry(msg.data);
+              }
+            }
           } catch (err) {}
         };
 
@@ -353,7 +434,11 @@
           }
 
           if (typ === 'telemetry') {
-            renderTelemetry(msg.data);
+            if (msg.frame_pts != null && msg.data) {
+              pushTelemetryWithPts(msg.frame_pts, msg.frame_time_base, msg.data);
+            } else if (msg.data) {
+              renderTelemetry(msg.data);
+            }
             return;
           }
 

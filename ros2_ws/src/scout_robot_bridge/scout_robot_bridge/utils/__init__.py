@@ -11,7 +11,7 @@ from scout_robot_bridge.core.constants import (
     FRODOBOTS_API_URL,
     REQUIRED_AUTH_KEYS,
 )
-from scout_robot_bridge.core.exceptions import AuthenticationError, SDKConnectionError
+from scout_robot_bridge.core.exceptions import AuthenticationError
 
 
 def fetch_auth_sync() -> dict:

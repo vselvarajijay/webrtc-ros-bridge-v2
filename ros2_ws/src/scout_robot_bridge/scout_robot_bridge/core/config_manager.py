@@ -5,7 +5,7 @@ from typing import Optional
 
 from rclpy.node import Node
 
-from scout_robot_bridge.core.constants import DEFAULT_MAP_ZOOM_LEVEL
+from scout_robot_bridge.core.constants import DEFAULT_MAP_ZOOM_LEVEL, DEFAULT_ROBOT_TYPE
 
 # Mapping: ROS 2 parameter name (FRODOBOT_*) -> SDK env var name
 FRODOBOT_PARAM_TO_ENV = {
@@ -46,3 +46,20 @@ class ConfigManager:
                 os.environ[sdk_env] = value_str
             elif os.environ.get(ros_param):
                 os.environ[sdk_env] = str(os.environ.get(ros_param)).strip()
+
+    @staticmethod
+    def setup_robot_config(node: Node) -> str:
+        """
+        Set up robot configuration from ROS parameters.
+
+        Args:
+            node: ROS 2 node
+
+        Returns:
+            The configured robot type.
+        """
+        node.declare_parameter("robot_type", DEFAULT_ROBOT_TYPE)
+        robot_type = node.get_parameter("robot_type").value
+        if robot_type == "earth_rovers_sdk":
+            ConfigManager.setup_frodobot_config(node)
+        return robot_type

@@ -18,7 +18,6 @@ from scout_robot_bridge.core.constants import (
     DEFAULT_IMAGE_FORMAT,
     DEFAULT_MAX_ANGULAR_SPEED,
     DEFAULT_MAX_LINEAR_SPEED,
-    DEFAULT_ROBOT_TYPE,
     DEFAULT_TELEMETRY_PUBLISH_RATE,
     MAX_VELOCITY,
     MIN_VELOCITY,
@@ -26,25 +25,6 @@ from scout_robot_bridge.core.constants import (
 )
 from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.core.robot_factory import create_robot
-
-
-def setup_robot_config(node: Node) -> str:
-    """
-    Set up robot configuration from ROS parameters.
-    
-    Args:
-        node: ROS 2 node
-        
-    Returns:
-        robot_type: The configured robot type
-    """
-    node.declare_parameter('robot_type', DEFAULT_ROBOT_TYPE)
-    robot_type = node.get_parameter('robot_type').value
-
-    if robot_type == 'earth_rovers_sdk':
-        ConfigManager.setup_frodobot_config(node)
-
-    return robot_type
 
 
 def setup_cmd_vel_subscriber(node: Node, robot: RobotBase) -> None:
@@ -193,7 +173,7 @@ def main(args=None):
 
     try:
         # Set up robot configuration
-        robot_type = setup_robot_config(node)
+        robot_type = ConfigManager.setup_robot_config(node)
         
         # Create robot instance
         robot = create_robot(robot_type)

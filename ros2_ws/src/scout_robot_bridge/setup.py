@@ -15,7 +15,6 @@ setup(
     ],
     package_data={
         '': ['py.typed'],
-        'frodobot_rover_sdk': ['static/*'],
         'scout_robot_bridge': [
             'robot_sdk/earth_rovers_sdk/*.py',
         ],

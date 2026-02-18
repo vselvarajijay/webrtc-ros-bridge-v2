@@ -6,6 +6,6 @@ logger = logging.getLogger('launch')
 
 def generate_launch_description():
     logger.info('Scout boot launch file loading')
+    # Placeholder for future use: add bridge_node, webrtc_node, etc. when needed.
     return LaunchDescription([
-        # Add nodes here as you create them        
     ])
