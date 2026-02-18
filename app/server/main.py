@@ -42,8 +42,46 @@ def health():
 
 @app.get("/api/config")
 def api_config():
-    """WebRTC config: ICE servers (STUN + optional TURN from env)."""
-    return {"iceServers": get_ice_servers()}
+    """WebRTC config: ICE servers (STUN + optional TURN from env), optional front camera intrinsics for tap-to-orient."""
+    out = {"iceServers": get_ice_servers()}
+    # Front camera intrinsics for tap-to-orient (stream resolution, e.g. 320x240). Optional; UI uses 60° FOV if not set.
+    # Override via env: CAMERA_FX, CAMERA_CX, CAMERA_CY, CAMERA_WIDTH, CAMERA_HEIGHT.
+    import os
+    import math
+    w = 320
+    h = 240
+    fx = cx = cy = None
+    for key, default, conv in [
+        ("CAMERA_WIDTH", 320, int),
+        ("CAMERA_HEIGHT", 240, int),
+        ("CAMERA_FX", None, float),
+        ("CAMERA_CX", None, float),
+        ("CAMERA_CY", None, float),
+    ]:
+        v = os.environ.get(key, "").strip()
+        if v:
+            try:
+                val = conv(v)
+                if key == "CAMERA_WIDTH":
+                    w = val
+                elif key == "CAMERA_HEIGHT":
+                    h = val
+                elif key == "CAMERA_FX":
+                    fx = val
+                elif key == "CAMERA_CX":
+                    cx = val
+                elif key == "CAMERA_CY":
+                    cy = val
+            except (ValueError, TypeError):
+                pass
+    if fx is None:
+        fx = (w / 2.0) / math.tan(30.0 * math.pi / 180.0)
+    if cx is None:
+        cx = w / 2.0
+    if cy is None:
+        cy = h / 2.0
+    out["camera"] = {"fx": fx, "cx": cx, "cy": cy, "width": w, "height": h}
+    return out
 
 
 @app.get("/v2/front")

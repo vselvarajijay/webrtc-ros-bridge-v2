@@ -27,6 +27,7 @@ from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Int32, String
 
 from scout_teleop.constants import (
+    AUTONOMY_COMMAND_TOPIC,
     CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
@@ -322,14 +323,16 @@ def run_ros_node(
     frame_queue: queue.Queue,
     control_queue: queue.Queue,
     telemetry_queue: queue.Queue,
+    autonomy_command_queue: queue.Queue,
     image_format: str,
     stop_event: threading.Event,
 ) -> None:
-    """Run rclpy node. Drains control_queue of (twist, lamp) and publishes both so state is passed together."""
+    """Run rclpy node. Drains control_queue of (twist, lamp) and autonomy_command_queue of command strings."""
     rclpy.init()
     node = Node("webrtc_node")
     cmd_pub = node.create_publisher(Twist, CMD_VEL_TOPIC, 10)
     lamp_pub = node.create_publisher(Int32, LAMP_TOPIC, 10)
+    autonomy_pub = node.create_publisher(String, AUTONOMY_COMMAND_TOPIC, 10)
 
     first_telemetry_logged = [False]
 
@@ -479,6 +482,16 @@ def run_ros_node(
                 pass
             except Exception as e:
                 LOG.warning("Control drain error (continuing): %s", e)
+            try:
+                while True:
+                    cmd = autonomy_command_queue.get_nowait()
+                    if cmd and isinstance(cmd, str) and cmd.strip():
+                        autonomy_pub.publish(String(data=cmd.strip()))
+                        LOG.info("Published autonomy command: %r", cmd.strip())
+            except queue.Empty:
+                pass
+            except Exception as e:
+                LOG.warning("Autonomy command drain error (continuing): %s", e)
 
     try:
         node.destroy_node()
@@ -601,6 +614,7 @@ async def run_signaling_and_webrtc(
     frame_queue: queue.Queue,
     control_queue: queue.Queue,
     telemetry_queue: queue.Queue,
+    autonomy_command_queue: queue.Queue,
     stop_event: threading.Event,
 ) -> None:
     """Connect to signaling WebSocket, handle offer/answer/ICE, and run WebRTC peer."""
@@ -683,6 +697,13 @@ async def run_signaling_and_webrtc(
                                     if isinstance(message, str):
                                         try:
                                             data = json.loads(message)
+                                            cmd_str = data.get("command")
+                                            if isinstance(cmd_str, str) and cmd_str.strip():
+                                                try:
+                                                    autonomy_command_queue.put_nowait(cmd_str.strip())
+                                                except queue.Full:
+                                                    pass
+                                                return
                                             twist = _twist_from_control(data)
                                             if twist is not None:
                                                 if not first_control_logged[0]:
@@ -768,17 +789,18 @@ def main(args=None) -> None:
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
     control_queue: queue.Queue = queue.Queue(maxsize=64)  # items: (twist, lamp) — state tracked and passed together
     telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
+    autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()
 
     ros_thread = threading.Thread(
         target=run_ros_node,
-        args=(frame_queue, control_queue, telemetry_queue, image_format, stop),
+        args=(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, image_format, stop),
         daemon=True,
     )
     ros_thread.start()
 
     try:
-        asyncio.run(run_signaling_and_webrtc(frame_queue, control_queue, telemetry_queue, stop))
+        asyncio.run(run_signaling_and_webrtc(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, stop))
     except KeyboardInterrupt:
         pass
     finally:

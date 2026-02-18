@@ -6,6 +6,7 @@ import os
 CMD_VEL_TOPIC = "/cmd_vel"
 LAMP_TOPIC = "/robot/lamp"
 ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"
+AUTONOMY_COMMAND_TOPIC = "/autonomy/command"
 CAMERA_FRONT_COMPRESSED_TOPIC = "/camera/front/compressed"
 CAMERA_FRAME_ID = "camera_front"
 TELEOP_VELOCITY_TARGET_TOPIC = "/teleop/velocity_target"

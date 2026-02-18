@@ -195,12 +195,22 @@
       font-size: 0.75rem; padding: 0.35rem 0.6rem; cursor: pointer; font-family: var(--font-mono);
     }
     .video-fullscreen-btn:hover { background: rgba(0,0,0,0.9); }
+    .tap-orient-toast {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      z-index: 6; pointer-events: none;
+      background: rgba(0,0,0,0.85); color: var(--accent); padding: 0.5rem 1rem;
+      font-family: var(--font-mono); font-size: 0.9rem; border-radius: 4px;
+      opacity: 0; transition: opacity 0.15s ease;
+    }
+    .tap-orient-toast.visible { opacity: 1; }
     .video-hint {
       margin: 0.5rem 0 0 0;
       font-size: 0.8rem;
       color: var(--muted);
     }
     .video-hint code { font-size: 0.85em; }
+    .commands-status { font-size: 0.75rem; font-family: var(--font-mono); color: var(--muted); margin-top: 0.25rem; }
+    .commands-status.ready { color: var(--ok); }
     .status-badges {
       display: none;
     }
@@ -806,7 +816,7 @@
   <main>
     <div class="top-row">
       <section class="video-section">
-        <h2 class="video-label">Live view — Front camera</h2>
+        <h2 class="video-label">Live view — Front camera (tap to orient)</h2>
         <div class="video-wrap" id="videoWrap">
           <video id="remoteVideo" autoplay playsinline muted></video>
           <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
@@ -821,6 +831,7 @@
             <span class="video-hud-timestamp" id="videoHudTimestamp">--:--:--</span>
             <span class="video-hud-rec" id="videoHudRec">REC</span>
             <button type="button" class="video-fullscreen-btn" id="videoFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+            <div class="tap-orient-toast" id="tapOrientToast" aria-live="polite">Tap to orient</div>
           </div>
         </div>
         <div class="status-badges" id="statusBadges" aria-live="polite">
@@ -838,6 +849,7 @@
             <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Drive speed 1–5">
           </div>
           <div class="speed-delta" id="speedSelectedActual" aria-live="polite">→ <span class="actual" id="speedActualVal">—</span> m/s <span class="delta" id="speedDeltaVal">∆ —</span></div>
+          <div class="commands-status" id="commandsStatus" aria-live="polite">Commands: connecting…</div>
           <div class="control-grid">
             <div class="cell" data-pos="fl"><button type="button" class="control-btn" data-linear="1" data-angular="1" title="Forward + left (W+A)" aria-label="Forward left">&#8598;<span class="key-label">W</span></button></div>
             <div class="cell" data-pos="f"><button type="button" class="control-btn" data-linear="1" data-angular="0" title="Forward (W)" aria-label="Forward">&#9650;<span class="key-label">W</span></button></div>
@@ -882,7 +894,7 @@
     </div>
     <section class="telemetry-dashboard">
       <h2>Live telemetry</h2>
-      <p class="telemetry-waiting-hint" id="telemetryWaitingHint" aria-live="polite">Waiting for robot telemetry…</p>
+      <p class="telemetry-waiting-hint" id="telemetryWaitingHint" aria-live="polite">Waiting for robot telemetry. Ensure <strong>bridge_node</strong> and <strong>webrtc_node</strong> are running (same ROS) and robot SDK is up for live data.</p>
       <div id="dashboardContent">
         <div class="telemetry-section" id="sectionNav">
           <div class="telemetry-section-header" data-section="sectionNav">NAVIGATION</div>
@@ -1310,7 +1322,7 @@
         }
         renderDashboard(merged);
         var hint = document.getElementById('telemetryWaitingHint');
-        if (hint) hint.classList.toggle('hidden', isRealTelemetry(merged));
+        if (hint) hint.classList.add('hidden');
       }
 
       function updateTelemetryForVideoTime() {
@@ -1373,6 +1385,7 @@
           pc = null;
         }
         dataChannel = null;
+        updateCommandsStatus();
         if (ws && ws.readyState === WebSocket.OPEN) ws.close();
         ws = null;
         videoPlaceholder.hidden = false;
@@ -1517,7 +1530,12 @@
 
         dataChannel = pc.createDataChannel('control', { ordered: false });
         dataChannel.onopen = function () {
-          console.log('Data channel open');
+          console.log('[webrtc] Data channel open — commands can be sent');
+          updateCommandsStatus();
+        };
+        dataChannel.onclose = function () {
+          console.log('[webrtc] Data channel closed');
+          updateCommandsStatus();
         };
         dataChannel.onmessage = function (event) {
           try {
@@ -1531,6 +1549,7 @@
           } catch (err) {}
         };
 
+        updateCommandsStatus();
         pc.createOffer()
           .then(function (offer) {
             return pc.setLocalDescription(offer);
@@ -1653,10 +1672,15 @@
         document.head.appendChild(s);
       })();
 
+      var cameraIntrinsics = null;
       fetch('/api/config')
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data && data.iceServers && data.iceServers.length) iceServers = data.iceServers;
+          if (data && data.camera && typeof data.camera.fx === 'number') {
+            cameraIntrinsics = data.camera;
+            console.log('[tap-orient] camera intrinsics loaded:', cameraIntrinsics);
+          }
         })
         .catch(function () {})
         .finally(function () { connect(); });
@@ -1670,6 +1694,80 @@
           angular_z: angular_z,
           lamp: lampOn ? 1 : 0
         }));
+      }
+
+      function showTapOrientToast(text) {
+        var el = document.getElementById('tapOrientToast');
+        if (!el) return;
+        el.textContent = text;
+        el.classList.add('visible');
+        clearTimeout(showTapOrientToast._tid);
+        showTapOrientToast._tid = setTimeout(function () {
+          el.classList.remove('visible');
+        }, 2000);
+      }
+
+      function sendOrientationCommand(commandString) {
+        if (!dataChannel) {
+          console.log('[tap-orient] sendOrientationCommand: no dataChannel');
+          return;
+        }
+        if (dataChannel.readyState !== 'open') {
+          console.log('[tap-orient] sendOrientationCommand: channel not open, state=', dataChannel.readyState);
+          return;
+        }
+        console.log('[tap-orient] sending command:', commandString);
+        dataChannel.send(JSON.stringify({ command: commandString }));
+      }
+
+      function videoTapToOrientation(e) {
+        if (e.target && (e.target.id === 'videoFullscreenBtn' || (e.target.closest && e.target.closest('button')))) return;
+        e.preventDefault();
+        var video = document.getElementById('remoteVideo');
+        if (!video) return;
+        if (!video.srcObject || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+
+        var rect = video.getBoundingClientRect();
+        var clientX = (e.touches && e.touches.length) ? e.touches[0].clientX : e.clientX;
+        var clientY = (e.touches && e.touches.length) ? e.touches[0].clientY : e.clientY;
+        var relX = clientX - rect.left;
+        var relY = clientY - rect.top;
+        var vw = video.videoWidth;
+        var vh = video.videoHeight;
+        var rw = rect.width;
+        var rh = rect.height;
+        var scale = Math.min(rw / vw, rh / vh);
+        var dispW = scale * vw;
+        var dispH = scale * vh;
+        var offsetX = (rw - dispW) / 2;
+        var offsetY = (rh - dispH) / 2;
+        if (relX < offsetX || relX > offsetX + dispW || relY < offsetY || relY > offsetY + dispH) return;
+        var px = (relX - offsetX) / scale;
+        var py = (relY - offsetY) / scale;
+
+        var fx, cx;
+        if (cameraIntrinsics && typeof cameraIntrinsics.fx === 'number' && typeof cameraIntrinsics.cx === 'number') {
+          if (vw === cameraIntrinsics.width && vh === cameraIntrinsics.height) {
+            fx = cameraIntrinsics.fx;
+            cx = cameraIntrinsics.cx;
+          } else {
+            var sx = vw / cameraIntrinsics.width;
+            fx = cameraIntrinsics.fx * sx;
+            cx = cameraIntrinsics.cx * sx;
+          }
+        } else {
+          var halfFovDeg = 30;
+          cx = vw / 2;
+          fx = vw / (2 * Math.tan(halfFovDeg * Math.PI / 180));
+        }
+        var angleDeg = Math.atan2(px - cx, fx) * 180 / Math.PI;
+        angleDeg = Math.max(-90, Math.min(90, angleDeg));
+        if (Math.abs(angleDeg) < 2) return;
+        var cmd = angleDeg >= 0 ? 'right ' + Math.round(angleDeg) : 'left ' + Math.round(-angleDeg);
+        var label = angleDeg >= 0 ? 'right ' + Math.round(angleDeg) + '\u00B0' : 'left ' + Math.round(-angleDeg) + '\u00B0';
+        console.log('[tap-orient] px=', px.toFixed(0), 'angleDeg=', angleDeg.toFixed(1), 'cmd=', cmd);
+        showTapOrientToast('Tap to orient: ' + label);
+        sendOrientationCommand(cmd);
       }
 
       function getSpeedMultiplier() {
@@ -1702,6 +1800,18 @@
           return [linear_x, angular_z];
         }
         return computeVelocityFromDirection();
+      }
+
+      function updateCommandsStatus() {
+        var el = document.getElementById('commandsStatus');
+        if (!el) return;
+        if (dataChannel && dataChannel.readyState === 'open') {
+          el.textContent = 'Commands: connected';
+          el.classList.add('ready');
+        } else {
+          el.textContent = dataChannel ? 'Commands: ' + (dataChannel.readyState || 'connecting') : 'Commands: no channel';
+          el.classList.remove('ready');
+        }
       }
 
       function updateControlPanelVisual() {
@@ -1894,6 +2004,16 @@
               fullscreenBtn.textContent = '⛶ Fullscreen';
             }
           });
+        }
+        if (videoWrap) {
+          videoWrap.setAttribute('title', 'Tap on video to orient robot to that direction');
+          videoWrap.addEventListener('click', function (e) { videoTapToOrientation(e); });
+          videoWrap.addEventListener('touchend', function (e) {
+            if (e.changedTouches && e.changedTouches.length) {
+              var t = e.changedTouches[0];
+              videoTapToOrientation({ target: e.target, clientX: t.clientX, clientY: t.clientY, touches: null, preventDefault: function () {} });
+            }
+          }, { passive: false });
         }
       })();
 

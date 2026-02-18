@@ -3,9 +3,11 @@
 Controller node: executes high-level autonomy commands (forward X, turn theta).
 
 Subscribes to /autonomy/command (String) and /robot/telemetry (String JSON).
-Publishes /cmd_vel (Twist) in m/s and rad/s. Uses P control for distance and heading.
+Publishes /cmd_vel (Twist) in m/s and rad/s. Uses P control or trapezoidal
+velocity profile (when velocity/accel/decel specified in command).
 """
 
+import math
 import threading
 import time
 
@@ -27,8 +29,17 @@ from scout_controller.constants import (
     DEFAULT_STEP_TIMEOUT_S,
     DEFAULT_LINEAR_P_GAIN,
     DEFAULT_ANGULAR_P_GAIN,
+    DEFAULT_ANGULAR_I_GAIN,
+    DEFAULT_ANGULAR_D_GAIN,
+    DEFAULT_ANGULAR_INTEGRAL_MAX,
+    DEFAULT_LINEAR_ACCEL,
+    DEFAULT_LINEAR_DECEL,
+    DEFAULT_ANGULAR_ACCEL,
+    DEFAULT_ANGULAR_DECEL,
 )
 from scout_controller.telemetry_parse import parse_telemetry
+
+DEG_TO_RAD = math.pi / 180.0
 
 
 def _normalize_angle_deg(deg: float) -> float:
@@ -51,6 +62,79 @@ def _angle_error_deg(target_deg: float, current_deg: float) -> float:
     return err
 
 
+def _compute_trapezoidal_turn(
+    total_angle_rad: float,
+    v_max: float,
+    accel: float,
+    decel: float,
+) -> tuple[float, float, float]:
+    """
+    Compute phase durations (t_accel, t_hold, t_decel) for a turn.
+    total_angle_rad is absolute. Returns (t_accel, t_hold, t_decel) in seconds.
+    """
+    if v_max <= 0 or accel <= 0 or decel <= 0:
+        return (0.0, 0.0, 0.0)
+    ramp_angle = (v_max * v_max / 2.0) * (1.0 / accel + 1.0 / decel)
+    if total_angle_rad <= ramp_angle:
+        denom = (1.0 / accel + 1.0 / decel)
+        if denom <= 0:
+            return (0.0, 0.0, 0.0)
+        v_actual = math.sqrt(2.0 * total_angle_rad / denom)
+        t_accel = v_actual / accel
+        t_decel = v_actual / decel
+        return (t_accel, 0.0, t_decel)
+    t_accel = v_max / accel
+    t_decel = v_max / decel
+    hold_angle = total_angle_rad - ramp_angle
+    t_hold = hold_angle / v_max if v_max > 0 else 0.0
+    return (t_accel, t_hold, t_decel)
+
+
+def _compute_trapezoidal_drive(
+    total_distance_m: float,
+    v_max: float,
+    accel: float,
+    decel: float,
+) -> tuple[float, float, float]:
+    """Compute (t_accel, t_hold, t_decel) for a drive."""
+    if v_max <= 0 or accel <= 0 or decel <= 0:
+        return (0.0, 0.0, 0.0)
+    ramp_dist = (v_max * v_max / 2.0) * (1.0 / accel + 1.0 / decel)
+    if total_distance_m <= ramp_dist:
+        denom = (1.0 / accel + 1.0 / decel)
+        if denom <= 0:
+            return (0.0, 0.0, 0.0)
+        v_actual = math.sqrt(2.0 * total_distance_m / denom)
+        t_accel = v_actual / accel
+        t_decel = v_actual / decel
+        return (t_accel, 0.0, t_decel)
+    t_accel = v_max / accel
+    t_decel = v_max / decel
+    hold_dist = total_distance_m - ramp_dist
+    t_hold = hold_dist / v_max if v_max > 0 else 0.0
+    return (t_accel, t_hold, t_decel)
+
+
+def _get_profile_setpoint(
+    t_elapsed: float,
+    t_accel: float,
+    t_hold: float,
+    t_decel: float,
+    v_max: float,
+    accel: float,
+    decel: float,
+) -> float:
+    """Return velocity setpoint at time t_elapsed for trapezoidal profile."""
+    if t_elapsed < t_accel:
+        return min(accel * t_elapsed, v_max)
+    if t_elapsed < t_accel + t_hold:
+        return v_max
+    if t_elapsed < t_accel + t_hold + t_decel:
+        tau = t_elapsed - (t_accel + t_hold)
+        return max(v_max - decel * tau, 0.0)
+    return 0.0
+
+
 class ControllerNode(Node):
     """ROS 2 node that runs autonomy command goals with P control."""
 
@@ -65,6 +149,25 @@ class ControllerNode(Node):
         self._last_ts = 0.0
         self._goal_start_time = 0.0
 
+        # Trapezoidal profile state (set when starting a profile goal)
+        self._profile_phase: str | None = None  # "ramp_up" | "hold" | "ramp_down" | None
+        self._profile_t_accel = 0.0
+        self._profile_t_hold = 0.0
+        self._profile_t_decel = 0.0
+        self._profile_t_elapsed = 0.0
+        self._profile_integrated = 0.0  # angle_rad for turn, distance_m for drive
+        self._profile_total = 0.0  # target total (angle_rad or distance_m)
+        self._profile_v_max = 0.0  # peak velocity for current profile
+        self._profile_setpoint = 0.0  # current velocity setpoint (rad/s or m/s)
+        self._profile_sign = 1  # +1 or -1 for direction
+        self._profile_accel = 0.0
+        self._profile_decel = 0.0
+
+        # PID state for turn (P-only branch)
+        self._turn_integral = 0.0  # degree-seconds
+        self._turn_last_err_deg: float | None = None
+        self._turn_last_time = 0.0
+
         # Parameters
         self.declare_parameter("max_linear_speed", DEFAULT_MAX_LINEAR_SPEED)
         self.declare_parameter("max_angular_speed", DEFAULT_MAX_ANGULAR_SPEED)
@@ -74,6 +177,13 @@ class ControllerNode(Node):
         self.declare_parameter("step_timeout_s", DEFAULT_STEP_TIMEOUT_S)
         self.declare_parameter("linear_p_gain", DEFAULT_LINEAR_P_GAIN)
         self.declare_parameter("angular_p_gain", DEFAULT_ANGULAR_P_GAIN)
+        self.declare_parameter("angular_i_gain", DEFAULT_ANGULAR_I_GAIN)
+        self.declare_parameter("angular_d_gain", DEFAULT_ANGULAR_D_GAIN)
+        self.declare_parameter("angular_integral_max", DEFAULT_ANGULAR_INTEGRAL_MAX)
+        self.declare_parameter("default_linear_accel", DEFAULT_LINEAR_ACCEL)
+        self.declare_parameter("default_linear_decel", DEFAULT_LINEAR_DECEL)
+        self.declare_parameter("default_angular_accel", DEFAULT_ANGULAR_ACCEL)
+        self.declare_parameter("default_angular_decel", DEFAULT_ANGULAR_DECEL)
 
         self._cmd_pub = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
         self.create_subscription(String, AUTONOMY_COMMAND_TOPIC, self._on_command, 10)
@@ -117,19 +227,69 @@ class ControllerNode(Node):
         """Assume lock held. Start first goal in queue or go idle."""
         if not self._goal_queue:
             self._state = "idle"
+            self._profile_phase = None
             return
         goal = self._goal_queue[0]
         self._goal_start_time = time.monotonic()
+        self._profile_phase = None
+
         if goal["type"] == "drive":
             self._state = "driving"
             self._traveled_m = 0.0
+            # Trapezoidal profile when linear_vel_m_s is specified
+            v_lin = goal.get("linear_vel_m_s")
+            if v_lin is not None and v_lin > 0:
+                max_linear = self.get_parameter("max_linear_speed").value
+                v_max = min(v_lin, max_linear)
+                accel = goal.get("accel_m_s2") or self.get_parameter("default_linear_accel").value
+                decel = goal.get("decel_m_s2") or self.get_parameter("default_linear_decel").value
+                dist = goal["distance_m"] * goal.get("direction", 1)
+                dist_abs = abs(dist)
+                t_a, t_h, t_d = _compute_trapezoidal_drive(dist_abs, v_max, accel, decel)
+                self._profile_t_accel = t_a
+                self._profile_t_hold = t_h
+                self._profile_t_decel = t_d
+                self._profile_t_elapsed = 0.0
+                self._profile_integrated = 0.0
+                self._profile_total = dist_abs
+                self._profile_v_max = v_max
+                self._profile_accel = accel
+                self._profile_decel = decel
+                self._profile_setpoint = 0.0
+                self._profile_sign = 1 if dist >= 0 else -1
+                self._profile_phase = "ramp_up"
+
         elif goal["type"] == "turn":
             self._state = "turning"
+            self._turn_integral = 0.0
+            self._turn_last_err_deg = None
+            self._turn_last_time = time.monotonic()
             if self._last_telemetry is not None:
                 current = self._last_telemetry[0]
                 self._target_heading_deg = _normalize_angle_deg(current + goal["angle_deg"])
             else:
                 self._target_heading_deg = _normalize_angle_deg(goal["angle_deg"])
+            # Trapezoidal profile when angular_vel_rad_s is specified
+            v_ang = goal.get("angular_vel_rad_s")
+            if v_ang is not None and v_ang > 0:
+                max_angular = self.get_parameter("max_angular_speed").value
+                v_max = min(v_ang, max_angular)
+                accel = goal.get("accel_rad_s2") or self.get_parameter("default_angular_accel").value
+                decel = goal.get("decel_rad_s2") or self.get_parameter("default_angular_decel").value
+                total_rad = abs(goal["angle_deg"]) * DEG_TO_RAD
+                t_a, t_h, t_d = _compute_trapezoidal_turn(total_rad, v_max, accel, decel)
+                self._profile_t_accel = t_a
+                self._profile_t_hold = t_h
+                self._profile_t_decel = t_d
+                self._profile_t_elapsed = 0.0
+                self._profile_integrated = 0.0
+                self._profile_total = total_rad
+                self._profile_v_max = v_max
+                self._profile_accel = accel
+                self._profile_decel = decel
+                self._profile_setpoint = 0.0
+                self._profile_sign = -1 if goal["angle_deg"] >= 0 else 1  # ROS: positive z = left
+                self._profile_phase = "ramp_up"
 
     def _control_tick(self) -> None:
         with self._lock:
@@ -170,15 +330,38 @@ class ControllerNode(Node):
             return
 
         goal = goals[0]
+        dt = 1.0 / self.get_parameter("control_hz").value
+
         if goal["type"] == "drive":
+            if self._profile_phase is not None:
+                setpoint = _get_profile_setpoint(
+                    self._profile_t_elapsed,
+                    self._profile_t_accel,
+                    self._profile_t_hold,
+                    self._profile_t_decel,
+                    self._profile_v_max,
+                    self._profile_accel,
+                    self._profile_decel,
+                )
+                self._profile_t_elapsed += dt
+                self._profile_integrated += setpoint * dt
+                twist.linear.x = self._profile_sign * max(-max_linear, min(max_linear, setpoint))
+                total_time = self._profile_t_accel + self._profile_t_hold + self._profile_t_decel
+                if self._profile_integrated >= self._profile_total - dist_tol or self._profile_t_elapsed >= total_time:
+                    with self._lock:
+                        if self._goal_queue:
+                            self._goal_queue.pop(0)
+                        self._start_next_goal()
+                self._cmd_pub.publish(twist)
+                return
             if telemetry is None:
                 self._cmd_pub.publish(twist)
                 return
             _, speed_m_s, ts = telemetry
             last_ts = getattr(self, "_last_ts", 0.0)
             if last_ts > 0 and ts > last_ts:
-                dt = ts - last_ts
-                traveled += speed_m_s * dt * goal.get("direction", 1)
+                dtt = ts - last_ts
+                traveled += speed_m_s * dtt * goal.get("direction", 1)
             with self._lock:
                 self._traveled_m = traveled
             self._last_ts = ts
@@ -199,6 +382,27 @@ class ControllerNode(Node):
             return
 
         if goal["type"] == "turn":
+            if self._profile_phase is not None:
+                setpoint = _get_profile_setpoint(
+                    self._profile_t_elapsed,
+                    self._profile_t_accel,
+                    self._profile_t_hold,
+                    self._profile_t_decel,
+                    self._profile_v_max,
+                    self._profile_accel,
+                    self._profile_decel,
+                )
+                self._profile_t_elapsed += dt
+                self._profile_integrated += setpoint * dt
+                twist.angular.z = self._profile_sign * max(-max_angular, min(max_angular, setpoint))
+                total_time = self._profile_t_accel + self._profile_t_hold + self._profile_t_decel
+                if self._profile_integrated >= self._profile_total - (angle_tol * DEG_TO_RAD) or self._profile_t_elapsed >= total_time:
+                    with self._lock:
+                        if self._goal_queue:
+                            self._goal_queue.pop(0)
+                        self._start_next_goal()
+                self._cmd_pub.publish(twist)
+                return
             if telemetry is None or target_heading is None:
                 self._cmd_pub.publish(twist)
                 return
@@ -211,8 +415,21 @@ class ControllerNode(Node):
                     self._start_next_goal()
                 self._cmd_pub.publish(twist)
                 return
-            # ROS: positive angular.z = CCW (left). Our error: positive = turn left.
-            angular = k_angular * err_deg
+            # PID: smooth turn. positive err = turn left (CCW) = positive angular.z in ROS
+            k_i = self.get_parameter("angular_i_gain").value
+            k_d = self.get_parameter("angular_d_gain").value
+            integral_max = self.get_parameter("angular_integral_max").value
+            now_t = time.monotonic()
+            dt = now_t - self._turn_last_time if self._turn_last_time > 0 else dt
+            if dt > 0 and dt < 1.0:
+                self._turn_integral += err_deg * dt
+                self._turn_integral = max(-integral_max, min(integral_max, self._turn_integral))
+            self._turn_last_time = now_t
+            deriv = 0.0
+            if self._turn_last_err_deg is not None and dt > 0 and dt < 1.0:
+                deriv = (err_deg - self._turn_last_err_deg) / dt
+            self._turn_last_err_deg = err_deg
+            angular = k_angular * err_deg + k_i * self._turn_integral + k_d * deriv
             angular = max(-max_angular, min(max_angular, angular))
             twist.angular.z = angular
             self._cmd_pub.publish(twist)
@@ -231,11 +448,6 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-
-
-# Fix: use instance attribute for _last_ts (was referencing before assignment in _control_tick)
-# Replace _last_ts with a single stored value; we're already using self._last_ts in the method.
-# Check: in _control_tick we have "if self._last_ts > 0" and "self._last_ts = ts" but we never defined _last_ts on the instance. So we need to add self._last_ts = 0.0 in __init__ and use it. Let me fix that.
 </think>
 Adding `_last_ts` to `__init__` and removing the duplicate property at the end.
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
