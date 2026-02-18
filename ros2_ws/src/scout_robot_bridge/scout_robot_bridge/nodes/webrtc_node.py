@@ -86,7 +86,7 @@ def _webrtc_ice_config() -> Optional[RTCConfiguration]:
 
 
 CMD_VEL_DRAIN_HZ = 50
-TELEMETRY_SEND_INTERVAL = 0.2  # seconds
+TELEMETRY_SEND_INTERVAL = 0.05  # seconds (20 Hz for responsive UI)
 LOG = logging.getLogger(__name__)
 
 
@@ -119,11 +119,15 @@ def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -
 
 
 def _decode_compressed_image(data: bytes, fmt: str) -> Optional[np.ndarray]:
-    """Decode JPEG/PNG bytes to BGR numpy array for OpenCV."""
+    """Decode JPEG/PNG bytes to BGR numpy array for OpenCV. cv2.imdecode auto-detects format."""
     if not HAS_CV2:
         return None
     arr = np.frombuffer(data, dtype=np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None and len(data) > 0:
+        # Some OpenCV builds require a writable contiguous buffer
+        arr = np.ascontiguousarray(np.copy(arr))
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     return img
 
 
@@ -234,6 +238,8 @@ def run_ros_node(
         10,
     )
 
+    decode_fail_logged: list = [False]
+
     def on_image(msg: CompressedImage) -> None:
         data = bytes(msg.data)
         if not data:
@@ -248,6 +254,14 @@ def run_ros_node(
                     frame_queue.put_nowait(img)
                 except queue.Empty:
                     pass
+        else:
+            if not decode_fail_logged[0]:
+                decode_fail_logged[0] = True
+                LOG.warning(
+                    "Camera frame decode failed (format=%s, len=%d). Check IMAGE_FORMAT matches SDK. No video will show until decode succeeds.",
+                    msg.format or image_format,
+                    len(data),
+                )
 
     # QoS: depth 1 + KEEP_LAST so we only get the newest frame (no lag from backlog).
     camera_qos = QoSProfile(
@@ -309,7 +323,7 @@ async def _telemetry_sender_loop(
     stop_event: threading.Event,
     last_frame_pts_ref: Optional[list] = None,
 ) -> None:
-    """Send telemetry to app server and browser. Drain queue and send the best available (prefer full over partial)."""
+    """Send telemetry to app server (prefer full) and browser (newest). Drain queue each tick."""
     while not stop_event.is_set():
         await asyncio.sleep(TELEMETRY_SEND_INTERVAL)
         try:
@@ -322,38 +336,49 @@ async def _telemetry_sender_loop(
                 pass
             if not collected:
                 continue
-            # Prefer last full telemetry so we don't send only partial (speed echo) when full exists
-            payload_obj = None
-            for data in reversed(collected):
+            # Parse all collected items
+            parsed = []
+            for data in collected:
                 try:
                     obj = json.loads(data) if isinstance(data, str) else data
+                    if obj is not None:
+                        parsed.append(obj)
                 except json.JSONDecodeError:
                     continue
-                if obj is None:
-                    continue
-                if _is_full_telemetry(obj):
-                    payload_obj = obj
-                    break
-                if payload_obj is None:
-                    payload_obj = obj
-            if payload_obj is None:
+            if not parsed:
                 continue
-            payload = {"type": "telemetry", "data": payload_obj}
+            # For signaling WS (logging): prefer last full telemetry
+            payload_obj_ws = None
+            for obj in reversed(parsed):
+                if _is_full_telemetry(obj):
+                    payload_obj_ws = obj
+                    break
+                if payload_obj_ws is None:
+                    payload_obj_ws = obj
+            if payload_obj_ws is None:
+                continue
+            payload_ws = {"type": "telemetry", "data": payload_obj_ws}
             if last_frame_pts_ref is not None:
-                payload["frame_pts"] = last_frame_pts_ref[0]
-                payload["frame_time_base"] = FRAME_CLOCK_RATE
-            payload_str = json.dumps(payload)
-            # Yield so video track and other coroutines can run before we send
+                payload_ws["frame_pts"] = last_frame_pts_ref[0]
+                payload_ws["frame_time_base"] = FRAME_CLOCK_RATE
+            payload_str_ws = json.dumps(payload_ws)
+            # For data channel (browser): send newest so UI reflects latest state immediately
+            payload_obj_dc = parsed[-1]
+            payload_dc = {"type": "telemetry", "data": payload_obj_dc}
+            if last_frame_pts_ref is not None:
+                payload_dc["frame_pts"] = last_frame_pts_ref[0]
+                payload_dc["frame_time_base"] = FRAME_CLOCK_RATE
+            payload_str_dc = json.dumps(payload_dc)
             await asyncio.sleep(0)
             try:
-                await ws.send(payload_str)
+                await ws.send(payload_str_ws)
             except Exception:
                 break
             if data_channel_ref and data_channel_ref[0] is not None:
                 try:
                     dc = data_channel_ref[0]
                     if getattr(dc, "readyState", None) == "open":
-                        dc.send(payload_str)
+                        dc.send(payload_str_dc)
                 except Exception:
                     pass
         except Exception as e:
@@ -425,6 +450,13 @@ async def run_signaling_and_webrtc(
                                                 # Push partial telemetry so UI shows commanded speed; only fields we have
                                                 partial = {"speed": float(twist.linear.x), "timestamp": time.time()}
                                                 _put_latest(telemetry_queue, json.dumps(partial))
+                                                # Send partial to browser immediately so speed echo appears in one RTT
+                                                if getattr(channel, "readyState", None) == "open":
+                                                    try:
+                                                        payload_str = json.dumps({"type": "telemetry", "data": partial})
+                                                        channel.send(payload_str)
+                                                    except Exception:
+                                                        pass
                                         except json.JSONDecodeError:
                                             pass
 

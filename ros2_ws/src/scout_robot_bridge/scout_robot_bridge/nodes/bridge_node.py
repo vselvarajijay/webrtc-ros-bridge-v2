@@ -118,9 +118,19 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
         node._camera_stop_event = stop_event
 
         def camera_stream_loop() -> None:
+            none_count = 0
+            no_frame_logged = [False]
             for frame in robot.get_front_camera_stream(stop_event):
                 if frame is None:
+                    none_count += 1
+                    if none_count >= 50 and not no_frame_logged[0]:
+                        no_frame_logged[0] = True
+                        node.get_logger().warning(
+                            "No camera frames from SDK (SDK_SKIP_BROWSER_JOIN=0 and browser joined?). Video will stay black until %s returns frames.",
+                            "get_front_camera_stream",
+                        )
                     continue
+                none_count = 0
                 try:
                     msg = CompressedImage()
                     msg.header = Header()

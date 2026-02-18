@@ -128,14 +128,18 @@ class EarthRoversRobot(RobotBase):
                 )
             return None
 
+    # Minimum delay between frame pulls when using stream; actual rate limited by get_front_camera_frame() (HTTP + SDK).
+    CAMERA_STREAM_LOOP_SLEEP = 0.01
+
     def get_front_camera_stream(self, stop_event=None) -> Iterator[Optional[bytes]]:
         """
         Yield front camera frames continuously at max sustainable rate (reuses get_front_camera_frame).
+        Frame rate is dominated by get_front_camera_frame() latency (HTTP + SDK capture); loop sleep is a cap only.
         """
         while stop_event is None or not stop_event.is_set():
             frame = self.get_front_camera_frame()
             yield frame
-            time.sleep(0.01)
+            time.sleep(self.CAMERA_STREAM_LOOP_SLEEP)
 
     def get_telemetry(self) -> Optional[TelemetryFrame]:
         """

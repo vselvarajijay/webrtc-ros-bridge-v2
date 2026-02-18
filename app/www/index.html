@@ -144,6 +144,11 @@
       const noTelemetryEl = document.getElementById('noTelemetry');
       const telemetryGridEl = document.getElementById('telemetryGrid');
 
+      // Ask browser for low decode buffer (less latency, more risk of stalls). Set before srcObject.
+      if (typeof remoteVideo.latencyHint !== 'undefined') {
+        remoteVideo.latencyHint = 0.075;
+      }
+
       var lastTelemetry = {};
       var telemetryBuffer = [];
       var TELEMETRY_BUFFER_MAX = 100;
@@ -360,7 +365,7 @@
           if (pc && pc.iceConnectionState === 'failed') setStatus(false, true, false);
         };
 
-        dataChannel = pc.createDataChannel('control', { ordered: true });
+        dataChannel = pc.createDataChannel('control', { ordered: false });
         dataChannel.onopen = function () {
           console.log('Data channel open');
         };
@@ -368,10 +373,9 @@
           try {
             var msg = JSON.parse(event.data);
             if (msg.type === 'telemetry' && msg.data) {
+              renderTelemetry(msg.data);
               if (msg.frame_pts != null) {
                 pushTelemetryWithPts(msg.frame_pts, msg.frame_time_base, msg.data);
-              } else {
-                renderTelemetry(msg.data);
               }
             }
           } catch (err) {}
