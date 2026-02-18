@@ -25,10 +25,14 @@ DEFAULT_VIEWPORT_WIDTH = 3840
 DEFAULT_VIEWPORT_HEIGHT = 2160
 DEFAULT_VIEWPORT = {"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT}
 
-# Image formats
+# Image formats (jpeg is faster to encode/decode than png; use for lower latency)
 VALID_IMAGE_FORMATS = ["png", "jpeg", "webp"]
-DEFAULT_IMAGE_FORMAT = "png"
-DEFAULT_IMAGE_QUALITY = 1.0
+DEFAULT_IMAGE_FORMAT = "jpeg"
+DEFAULT_IMAGE_QUALITY = 0.85
+
+# WebRTC video output size (lower = faster decode/encode and less bandwidth)
+VIDEO_OUTPUT_WIDTH = 320
+VIDEO_OUTPUT_HEIGHT = 240
 
 # Chrome executable fallback paths
 CHROME_FALLBACK_PATHS = [

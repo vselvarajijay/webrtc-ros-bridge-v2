@@ -29,8 +29,8 @@ except ImportError:
     DEFAULT_VIEWPORT = {"width": 3840, "height": 2160}
     SDK_LOCAL_ENDPOINT = "http://127.0.0.1:8000/sdk"
     VALID_IMAGE_FORMATS = ["png", "jpeg", "webp"]
-    DEFAULT_IMAGE_FORMAT = "png"
-    DEFAULT_IMAGE_QUALITY = 1.0
+    DEFAULT_IMAGE_FORMAT = "jpeg"
+    DEFAULT_IMAGE_QUALITY = 0.85
 
 load_dotenv()
 

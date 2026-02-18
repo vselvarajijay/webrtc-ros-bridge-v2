@@ -30,6 +30,8 @@ from scout_robot_bridge.core.constants import (
     CMD_VEL_TOPIC,
     DEFAULT_IMAGE_FORMAT,
     ROBOT_TELEMETRY_TOPIC,
+    VIDEO_OUTPUT_HEIGHT,
+    VIDEO_OUTPUT_WIDTH,
 )
 from scout_robot_bridge.core.webrtc_config import get_ice_servers_dict
 
@@ -155,8 +157,8 @@ class CameraTrack(VideoStreamTrack):
         except queue.Empty:
             pass
         if self._last_frame is None:
-            # No frame yet: yield a tiny black frame to satisfy recv
-            self._last_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            # No frame yet: yield a black frame at output resolution to satisfy recv
+            self._last_frame = np.zeros((VIDEO_OUTPUT_HEIGHT, VIDEO_OUTPUT_WIDTH, 3), dtype=np.uint8)
         if self._recv_count == 0:
             LOG.info("CameraTrack: first frame sent (from_queue=%s)", self._last_frame is not None)
         elif self._recv_count < 3 or self._recv_count % 100 == 0:
@@ -246,6 +248,12 @@ def run_ros_node(
             return
         img = _decode_compressed_image(data, msg.format or image_format)
         if img is not None:
+            if img.shape[1] != VIDEO_OUTPUT_WIDTH or img.shape[0] != VIDEO_OUTPUT_HEIGHT:
+                img = cv2.resize(
+                    img,
+                    (VIDEO_OUTPUT_WIDTH, VIDEO_OUTPUT_HEIGHT),
+                    interpolation=cv2.INTER_AREA,
+                )
             try:
                 frame_queue.put_nowait(img)
             except queue.Full:
