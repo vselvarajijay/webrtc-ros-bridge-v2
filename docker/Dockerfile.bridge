@@ -36,6 +36,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libavfilter-dev libswscale-dev libswresample-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Foxglove WebSocket bridge for Foxglove Studio (port 8765)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-kilted-foxglove-bridge \
+    && rm -rf /var/lib/apt/lists/*
+
 # Bridge Python deps (colcon does not install setup.py install_requires)
 # webrtc_node needs aiortc, av, opencv-python-headless, websockets (use system numpy)
 RUN python3 -m pip install --no-cache-dir --break-system-packages --ignore-installed numpy \

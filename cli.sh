@@ -67,8 +67,16 @@ case "$cmd" in
     # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
     echo "Waiting for services to be ready..."
     sleep 5
+    echo ""
     echo "App (signaling + www): http://localhost:8000/"
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
+    echo ""
+    echo "Foxglove Studio (ROS 2 visualization):"
+    echo "  1. Open Foxglove Studio: https://app.foxglove.dev/  (or install the desktop app)"
+    echo "  2. Add connection → Foxglove WebSocket"
+    echo "  3. URL: ws://localhost:8765"
+    echo "  4. Connect to view /cmd_vel, /camera/front/compressed, /robot/telemetry, and other ROS 2 topics."
+    echo ""
     if [[ "$RUN_TELEOP" == true ]]; then
       echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."
       RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && (ros2 run scout_controller manual_controller &) && sleep 0.5 && exec ros2 run scout_teleop keyboard_node'"

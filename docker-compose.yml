@@ -56,6 +56,8 @@ services:
       dockerfile: docker/Dockerfile.bridge
     image: webrtc-ros-bridge-v2-scout_bridge
     container_name: scout_bridge
+    ports:
+      - "8765:8765"
     depends_on:
       - scout_sdk
       - app
@@ -77,8 +79,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
     # No network_mode: host so bridge can reach scout_sdk via Docker DNS (required on Docker Desktop for Mac)
-    # bridge_node and controller_node in background, webrtc_node in foreground (same container so /cmd_vel reaches webrtc for telemetry; controller_node handles /autonomy/command for tap-to-orient)
-    command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && source install/setup.bash && (ros2 run scout_robot_bridge bridge_node &) && (ros2 run scout_controller controller_node &) && sleep 0.5 && exec ros2 run scout_teleop webrtc_node"]
+    # bridge_node, controller_node, foxglove_bridge in background; webrtc_node in foreground (same container so /cmd_vel reaches webrtc for telemetry; controller_node handles /autonomy/command for tap-to-orient)
+    command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && source install/setup.bash && (ros2 run scout_robot_bridge bridge_node &) && (ros2 run scout_controller controller_node &) && (ros2 run foxglove_bridge foxglove_bridge &) && sleep 0.5 && exec ros2 run scout_teleop webrtc_node"]
 
   scout_perception:
     build:

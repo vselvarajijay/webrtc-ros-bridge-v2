@@ -116,8 +116,39 @@ Stream the robot's front camera to the browser over WebRTC and control the robot
 
 - **scout_app** – FastAPI app (signaling WebSocket + static page) on port 8000.
 - **scout_sdk** – Earth Rovers SDK (/v2/front, /data) on port 8001; runs in Docker so no host pip install needed.
-- **scout_bridge** – `bridge_node`: robot control and front camera publisher on `/camera/front/compressed` (gets frames from scout_sdk).
+- **scout_bridge** – `bridge_node`: robot control and front camera publisher on `/camera/front/compressed` (gets frames from scout_sdk). Also runs **foxglove_bridge** for Foxglove Studio (port 8765).
 - **scout_webrtc** – `webrtc_node`: subscribes to the camera topic, sends video over WebRTC to the app. Uses **host network** so it shares the host ROS 2 network with scout_bridge; connects to the app at `ws://host.docker.internal:8000/ws/signaling`.
+
+**Foxglove Studio (ROS 2 visualization):**
+
+After `./cli.sh start`, the Foxglove WebSocket bridge runs inside **scout_bridge** on port 8765. To view topics (e.g. `/cmd_vel`, `/camera/front/compressed`, `/robot/telemetry`) in Foxglove Studio:
+
+1. Open [Foxglove Studio](https://app.foxglove.dev/) (browser) or install the [desktop app](https://foxglove.dev/download).
+2. **Add connection** → **Foxglove WebSocket**.
+3. Set **URL** to `ws://localhost:8765` and connect.
+
+No extra parameters are required; the bridge exposes all ROS 2 topics by default.
+
+**Troubleshooting Foxglove (ws://localhost:8765):**
+
+- **Connection refused or nothing on 8765**  
+  The `foxglove_bridge` node must be installed in the Docker image and started with the bridge. If the image was built before the Foxglove setup was added, rebuild so the package is installed:
+
+  ```bash
+  ./cli.sh stop
+  docker compose --profile webrtc build --no-cache scout_bridge
+  ./cli.sh build
+  ./cli.sh start
+  ```
+
+- **Check that something is listening on 8765 (on your Mac):**  
+  `lsof -i :8765` — you should see Docker (or the Foxglove process) listening.
+
+- **Check that the bridge is running inside the container:**  
+  `docker compose --profile webrtc exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && ros2 pkg list | grep foxglove'` — should print `foxglove_bridge`. If it doesn’t, the package isn’t installed in the image; rebuild as above.
+
+- **Check ROS topics:**  
+  `docker compose --profile webrtc exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 topic list'` — you should see `/cmd_vel`, `/camera/front/compressed`, `/robot/telemetry`, etc.
 
 ---
 
