@@ -34,6 +34,7 @@ class EarthRoversRobot(RobotBase):
         self._camera_fail_count = 0
         self._last_telemetry_warning_time = 0.0
         self._telemetry_warning_interval = 5.0  # Only log warning every 5 seconds
+        self._lamp = 0  # Bitfield: 0=off, 1=front, 2=back, 3=both
         
         try:
             auth = fetch_auth_sync()
@@ -42,24 +43,28 @@ class EarthRoversRobot(RobotBase):
             self._logger.warning(f"Failed to authenticate: {e}. Robot will operate without RTM client.")
             self._rtm_client = None
 
-    def _send_velocity_command(self, linear: float, angular: float, lamp: int = 0) -> None:
+    def set_lamp(self, lamp: int) -> None:
+        """Set lamp state (0=off, 1=on). Sent with next velocity command to SDK."""
+        self._lamp = 1 if lamp else 0
+
+    def _send_velocity_command(self, linear: float, angular: float, lamp: Optional[int] = None) -> None:
         """
         Internal method to send velocity commands to the robot.
         
         Args:
             linear: Forward/backward speed (-1.0 to 1.0)
             angular: Rotation speed left/right (-1.0 to 1.0)
-            lamp: Lamp value (default: 0)
+            lamp: Lamp value (default: use current self._lamp). SDK accepts 0=off, 1=on.
         """
         if self._rtm_client is None:
             self._logger.warning("Cannot send velocity command: RTM client not initialized")
             return
-        
-        self._logger.debug(f"Sending velocity command: linear={linear:.3f}, angular={angular:.3f}")
+        lamp_val = self._lamp if lamp is None else (1 if lamp else 0)
+        self._logger.debug(f"Sending velocity command: linear={linear:.3f}, angular={angular:.3f}, lamp={lamp_val}")
         self._rtm_client.send_message({
             "linear": linear,
             "angular": angular,
-            "lamp": lamp
+            "lamp": lamp_val
         })
 
     def move_forward(self) -> None:

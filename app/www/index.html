@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Robot WebRTC — Telemetry</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <style>
     :root {
       --bg: #0f1419;
@@ -43,16 +44,13 @@
     .status.error { background: #f85149; }
     main {
       flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 320px;
+      display: flex;
+      flex-direction: column;
       gap: 1rem;
       padding: 1rem;
       max-width: 1400px;
       margin: 0 auto;
       width: 100%;
-    }
-    @media (max-width: 768px) {
-      main { grid-template-columns: 1fr; }
     }
     .video-section { margin: 0; }
     .video-label {
@@ -82,36 +80,193 @@
       color: var(--muted);
       padding: 1rem;
     }
-    .telemetry-panel {
+    .map-section {
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .map-section h2 {
+      margin: 0;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    #map {
+      width: 100%;
+      height: 400px;
+      min-height: 200px;
+      background: var(--bg);
+    }
+    .map-placeholder {
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .telemetry-dashboard {
       background: var(--surface);
       border-radius: 8px;
       border: 1px solid var(--border);
       padding: 1rem;
-      height: fit-content;
     }
-    .telemetry-panel h2 {
-      margin: 0 0 0.75rem 0;
+    .telemetry-dashboard h2 {
+      margin: 0 0 1rem 0;
       font-size: 0.9rem;
       font-weight: 600;
       color: var(--muted);
     }
-    .telemetry-grid {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.35rem 1.5rem;
-      align-items: baseline;
+    .dashboard-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.5rem;
+      align-items: flex-start;
+      margin-bottom: 1rem;
     }
-    .telemetry-grid dt {
-      margin: 0;
+    .dashboard-row:last-child { margin-bottom: 0; }
+    .metric-card {
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.9rem;
+      min-width: 80px;
+    }
+    .metric-card .label {
+      font-size: 0.7rem;
       color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 0.25rem;
+    }
+    .metric-card .value {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 0.25rem;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.2s ease;
+    }
+    .bar-fill.battery { background: var(--ok); }
+    .bar-fill.battery.low { background: var(--warn); }
+    .bar-fill.battery.critical { background: #f85149; }
+    .bar-fill.signal { background: var(--accent); }
+    .compass-wrap {
+      width: 64px;
+      height: 64px;
+      margin: 0.25rem auto 0;
+      position: relative;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    .compass-arrow {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 3px;
+      height: 28px;
+      margin-left: -1.5px;
+      margin-top: -28px;
+      background: var(--accent);
+      border-radius: 2px;
+      transform-origin: 50% 100%;
+      transition: transform 0.15s ease;
+    }
+    .compass-arrow::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: -4px;
+      margin-left: -4px;
+      border: 4px solid transparent;
+      border-bottom-color: var(--accent);
+      border-top: none;
+    }
+    .rpm-bars {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      min-width: 200px;
+    }
+    .rpm-bar-wrap {
+      text-align: center;
+    }
+    .rpm-bar-wrap .label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+    .rpm-bar-wrap .bar-wrap {
+      height: 40px;
+      width: 100%;
+      border-radius: 4px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .rpm-bar-wrap .bar-fill {
+      width: 100%;
+      height: 0%;
+      min-height: 2px;
+      background: var(--accent);
+      border-radius: 0 0 4px 4px;
+    }
+    .imu-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+    .imu-group .metric-card { min-width: 0; }
+    .imu-group .value { font-size: 0.85rem; }
+    .lamp-badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
       font-size: 0.8rem;
+      font-weight: 600;
     }
-    .telemetry-grid dd {
-      margin: 0;
-      font-size: 0.95rem;
+    .lamp-badge.on { background: var(--warn); color: var(--bg); }
+    .lamp-badge.off { background: var(--border); color: var(--muted); }
+    .lamp-switch-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-    .telemetry-grid dd .unit { color: var(--muted); font-size: 0.85em; }
-    .no-telemetry { color: var(--muted); font-size: 0.9rem; }
+    .lamp-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .lamp-switch.on { background: var(--warn); }
+    .lamp-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--text);
+      transition: transform 0.2s ease;
+    }
+    .lamp-switch.on::after { transform: translateX(20px); }
   </style>
 </head>
 <body>
@@ -127,13 +282,104 @@
         <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
       </div>
     </section>
-    <aside class="telemetry-panel">
-      <h2>Robot telemetry</h2>
-      <div id="telemetryContent">
-        <p class="no-telemetry" id="noTelemetry">No telemetry yet. Connect to the robot.</p>
-        <dl class="telemetry-grid" id="telemetryGrid" hidden></dl>
+    <section class="telemetry-dashboard">
+      <h2>Live telemetry</h2>
+      <div id="dashboardContent">
+        <div class="dashboard-row" id="dashboardRow1">
+          <div class="metric-card" id="cardBattery">
+            <div class="label">Battery</div>
+            <div class="value" id="valBattery">—</div>
+            <div class="bar-wrap"><div class="bar-fill battery" id="barBattery" style="width:0%"></div></div>
+          </div>
+          <div class="metric-card" id="cardSignal">
+            <div class="label">Signal</div>
+            <div class="value" id="valSignal">—</div>
+            <div class="bar-wrap"><div class="bar-fill signal" id="barSignal" style="width:0%"></div></div>
+          </div>
+          <div class="metric-card" id="cardGps">
+            <div class="label">GPS signal</div>
+            <div class="value" id="valGps">—</div>
+            <div class="bar-wrap"><div class="bar-fill signal" id="barGps" style="width:0%"></div></div>
+          </div>
+          <div class="metric-card" id="cardOrientation">
+            <div class="label">Heading</div>
+            <div class="value" id="valOrientation">—°</div>
+            <div class="compass-wrap"><div class="compass-arrow" id="compassArrow"></div></div>
+          </div>
+          <div class="metric-card" id="cardSpeed">
+            <div class="label">Speed</div>
+            <div class="value" id="valSpeed">— m/s</div>
+          </div>
+          <div class="metric-card" id="cardVibration">
+            <div class="label">Vibration</div>
+            <div class="value" id="valVibration">—</div>
+            <div class="bar-wrap"><div class="bar-fill signal" id="barVibration" style="width:0%"></div></div>
+          </div>
+          <div class="metric-card" id="cardLamp">
+            <div class="label">Lamp</div>
+            <div class="lamp-switch-wrap">
+              <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
+              <span class="value" id="lampLabel">Off</span>
+            </div>
+          </div>
+          <div class="metric-card" id="cardLatitude">
+            <div class="label">Latitude</div>
+            <div class="value" id="valLatitude">—</div>
+          </div>
+          <div class="metric-card" id="cardLongitude">
+            <div class="label">Longitude</div>
+            <div class="value" id="valLongitude">—</div>
+          </div>
+          <div class="metric-card" id="cardLastUpdated">
+            <div class="label">Last updated</div>
+            <div class="value" id="valLastUpdated">—</div>
+          </div>
+        </div>
+        <div class="dashboard-row">
+          <div class="metric-card">
+            <div class="label">Wheel RPM</div>
+            <div class="rpm-bars">
+              <div class="rpm-bar-wrap"><div class="label">FL</div><div class="bar-wrap"><div class="bar-fill" id="rpmFL" style="height:0%"></div></div></div>
+              <div class="rpm-bar-wrap"><div class="label">FR</div><div class="bar-wrap"><div class="bar-fill" id="rpmFR" style="height:0%"></div></div></div>
+              <div class="rpm-bar-wrap"><div class="label">RL</div><div class="bar-wrap"><div class="bar-fill" id="rpmRL" style="height:0%"></div></div></div>
+              <div class="rpm-bar-wrap"><div class="label">RR</div><div class="bar-wrap"><div class="bar-fill" id="rpmRR" style="height:0%"></div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="dashboard-row">
+          <div class="metric-card">
+            <div class="label">Accel (last) x,y,z</div>
+            <div class="imu-group">
+              <div class="metric-card"><div class="label">X</div><div class="value" id="accelX">—</div></div>
+              <div class="metric-card"><div class="label">Y</div><div class="value" id="accelY">—</div></div>
+              <div class="metric-card"><div class="label">Z</div><div class="value" id="accelZ">—</div></div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Gyro (last) x,y,z</div>
+            <div class="imu-group">
+              <div class="metric-card"><div class="label">X</div><div class="value" id="gyroX">—</div></div>
+              <div class="metric-card"><div class="label">Y</div><div class="value" id="gyroY">—</div></div>
+              <div class="metric-card"><div class="label">Z</div><div class="value" id="gyroZ">—</div></div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Mag (last) x,y,z</div>
+            <div class="imu-group">
+              <div class="metric-card"><div class="label">X</div><div class="value" id="magX">—</div></div>
+              <div class="metric-card"><div class="label">Y</div><div class="value" id="magY">—</div></div>
+              <div class="metric-card"><div class="label">Z</div><div class="value" id="magZ">—</div></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </aside>
+    </section>
+    <section class="map-section">
+      <h2>Robot position</h2>
+      <div id="mapContainer">
+        <div id="map"></div>
+      </div>
+    </section>
   </main>
   <script>
     (function () {
@@ -141,8 +387,6 @@
       const statusTextEl = document.getElementById('statusText');
       const remoteVideo = document.getElementById('remoteVideo');
       const videoPlaceholder = document.getElementById('videoPlaceholder');
-      const noTelemetryEl = document.getElementById('noTelemetry');
-      const telemetryGridEl = document.getElementById('telemetryGrid');
 
       // Ask browser for low decode buffer (less latency, more risk of stalls). Set before srcObject.
       if (typeof remoteVideo.latencyHint !== 'undefined') {
@@ -152,8 +396,160 @@
       var lastTelemetry = {};
       var telemetryBuffer = [];
       var TELEMETRY_BUFFER_MAX = 100;
+      var lampOn = false;
+      var lastLinearX = 0;
+      var lastAngularZ = 0;
       var FRAME_TIME_BASE = 90000;
       var videoTimeUpdateHandle = null;
+
+      var mapInstance = null;
+      var mapMarker = null;
+      var mapCircle = null;
+      var RADIUS_METERS = 402; // 0.25 miles
+      var mapInited = false;
+
+      function initRobotMap() {
+        if (mapInited || typeof L === 'undefined') return;
+        var mapEl = document.getElementById('map');
+        if (!mapEl) return;
+        var lat = lastTelemetry.latitude != null ? lastTelemetry.latitude : 0;
+        var lng = lastTelemetry.longitude != null ? lastTelemetry.longitude : 0;
+        mapInstance = L.map('map').setView([lat, lng], 15);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          maxZoom: 19,
+        }).addTo(mapInstance);
+        mapMarker = L.marker([lat, lng], { title: 'Robot' }).addTo(mapInstance);
+        mapCircle = L.circle([lat, lng], {
+          radius: RADIUS_METERS,
+          color: '#FF0000',
+          fillColor: '#FF0000',
+          fillOpacity: 0.15,
+          weight: 2,
+        }).addTo(mapInstance);
+        mapInited = true;
+        if (lastTelemetry.latitude != null && lastTelemetry.longitude != null) {
+          updateMapPosition(lastTelemetry.latitude, lastTelemetry.longitude);
+        }
+      }
+
+      function updateMapPosition(lat, lng) {
+        if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return;
+        var latN = Number(lat);
+        var lngN = Number(lng);
+        var pos = [latN, lngN];
+        if (mapMarker) mapMarker.setLatLng(pos);
+        if (mapCircle) mapCircle.setLatLng(pos);
+        if (mapInstance) mapInstance.panTo(pos);
+      }
+
+      function renderDashboard(d) {
+        var set = function (id, text) {
+          var el = document.getElementById(id);
+          if (el) el.textContent = text;
+        };
+        var setBar = function (id, pct, low, critical) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.style.width = (pct != null && isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0) + '%';
+          el.classList.remove('low', 'critical');
+          if (critical && pct <= (critical || 0)) el.classList.add('critical');
+          else if (low && pct <= (low || 0)) el.classList.add('low');
+        };
+        var setBarVert = function (id, pct, max) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          var v = pct != null && isFinite(pct) && max > 0 ? Math.min(100, (pct / max) * 100) : 0;
+          el.style.height = v + '%';
+        };
+
+        if (d.battery != null && isFinite(d.battery)) {
+          set('valBattery', Math.round(d.battery) + '%');
+          setBar('barBattery', d.battery, 20, 10);
+        } else { set('valBattery', '—'); setBar('barBattery', 0); }
+
+        if (d.signal_level != null && isFinite(d.signal_level)) {
+          set('valSignal', Number(d.signal_level).toFixed(1));
+          setBar('barSignal', (d.signal_level / 5) * 100);
+        } else { set('valSignal', '—'); setBar('barSignal', 0); }
+
+        if (d.gps_signal != null && isFinite(d.gps_signal)) {
+          set('valGps', Number(d.gps_signal).toFixed(1));
+          setBar('barGps', Math.min(100, d.gps_signal));
+        } else { set('valGps', '—'); setBar('barGps', 0); }
+
+        var deg = d.orientation != null ? (d.orientation / 255) * 360 : null;
+        if (deg != null && isFinite(deg)) {
+          set('valOrientation', deg.toFixed(1) + '°');
+          var arrow = document.getElementById('compassArrow');
+          if (arrow) arrow.style.transform = 'rotate(' + deg + 'deg)';
+        } else { set('valOrientation', '—°'); }
+
+        if (d.speed != null && isFinite(d.speed)) {
+          set('valSpeed', Number(d.speed).toFixed(4) + ' m/s');
+        } else set('valSpeed', '— m/s');
+
+        if (d.vibration != null && isFinite(d.vibration)) {
+          set('valVibration', Number(d.vibration).toFixed(2));
+          setBar('barVibration', Math.min(100, d.vibration * 50));
+        } else { set('valVibration', '—'); setBar('barVibration', 0); }
+
+        /* Lamp switch state is user-driven; do not overwrite from telemetry. */
+        var lampSw = document.getElementById('lampSwitch');
+        if (lampSw) {
+          lampSw.className = 'lamp-switch ' + (lampOn ? 'on' : 'off');
+          lampSw.setAttribute('aria-pressed', lampOn ? 'true' : 'false');
+        }
+        if (document.getElementById('lampLabel')) {
+          document.getElementById('lampLabel').textContent = lampOn ? 'On' : 'Off';
+        }
+
+        if (d.latitude != null && isFinite(d.latitude)) {
+          set('valLatitude', Number(d.latitude).toFixed(5));
+        } else set('valLatitude', '—');
+        if (d.longitude != null && isFinite(d.longitude)) {
+          set('valLongitude', Number(d.longitude).toFixed(5));
+        } else set('valLongitude', '—');
+        if (d.timestamp != null && isFinite(d.timestamp)) {
+          set('valLastUpdated', new Date(d.timestamp * 1000).toLocaleTimeString());
+        } else set('valLastUpdated', '—');
+
+        var rpms = d.rpms;
+        var lastRpm = Array.isArray(rpms) && rpms.length > 0 ? rpms[rpms.length - 1] : null;
+        var rpmMax = 200;
+        if (Array.isArray(lastRpm) && lastRpm.length >= 4) {
+          setBarVert('rpmFL', lastRpm[0], rpmMax);
+          setBarVert('rpmFR', lastRpm[1], rpmMax);
+          setBarVert('rpmRL', lastRpm[2], rpmMax);
+          setBarVert('rpmRR', lastRpm[3], rpmMax);
+        } else {
+          setBarVert('rpmFL', 0, 1); setBarVert('rpmFR', 0, 1); setBarVert('rpmRL', 0, 1); setBarVert('rpmRR', 0, 1);
+        }
+
+        var acc = d.accels;
+        var lastAcc = Array.isArray(acc) && acc.length > 0 ? acc[acc.length - 1] : null;
+        if (Array.isArray(lastAcc) && lastAcc.length >= 3) {
+          set('accelX', Number(lastAcc[0]).toFixed(3));
+          set('accelY', Number(lastAcc[1]).toFixed(3));
+          set('accelZ', Number(lastAcc[2]).toFixed(3));
+        } else { set('accelX', '—'); set('accelY', '—'); set('accelZ', '—'); }
+
+        var gyro = d.gyros;
+        var lastGyro = Array.isArray(gyro) && gyro.length > 0 ? gyro[gyro.length - 1] : null;
+        if (Array.isArray(lastGyro) && lastGyro.length >= 3) {
+          set('gyroX', Number(lastGyro[0]).toFixed(3));
+          set('gyroY', Number(lastGyro[1]).toFixed(3));
+          set('gyroZ', Number(lastGyro[2]).toFixed(3));
+        } else { set('gyroX', '—'); set('gyroY', '—'); set('gyroZ', '—'); }
+
+        var mag = d.mags;
+        var lastMag = Array.isArray(mag) && mag.length > 0 ? mag[mag.length - 1] : null;
+        if (Array.isArray(lastMag) && lastMag.length >= 3) {
+          set('magX', Number(lastMag[0]).toFixed(0));
+          set('magY', Number(lastMag[1]).toFixed(0));
+          set('magZ', Number(lastMag[2]).toFixed(0));
+        } else { set('magX', '—'); set('magY', '—'); set('magZ', '—'); }
+      }
 
       function setStatus(connected, error, connecting) {
         if (error) {
@@ -162,16 +558,12 @@
         } else if (connected) {
           statusEl.className = 'status connected';
           statusTextEl.textContent = 'Connected';
-          if (!telemetryGridEl.querySelector('dt')) {
-            noTelemetryEl.textContent = 'Waiting for telemetry (ensure scout_bridge and scout_sdk are running).';
-          }
         } else if (connecting) {
           statusEl.className = 'status';
           statusTextEl.textContent = 'Connecting…';
         } else {
           statusEl.className = 'status';
           statusTextEl.textContent = 'Disconnected';
-          noTelemetryEl.textContent = 'No telemetry yet. Connect to the robot.';
         }
       }
 
@@ -209,37 +601,12 @@
           if (data.timestamp != null) merged.timestamp = data.timestamp;
         }
         lastTelemetry = merged;
-
-        noTelemetryEl.hidden = true;
-        telemetryGridEl.hidden = false;
-
         const d = merged;
-        const orientationDeg = d.orientation != null ? ((d.orientation / 255) * 360).toFixed(1) : '—';
-        const ts = d.timestamp != null ? new Date(d.timestamp * 1000).toLocaleTimeString() : '';
-        const rows = [
-          ['Battery', d.battery != null ? `${Number(d.battery).toFixed(0)}%` : '—'],
-          ['Speed', d.speed != null ? `${Number(d.speed).toFixed(4)} m/s` : '—'],
-          ['Latitude', d.latitude != null ? Number(d.latitude).toFixed(5) : '—'],
-          ['Longitude', d.longitude != null ? Number(d.longitude).toFixed(5) : '—'],
-          ['GPS signal', d.gps_signal != null ? Number(d.gps_signal).toFixed(1) : '—'],
-          ['Orientation', orientationDeg + '°'],
-          ['Lamp', d.lamp != null ? (d.lamp ? 'On' : 'Off') : '—'],
-        ];
-        if (ts) rows.push(['Last updated', ts]);
 
-        var rpmStr = '—';
-        var rpms = d.rpms;
-        if (Array.isArray(rpms) && rpms.length > 0) {
-          var last = rpms[rpms.length - 1];
-          if (Array.isArray(last) && last.length >= 4) {
-            rpmStr = 'FL ' + last[0].toFixed(0) + ' FR ' + last[1].toFixed(0) + ' RL ' + last[2].toFixed(0) + ' RR ' + last[3].toFixed(0);
-          }
+        if (merged.latitude != null && merged.longitude != null) {
+          updateMapPosition(merged.latitude, merged.longitude);
         }
-        rows.push(['Wheel RPM', rpmStr]);
-
-        telemetryGridEl.innerHTML = rows.map(([label, value]) =>
-          `<dt>${label}</dt><dd>${value}</dd>`
-        ).join('');
+        renderDashboard(merged);
       }
 
       function updateTelemetryForVideoTime() {
@@ -466,6 +833,29 @@
         };
       }
 
+      fetch('/data')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && typeof data === 'object') renderTelemetry(data);
+        })
+        .catch(function () {});
+
+      (function loadLeafletThenInit() {
+        if (typeof L !== 'undefined') {
+          initRobotMap();
+          return;
+        }
+        var s = document.createElement('script');
+        s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        s.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+        s.crossOrigin = 'anonymous';
+        s.onload = function () {
+          L.Icon.Default.imagePath = 'https://unpkg.com/leaflet@1.9.4/dist/images/';
+          initRobotMap();
+        };
+        document.head.appendChild(s);
+      })();
+
       fetch('/api/config')
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -473,6 +863,25 @@
         })
         .catch(function () {})
         .finally(function () { connect(); });
+
+      function sendControl(linear_x, angular_z) {
+        lastLinearX = linear_x;
+        lastAngularZ = angular_z;
+        if (!dataChannel || dataChannel.readyState !== 'open') return;
+        dataChannel.send(JSON.stringify({
+          linear_x: linear_x,
+          angular_z: angular_z,
+          lamp: lampOn ? 1 : 0
+        }));
+      }
+
+      document.getElementById('lampSwitch').addEventListener('click', function () {
+        lampOn = !lampOn;
+        this.className = 'lamp-switch ' + (lampOn ? 'on' : 'off');
+        this.setAttribute('aria-pressed', lampOn ? 'true' : 'false');
+        document.getElementById('lampLabel').textContent = lampOn ? 'On' : 'Off';
+        sendControl(lastLinearX, lastAngularZ);
+      });
 
       document.addEventListener('keydown', function (e) {
         if (!dataChannel || dataChannel.readyState !== 'open') return;
@@ -487,13 +896,13 @@
           default: return;
         }
         e.preventDefault();
-        dataChannel.send(JSON.stringify({ linear_x, angular_z }));
+        sendControl(linear_x, angular_z);
       });
       document.addEventListener('keyup', function (e) {
         if (!dataChannel || dataChannel.readyState !== 'open') return;
         if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key) === -1) return;
         e.preventDefault();
-        dataChannel.send(JSON.stringify({ linear_x: 0, angular_z: 0 }));
+        sendControl(0, 0);
       });
     })();
   </script>

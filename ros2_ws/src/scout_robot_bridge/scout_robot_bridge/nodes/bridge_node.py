@@ -7,13 +7,14 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Header, String
+from std_msgs.msg import Header, Int32, String
 
 from scout_robot_bridge.core.config_manager import ConfigManager
 from scout_robot_bridge.core.constants import (
     CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
+    LAMP_TOPIC,
     DEFAULT_CAMERA_PUBLISH_RATE,
     DEFAULT_IMAGE_FORMAT,
     DEFAULT_MAX_ANGULAR_SPEED,
@@ -27,13 +28,15 @@ from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.core.robot_factory import create_robot
 
 
-def setup_cmd_vel_subscriber(node: Node, robot: RobotBase) -> None:
+def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) -> None:
     """
     Set up cmd_vel subscriber for robot control.
+    Uses last_lamp_ref[0] so every velocity command is sent with the latest lamp state.
     
     Args:
         node: ROS 2 node
         robot: Robot instance to control
+        last_lamp_ref: Single-element list holding last lamp value (0 or 1) from /robot/lamp
     """
     node.declare_parameter('max_linear_speed', DEFAULT_MAX_LINEAR_SPEED)
     node.declare_parameter('max_angular_speed', DEFAULT_MAX_ANGULAR_SPEED)
@@ -44,6 +47,9 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase) -> None:
         if robot is None:
             node.get_logger().warn('cmd_vel received but no robot (robot is None); check auth/env.')
             return
+        # Apply latest lamp state so this velocity command carries it to the SDK
+        if hasattr(robot, 'set_lamp'):
+            robot.set_lamp(last_lamp_ref[0])
         
         # Convert ROS Twist to Frodobots SDK format
         # ROS linear.x: forward/backward (m/s), angular.z: rotation (rad/s)
@@ -61,7 +67,7 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase) -> None:
             if max_angular > 0 else 0.0
         )
         
-        # Send continuous velocity command for smooth control
+        # Send continuous velocity command for smooth control (includes lamp via set_lamp above)
         robot.send_velocity(linear_normalized, angular_normalized)
         
         # Log periodically (not every message to reduce spam)
@@ -76,6 +82,20 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase) -> None:
         f'Subscribed to {CMD_VEL_TOPIC} '
         f'(max_linear={max_linear:.2f}, max_angular={max_angular:.2f}); bridge ready.'
     )
+
+
+def setup_lamp_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) -> None:
+    """
+    Set up lamp state subscriber. Store latest lamp (0=off, 1=on) in last_lamp_ref;
+    cmd_vel handler applies it so every velocity command carries the lamp to the SDK.
+    """
+    def on_lamp(msg: Int32) -> None:
+        last_lamp_ref[0] = 1 if msg.data else 0
+        if robot is not None and hasattr(robot, 'set_lamp'):
+            robot.set_lamp(last_lamp_ref[0])
+
+    node.create_subscription(Int32, LAMP_TOPIC, on_lamp, 10)
+    node.get_logger().info(f'Subscribed to {LAMP_TOPIC} for lamp control.')
 
 
 def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
@@ -126,8 +146,7 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     if none_count >= 50 and not no_frame_logged[0]:
                         no_frame_logged[0] = True
                         node.get_logger().warning(
-                            "No camera frames from SDK (SDK_SKIP_BROWSER_JOIN=0 and browser joined?). Video will stay black until %s returns frames.",
-                            "get_front_camera_stream",
+                            "No camera frames from SDK (SDK_SKIP_BROWSER_JOIN=0 and browser joined?). Video will stay black until get_front_camera_stream returns frames."
                         )
                     continue
                 none_count = 0
@@ -193,8 +212,12 @@ def main(args=None):
                 f'Unknown robot_type "{robot_type}"; running without robot.'
             )
 
+        # Shared ref so cmd_vel always sends with latest lamp (0=off, 1=on)
+        last_lamp_ref = [0]
+
         # Set up subscribers and publishers
-        setup_cmd_vel_subscriber(node, robot)
+        setup_cmd_vel_subscriber(node, robot, last_lamp_ref)
+        setup_lamp_subscriber(node, robot, last_lamp_ref)
         setup_camera_publisher(node, robot)
         setup_telemetry_publisher(node, robot)
 

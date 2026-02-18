@@ -44,6 +44,7 @@ DEFAULT_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chr
 
 # ROS topic names
 CMD_VEL_TOPIC = "/cmd_vel"
+LAMP_TOPIC = "/robot/lamp"
 CAMERA_FRONT_COMPRESSED_TOPIC = "/camera/front/compressed"
 CAMERA_FRAME_ID = "camera_front"
 ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"

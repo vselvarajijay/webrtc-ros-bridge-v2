@@ -117,6 +117,12 @@ case "$cmd" in
     docker compose --profile webrtc exec scout_bridge bash -c \
       'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
     ;;
+  test)
+    echo "Running all tests in ROS 2 workspace..."
+    docker compose --profile webrtc run --rm scout_bridge bash -c \
+      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon test"
+    echo "Tests complete."
+    ;;
   logs)
     target="${1:-webrtc}"
     if [[ "$target" == "webrtc" ]]; then
@@ -146,7 +152,7 @@ case "$cmd" in
     fi
     ;;
   *)
-    echo "Usage: $0 {build|start|stop|teleop|logs|clean} [options]"
+    echo "Usage: $0 {build|start|stop|teleop|test|logs|clean} [options]"
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
@@ -154,6 +160,7 @@ case "$cmd" in
     echo "               Options: --xterm  Run teleop in a separate xterm window"
     echo "  stop        Stop app, scout_turn, scout_sdk, scout_bridge, scout_perception, and any process on port 8000/8001"
     echo "  teleop      Run teleop_node in scout_bridge container (arrow key control)"
+    echo "  test        Run all ROS 2 workspace tests (colcon test in scout_bridge container)"
     echo "  logs        Follow container logs. Run in another terminal while start is running."
     echo "               $0 logs [webrtc|app|turn|sdk|bridge|perception|all]  (default: webrtc)"
     echo "  clean       Remove orphaned containers (ros2-ws, ros2-kilted, etc.)"

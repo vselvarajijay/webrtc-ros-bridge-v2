@@ -23,11 +23,12 @@ from av import VideoFrame
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import String
+from std_msgs.msg import Int32, String
 
 from scout_robot_bridge.core.constants import (
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
+    LAMP_TOPIC,
     DEFAULT_IMAGE_FORMAT,
     ROBOT_TELEMETRY_TOPIC,
     VIDEO_OUTPUT_HEIGHT,
@@ -206,19 +207,25 @@ def _twist_from_control(data: dict) -> Optional[Twist]:
 
 def run_ros_node(
     frame_queue: queue.Queue,
-    cmd_vel_queue: queue.Queue,
+    control_queue: queue.Queue,
     telemetry_queue: queue.Queue,
     image_format: str,
     stop_event: threading.Event,
 ) -> None:
-    """Run rclpy node in a dedicated thread: camera sub -> frame_queue; telemetry sub -> telemetry_queue; timer drains cmd_vel_queue -> /cmd_vel."""
+    """Run rclpy node. Drains control_queue of (twist, lamp) and publishes both so state is passed together."""
     rclpy.init()
     node = Node("webrtc_node")
     cmd_pub = node.create_publisher(Twist, CMD_VEL_TOPIC, 10)
+    lamp_pub = node.create_publisher(Int32, LAMP_TOPIC, 10)
+
+    first_telemetry_logged = [False]
 
     def on_telemetry(msg: String) -> None:
         if not msg.data:
             return
+        if not first_telemetry_logged[0]:
+            first_telemetry_logged[0] = True
+            LOG.info("First telemetry received on %s (len=%d)", ROBOT_TELEMETRY_TOPIC, len(msg.data))
         _put_latest(telemetry_queue, msg.data)
 
     node.create_subscription(
@@ -241,6 +248,7 @@ def run_ros_node(
     )
 
     decode_fail_logged: list = [False]
+    first_frame_logged: list = [False]
 
     def on_image(msg: CompressedImage) -> None:
         data = bytes(msg.data)
@@ -248,6 +256,9 @@ def run_ros_node(
             return
         img = _decode_compressed_image(data, msg.format or image_format)
         if img is not None:
+            if not first_frame_logged[0]:
+                first_frame_logged[0] = True
+                LOG.info("First camera frame received on %s", CAMERA_FRONT_COMPRESSED_TOPIC)
             if img.shape[1] != VIDEO_OUTPUT_WIDTH or img.shape[0] != VIDEO_OUTPUT_HEIGHT:
                 img = cv2.resize(
                     img,
@@ -291,15 +302,30 @@ def run_ros_node(
             rclpy.spin_once(node, timeout_sec=0.05)
         except ExternalShutdownException:
             break
+        except Exception as e:
+            err_str = str(e)
+            if "context is not valid" in err_str or "rcl_shutdown" in err_str or "rcl_init" in err_str:
+                LOG.info("ROS context shut down; exiting ROS thread.")
+                break
+            LOG.warning("ROS spin_once error (continuing): %s", e)
+            continue
         now = time.monotonic()
         if now - last_drain >= dt:
             last_drain = now
             try:
+                # Drain control queue: each item is (twist, lamp) so state is passed together
                 while True:
-                    twist = cmd_vel_queue.get_nowait()
-                    cmd_pub.publish(twist)
+                    item = control_queue.get_nowait()
+                    try:
+                        twist, lamp = item
+                        lamp_pub.publish(Int32(data=int(lamp) if lamp else 0))
+                        cmd_pub.publish(twist)
+                    except (TypeError, ValueError) as e:
+                        LOG.warning("Control queue item invalid (twist, lamp): %s", e)
             except queue.Empty:
                 pass
+            except Exception as e:
+                LOG.warning("Control drain error (continuing): %s", e)
 
     try:
         node.destroy_node()
@@ -324,6 +350,14 @@ def _is_full_telemetry(obj: dict) -> bool:
     )
 
 
+# Minimal payload so browser gets something when no real telemetry yet (connection alive)
+_HEARTBEAT_TELEMETRY = {
+    "battery": None,
+    "speed": 0.0,
+    "lamp": 0,
+    "timestamp": 0,
+}
+
 async def _telemetry_sender_loop(
     ws,
     telemetry_queue: queue.Queue,
@@ -331,7 +365,11 @@ async def _telemetry_sender_loop(
     stop_event: threading.Event,
     last_frame_pts_ref: Optional[list] = None,
 ) -> None:
-    """Send telemetry to app server (prefer full) and browser (newest). Drain queue each tick."""
+    """Send telemetry to app server and browser. Send heartbeat when queue empty so UI stays alive."""
+    last_heartbeat = [0.0]
+    last_payload_ws = [None]  # last full payload we sent (for heartbeat)
+    heartbeat_interval = 2.0  # seconds
+
     while not stop_event.is_set():
         await asyncio.sleep(TELEMETRY_SEND_INTERVAL)
         try:
@@ -342,36 +380,49 @@ async def _telemetry_sender_loop(
                     collected.append(data)
             except queue.Empty:
                 pass
-            if not collected:
-                continue
-            # Parse all collected items
-            parsed = []
-            for data in collected:
-                try:
-                    obj = json.loads(data) if isinstance(data, str) else data
-                    if obj is not None:
-                        parsed.append(obj)
-                except json.JSONDecodeError:
-                    continue
-            if not parsed:
-                continue
-            # For signaling WS (logging): prefer last full telemetry
+
             payload_obj_ws = None
-            for obj in reversed(parsed):
-                if _is_full_telemetry(obj):
-                    payload_obj_ws = obj
-                    break
-                if payload_obj_ws is None:
-                    payload_obj_ws = obj
-            if payload_obj_ws is None:
+            payload_obj_dc = None
+            if collected:
+                parsed = []
+                for data in collected:
+                    try:
+                        obj = json.loads(data) if isinstance(data, str) else data
+                        if obj is not None:
+                            parsed.append(obj)
+                    except json.JSONDecodeError:
+                        continue
+                if parsed:
+                    for obj in reversed(parsed):
+                        if _is_full_telemetry(obj):
+                            payload_obj_ws = obj
+                            break
+                        if payload_obj_ws is None:
+                            payload_obj_ws = obj
+                    payload_obj_dc = parsed[-1]
+            else:
+                # No telemetry: send heartbeat so browser knows connection is alive
+                now = time.time()
+                if now - last_heartbeat[0] >= heartbeat_interval:
+                    last_heartbeat[0] = now
+                    hb = dict(_HEARTBEAT_TELEMETRY)
+                    hb["timestamp"] = now
+                    payload_obj_ws = last_payload_ws[0] if last_payload_ws[0] else hb
+                    payload_obj_dc = hb
+
+            if payload_obj_ws is None and payload_obj_dc is None:
                 continue
+            if payload_obj_ws is None:
+                payload_obj_ws = payload_obj_dc
+            if payload_obj_dc is None:
+                payload_obj_dc = payload_obj_ws
+
+            last_payload_ws[0] = payload_obj_ws if _is_full_telemetry(payload_obj_ws) else last_payload_ws[0]
             payload_ws = {"type": "telemetry", "data": payload_obj_ws}
             if last_frame_pts_ref is not None:
                 payload_ws["frame_pts"] = last_frame_pts_ref[0]
                 payload_ws["frame_time_base"] = FRAME_CLOCK_RATE
             payload_str_ws = json.dumps(payload_ws)
-            # For data channel (browser): send newest so UI reflects latest state immediately
-            payload_obj_dc = parsed[-1]
             payload_dc = {"type": "telemetry", "data": payload_obj_dc}
             if last_frame_pts_ref is not None:
                 payload_dc["frame_pts"] = last_frame_pts_ref[0]
@@ -380,8 +431,8 @@ async def _telemetry_sender_loop(
             await asyncio.sleep(0)
             try:
                 await ws.send(payload_str_ws)
-            except Exception:
-                break
+            except Exception as e:
+                LOG.warning("Telemetry ws.send failed (will retry): %s", e)
             if data_channel_ref and data_channel_ref[0] is not None:
                 try:
                     dc = data_channel_ref[0]
@@ -395,7 +446,7 @@ async def _telemetry_sender_loop(
 
 async def run_signaling_and_webrtc(
     frame_queue: queue.Queue,
-    cmd_vel_queue: queue.Queue,
+    control_queue: queue.Queue,
     telemetry_queue: queue.Queue,
     stop_event: threading.Event,
 ) -> None:
@@ -419,6 +470,8 @@ async def run_signaling_and_webrtc(
                 pc: Optional[RTCPeerConnection] = None
                 data_channel_ref: list = [None]
                 last_frame_pts_ref: list = [0]
+                # Persist lamp state across datachannel reconnects so it does not reset to 0 on new offer
+                last_lamp_ref: list = [0]
 
                 async def recv_loop():
                     nonlocal pc
@@ -443,9 +496,13 @@ async def run_signaling_and_webrtc(
                             pc.addTrack(track)
                             LOG.info("Video track added to peer connection (source: %s)", CAMERA_FRONT_COMPRESSED_TOPIC)
 
+                            # Only publish when (linear, angular, lamp) changes to avoid flooding and reorder issues
+                            last_sent_control: list = [None]  # (linear_x, angular_z, lamp) or None
+
                             @pc.on("datachannel")
                             def on_datachannel(channel):
                                 data_channel_ref[0] = channel
+                                # Use outer last_lamp_ref so lamp state persists across reconnects (no reset to 0)
 
                                 @channel.on("message")
                                 def on_message(message):
@@ -454,15 +511,21 @@ async def run_signaling_and_webrtc(
                                             data = json.loads(message)
                                             twist = _twist_from_control(data)
                                             if twist is not None:
-                                                _put_latest(cmd_vel_queue, twist)
-                                                # Push partial telemetry so UI shows commanded speed; only fields we have
+                                                # Update lamp only when message includes it; otherwise keep current
+                                                if "lamp" in data:
+                                                    last_lamp_ref[0] = 1 if data.get("lamp") else 0
+                                                lamp = last_lamp_ref[0]
+                                                key = (float(twist.linear.x), float(twist.angular.z), lamp)
+                                                prev = last_sent_control[0]
+                                                if prev != key:
+                                                    last_sent_control[0] = key
+                                                    _put_latest(control_queue, (twist, lamp))
+                                                # Always push partial telemetry so UI shows commanded speed
                                                 partial = {"speed": float(twist.linear.x), "timestamp": time.time()}
                                                 _put_latest(telemetry_queue, json.dumps(partial))
-                                                # Send partial to browser immediately so speed echo appears in one RTT
                                                 if getattr(channel, "readyState", None) == "open":
                                                     try:
-                                                        payload_str = json.dumps({"type": "telemetry", "data": partial})
-                                                        channel.send(payload_str)
+                                                        channel.send(json.dumps({"type": "telemetry", "data": partial}))
                                                     except Exception:
                                                         pass
                                         except json.JSONDecodeError:
@@ -525,19 +588,19 @@ def main(args=None) -> None:
 
     image_format = os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
-    cmd_vel_queue: queue.Queue = queue.Queue(maxsize=64)
+    control_queue: queue.Queue = queue.Queue(maxsize=64)  # items: (twist, lamp) — state tracked and passed together
     telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
     stop = threading.Event()
 
     ros_thread = threading.Thread(
         target=run_ros_node,
-        args=(frame_queue, cmd_vel_queue, telemetry_queue, image_format, stop),
+        args=(frame_queue, control_queue, telemetry_queue, image_format, stop),
         daemon=True,
     )
     ros_thread.start()
 
     try:
-        asyncio.run(run_signaling_and_webrtc(frame_queue, cmd_vel_queue, telemetry_queue, stop))
+        asyncio.run(run_signaling_and_webrtc(frame_queue, control_queue, telemetry_queue, stop))
     except KeyboardInterrupt:
         pass
     finally:

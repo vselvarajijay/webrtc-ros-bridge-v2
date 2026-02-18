@@ -29,6 +29,13 @@ class RobotBase(ABC):
         """Stop the robot by sending zero velocity commands."""
         pass
 
+    def set_lamp(self, lamp: int) -> None:
+        """
+        Set lamp state (bitfield: 0=off, 1=front, 2=back, 3=both).
+        Default no-op; subclasses that support lamps should override.
+        """
+        pass
+
     def send_velocity(self, linear: float, angular: float) -> None:
         """
         Send continuous velocity commands to the robot.
