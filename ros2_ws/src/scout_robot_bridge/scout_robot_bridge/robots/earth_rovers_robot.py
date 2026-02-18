@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Iterator, Optional
+from typing import Dict, Iterator, Optional, Tuple
 
 import requests
 
@@ -32,6 +32,7 @@ class EarthRoversRobot(RobotBase):
         self._rtm_client: Optional[RtmClient] = None
         self._camera_disabled = False
         self._camera_fail_count = 0
+        self._camera_disabled_at: Optional[float] = None  # when we set _camera_disabled
         self._last_telemetry_warning_time = 0.0
         self._telemetry_warning_interval = 5.0  # Only log warning every 5 seconds
         self._lamp = 0  # Bitfield: 0=off, 1=front, 2=back, 3=both
@@ -102,29 +103,41 @@ class EarthRoversRobot(RobotBase):
         angular_clamped = max(MIN_VELOCITY, min(MAX_VELOCITY, angular))
         self._send_velocity_command(linear=linear_clamped, angular=angular_clamped)
 
-    def get_front_camera_frame(self) -> Optional[bytes]:
+    def get_front_camera_frame(self) -> Optional[Tuple[bytes, Dict[str, float]]]:
         """
-        Get latest front camera frame as raw bytes via SDK /v2/front API.
+        Get latest front camera frame as raw bytes via SDK /v2/front API, with timing metrics.
 
         Returns:
-            Camera frame bytes, or None if unavailable or disabled.
+            (frame_bytes, metrics) with metrics containing capture_ms and fetch_ms, or None if unavailable or disabled.
         """
+        # Re-enable after cooldown so temporary SDK unavailability doesn't kill video for the session
         if self._camera_disabled:
-            return None
+            if self._camera_disabled_at is not None and (time.monotonic() - self._camera_disabled_at) >= 30.0:
+                self._camera_disabled = False
+                self._camera_fail_count = 0
+                self._camera_disabled_at = None
+                self._logger.info("Front camera re-enabled after 30s cooldown; retrying %s", SDK_FRONT_ENDPOINT)
+            else:
+                return None
         try:
+            t0 = time.perf_counter()
             r = requests.get(SDK_FRONT_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
+            fetch_ms = (time.perf_counter() - t0) * 1000
             r.raise_for_status()
             data = r.json()
             b64 = data.get("front_frame")
             if not b64:
                 return None
+            capture_ms = float(data.get("capture_ms", 0))
             self._camera_fail_count = 0  # success: allow retries after future failures
-            return base64_to_bytes(b64)
+            metrics = {"capture_ms": capture_ms, "fetch_ms": fetch_ms}
+            return (base64_to_bytes(b64), metrics)
         except Exception as e:
             self._camera_fail_count += 1
             # Only disable after several consecutive failures so one timeout doesn't kill video
             if self._camera_fail_count >= 5:
                 self._camera_disabled = True
+                self._camera_disabled_at = time.monotonic()
                 self._logger.warning(
                     "Front camera disabled after %d failures: %s (%s). Run Earth Rovers SDK to enable.",
                     self._camera_fail_count,
@@ -136,14 +149,15 @@ class EarthRoversRobot(RobotBase):
     # Minimum delay between frame pulls when using stream; actual rate limited by get_front_camera_frame() (HTTP + SDK).
     CAMERA_STREAM_LOOP_SLEEP = 0.01
 
-    def get_front_camera_stream(self, stop_event=None) -> Iterator[Optional[bytes]]:
+    def get_front_camera_stream(self, stop_event=None) -> Iterator[Optional[Tuple[bytes, Dict[str, float]]]]:
         """
         Yield front camera frames continuously at max sustainable rate (reuses get_front_camera_frame).
         Frame rate is dominated by get_front_camera_frame() latency (HTTP + SDK capture); loop sleep is a cap only.
+        Yields (frame_bytes, metrics) or None.
         """
         while stop_event is None or not stop_event.is_set():
-            frame = self.get_front_camera_frame()
-            yield frame
+            result = self.get_front_camera_frame()
+            yield result
             time.sleep(self.CAMERA_STREAM_LOOP_SLEEP)
 
     def get_telemetry(self) -> Optional[TelemetryFrame]:

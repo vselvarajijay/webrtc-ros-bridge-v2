@@ -20,9 +20,10 @@ AUTH_TIMEOUT = 15
 SDK_CHECK_TIMEOUT = 10
 BROWSER_ERROR_LOG_INTERVAL = 10.0
 
-# Default viewport dimensions
-DEFAULT_VIEWPORT_WIDTH = 3840
-DEFAULT_VIEWPORT_HEIGHT = 2160
+# Default viewport dimensions (browser capture size; smaller = faster, less data).
+# Override via FRODOBOT_VIEWPORT_WIDTH / FRODOBOT_VIEWPORT_HEIGHT in .env.
+DEFAULT_VIEWPORT_WIDTH = int(os.getenv("FRODOBOT_VIEWPORT_WIDTH", "3840"))
+DEFAULT_VIEWPORT_HEIGHT = int(os.getenv("FRODOBOT_VIEWPORT_HEIGHT", "2160"))
 DEFAULT_VIEWPORT = {"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT}
 
 # Image formats (jpeg is faster to encode/decode than png; use for lower latency)

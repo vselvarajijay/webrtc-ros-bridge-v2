@@ -27,6 +27,7 @@ from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Int32, String
 
 from scout_robot_bridge.core.constants import (
+    CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
     LAMP_TOPIC,
@@ -91,6 +92,49 @@ FRAME_CLOCK_RATE = 90000
 CAMERA_TRACK_FPS = 5
 KEYFRAME_INTERVAL_FRAMES = 15  # ~3 s at 5 fps
 KEYFRAME_BURST_FIRST_N = 5  # First N frames as keyframes so browser gets one even if first packets are lost
+
+# Frame metrics log: one line per frame when FRAME_METRICS_ENABLED != 0
+# Default path: workspace root (project root in Docker) so frame_metrics.log appears next to cli.sh
+FRAME_METRICS_ENABLED = os.getenv("FRAME_METRICS_ENABLED", "1").strip() not in ("0", "false", "False", "no")
+_def_metrics_log = os.getenv("FRAME_METRICS_LOG")
+if _def_metrics_log:
+    FRAME_METRICS_LOG_PATH = _def_metrics_log if os.path.isabs(_def_metrics_log) else os.path.abspath(_def_metrics_log)
+else:
+    _nodes_dir = os.path.dirname(os.path.abspath(__file__))
+    _ros2_ws = os.path.abspath(os.path.join(_nodes_dir, "..", "..", "..", ".."))
+    _workspace_root = os.path.dirname(_ros2_ws)
+    FRAME_METRICS_LOG_PATH = os.path.join(_workspace_root, "frame_metrics.log")
+_metrics_log_file = [None]  # Open-once file handle for append
+
+
+def _parse_frame_metrics_from_header(frame_id_str: str, fallback_frame_id: int) -> tuple:
+    """Parse frame_id,sdk_capture_ms,fetch_ms from header.frame_id (e.g. camera_front_42_45.2_52.1)."""
+    prefix = f"{CAMERA_FRAME_ID}_"
+    if not frame_id_str or not frame_id_str.startswith(prefix):
+        return (fallback_frame_id, 0.0, 0.0)
+    parts = frame_id_str[len(prefix) :].split("_")
+    if len(parts) < 3:
+        return (fallback_frame_id, 0.0, 0.0)
+    try:
+        fid = int(parts[0])
+        sdk_ms = float(parts[1])
+        fetch_ms = float(parts[2])
+        return (fid, sdk_ms, fetch_ms)
+    except (ValueError, IndexError):
+        return (fallback_frame_id, 0.0, 0.0)
+
+
+def _get_metrics_log_handle():
+    """Return open file handle for frame metrics log (append), or None if disabled."""
+    if not FRAME_METRICS_ENABLED:
+        return None
+    if _metrics_log_file[0] is None:
+        try:
+            _metrics_log_file[0] = open(FRAME_METRICS_LOG_PATH, "a", encoding="utf-8")
+        except OSError as e:
+            LOG.warning("Failed to open frame metrics log %s: %s", FRAME_METRICS_LOG_PATH, e)
+            return None
+    return _metrics_log_file[0]
 
 
 def _webrtc_ice_config() -> Optional[RTCConfiguration]:
@@ -318,22 +362,32 @@ def run_ros_node(
 
     decode_fail_logged: list = [False]
     first_frame_logged: list = [False]
+    local_frame_counter = [0]
 
     def on_image(msg: CompressedImage) -> None:
         data = bytes(msg.data)
         if not data:
             return
+        t0 = time.perf_counter()
+        frame_id, sdk_capture_ms, fetch_ms = _parse_frame_metrics_from_header(
+            msg.header.frame_id, local_frame_counter[0]
+        )
         img = _decode_compressed_image(data, msg.format or image_format)
+        t1 = time.perf_counter()
+        decode_ms = (t1 - t0) * 1000
+        resize_ms = 0.0
         if img is not None:
             if not first_frame_logged[0]:
                 first_frame_logged[0] = True
                 LOG.info("First camera frame received on %s", CAMERA_FRONT_COMPRESSED_TOPIC)
             if img.shape[1] != VIDEO_OUTPUT_WIDTH or img.shape[0] != VIDEO_OUTPUT_HEIGHT:
+                t_resize_start = time.perf_counter()
                 img = cv2.resize(
                     img,
                     (VIDEO_OUTPUT_WIDTH, VIDEO_OUTPUT_HEIGHT),
                     interpolation=cv2.INTER_AREA,
                 )
+                resize_ms = (time.perf_counter() - t_resize_start) * 1000
             try:
                 frame_queue.put_nowait(img)
             except queue.Full:
@@ -342,6 +396,19 @@ def run_ros_node(
                     frame_queue.put_nowait(img)
                 except queue.Empty:
                     pass
+            local_frame_counter[0] += 1
+            # One line per frame: [frame_N],[sdk_capture],[ms],[bridge_fetch],[ms],[decode],[ms],[resize],[ms],[UI],[-]
+            log_handle = _get_metrics_log_handle()
+            if log_handle is not None:
+                line = (
+                    f"[frame_{frame_id}],[sdk_capture],[{sdk_capture_ms:.2f}],[bridge_fetch],[{fetch_ms:.2f}],"
+                    f"[decode],[{decode_ms:.2f}],[resize],[{resize_ms:.2f}],[UI],[-]\n"
+                )
+                try:
+                    log_handle.write(line)
+                    log_handle.flush()
+                except OSError as e:
+                    LOG.debug("Frame metrics log write failed: %s", e)
         else:
             if not decode_fail_logged[0]:
                 decode_fail_logged[0] = True
@@ -365,8 +432,25 @@ def run_ros_node(
     )
     dt = 1.0 / CMD_VEL_DRAIN_HZ
     last_drain = time.monotonic()
+    start_time = time.monotonic()
+    last_no_frame_log = [0.0]
+    last_no_telemetry_log = [0.0]
+    NO_DATA_WARN_INTERVAL = 15.0
 
     while not stop_event.is_set():
+        now = time.monotonic()
+        if not first_frame_logged[0] and (now - last_no_frame_log[0]) >= NO_DATA_WARN_INTERVAL and (now - start_time) >= 5.0:
+            last_no_frame_log[0] = now
+            LOG.warning(
+                "No camera frames on %s yet. Is bridge_node running in the same container? Is scout_sdk reachable and /v2/front returning frames?",
+                CAMERA_FRONT_COMPRESSED_TOPIC,
+            )
+        if not first_telemetry_logged[0] and (now - last_no_telemetry_log[0]) >= NO_DATA_WARN_INTERVAL and (now - start_time) >= 5.0:
+            last_no_telemetry_log[0] = now
+            LOG.warning(
+                "No telemetry on %s yet. Is bridge_node running? Is scout_sdk /data reachable?",
+                ROBOT_TELEMETRY_TOPIC,
+            )
         try:
             rclpy.spin_once(node, timeout_sec=0.05)
         except ExternalShutdownException:

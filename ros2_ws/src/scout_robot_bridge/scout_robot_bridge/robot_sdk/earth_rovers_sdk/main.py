@@ -1,10 +1,11 @@
+import asyncio
 import base64
 import functools
 import json
 import logging
 import os
+import time
 from datetime import datetime
-import asyncio
 
 import cv2
 import numpy as np
@@ -657,16 +658,20 @@ async def get_front_frame():
         response_data = {
             "front_frame": _get_placeholder_front_frame_b64(),
             "timestamp": datetime.utcnow().timestamp(),
+            "capture_ms": 0,
         }
         return JSONResponse(content=response_data)
     try:
+        t0 = time.perf_counter()
         front_frame = await browser_service.front()
+        capture_ms = (time.perf_counter() - t0) * 1000
     except Exception as e:
         logger.warning("Browser front frame unavailable: %s", e)
         # Return placeholder so bridge/webrtc keep publishing; UI shows "No camera feed" instead of black.
         response_data = {
             "front_frame": _get_placeholder_front_frame_b64(),
             "timestamp": datetime.utcnow().timestamp(),
+            "capture_ms": 0,
         }
         return JSONResponse(content=response_data)
     response_data = {}
@@ -674,11 +679,13 @@ async def get_front_frame():
         _, base64_data = front_frame.split(",", 1)
         response_data["front_frame"] = base64_data
         response_data["timestamp"] = datetime.utcnow().timestamp()
+        response_data["capture_ms"] = round(capture_ms, 2)
         return JSONResponse(content=response_data)
     # No frame from browser (e.g. not joined yet); return placeholder so pipeline stays active.
     response_data = {
         "front_frame": _get_placeholder_front_frame_b64(),
         "timestamp": datetime.utcnow().timestamp(),
+        "capture_ms": 0,
     }
     return JSONResponse(content=response_data)
 

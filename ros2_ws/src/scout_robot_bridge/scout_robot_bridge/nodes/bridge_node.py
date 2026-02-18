@@ -117,19 +117,26 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
         10,
     )
 
+    frame_counter_ref = [0]
+
     def on_camera_timer() -> None:
         if robot is None:
             return
         try:
-            frame = robot.get_front_camera_frame()
-            if frame is None:
+            result = robot.get_front_camera_frame()
+            if result is None:
                 return
+            if isinstance(result, tuple):
+                frame_bytes, metrics = result
+            else:
+                frame_bytes, metrics = result, {}
+            frame_counter_ref[0] += 1
             msg = CompressedImage()
             msg.header = Header()
             msg.header.stamp = node.get_clock().now().to_msg()
-            msg.header.frame_id = CAMERA_FRAME_ID
+            msg.header.frame_id = f"{CAMERA_FRAME_ID}_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
             msg.format = image_format
-            msg.data = list(frame)
+            msg.data = list(frame_bytes)
             camera_pub.publish(msg)
         except Exception as e:
             node.get_logger().debug(f'Failed to get camera frame: {e}')
@@ -141,8 +148,8 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
         def camera_stream_loop() -> None:
             none_count = 0
             no_frame_logged = [False]
-            for frame in robot.get_front_camera_stream(stop_event):
-                if frame is None:
+            for result in robot.get_front_camera_stream(stop_event):
+                if result is None:
                     none_count += 1
                     if none_count >= 50 and not no_frame_logged[0]:
                         no_frame_logged[0] = True
@@ -154,12 +161,17 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     continue
                 none_count = 0
                 try:
+                    if isinstance(result, tuple):
+                        frame_bytes, metrics = result
+                    else:
+                        frame_bytes, metrics = result, {}
+                    frame_counter_ref[0] += 1
                     msg = CompressedImage()
                     msg.header = Header()
                     msg.header.stamp = node.get_clock().now().to_msg()
-                    msg.header.frame_id = CAMERA_FRAME_ID
+                    msg.header.frame_id = f"{CAMERA_FRAME_ID}_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
                     msg.format = image_format
-                    msg.data = list(frame)
+                    msg.data = list(frame_bytes)
                     camera_pub.publish(msg)
                 except Exception as e:
                     node.get_logger().debug(f'Failed to publish camera frame: {e}')

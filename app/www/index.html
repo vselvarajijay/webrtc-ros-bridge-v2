@@ -5,43 +5,118 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Robot WebRTC — Telemetry</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f1419;
-      --surface: #1a2332;
-      --border: #2d3a4d;
+      --bg: #0a0d10;
+      --surface: rgba(255,255,255,0.03);
+      --border: rgba(245, 166, 35, 0.3);
+      --border-strong: rgba(245, 166, 35, 0.5);
       --text: #e6edf3;
       --muted: #8b949e;
-      --accent: #58a6ff;
-      --ok: #3fb950;
+      --accent: #f5a623;
+      --accent-green: #39ff14;
+      --ok: #39ff14;
       --warn: #d29922;
+      --estop: #f85149;
+      --font-mono: "JetBrains Mono", "Share Tech Mono", "SF Mono", monospace;
+      --font-header: "Orbitron", "Rajdhani", sans-serif;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-family: var(--font-mono);
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      position: relative;
     }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        radial-gradient(circle at 1px 1px, rgba(245,166,35,0.03) 1px, transparent 0);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body > * { position: relative; z-index: 1; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      position: relative;
+      padding: 1rem;
+    }
+    .panel::before, .panel::after {
+      content: '';
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-color: var(--accent);
+      border-style: solid;
+      border-width: 0;
+      opacity: 0.6;
+    }
+    .panel::before { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+    .panel::after { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+    .panel .panel-bracket-br { position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); opacity: 0.6; }
+    .panel .panel-bracket-tl { position: absolute; top: 0; left: 0; width: 12px; height: 12px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); opacity: 0.6; }
     header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--bg);
       padding: 0.75rem 1rem;
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 1rem;
+      flex-wrap: wrap;
     }
     .status {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: var(--muted);
       flex-shrink: 0;
     }
-    .status.connected { background: var(--ok); }
-    .status.error { background: #f85149; }
+    .status.connected {
+      background: var(--ok);
+      animation: status-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes status-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.5); }
+      50% { opacity: 0.9; box-shadow: 0 0 0 6px rgba(57, 255, 20, 0); }
+    }
+    .status.error { background: var(--estop); }
+    .header-battery-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .header-battery-bar .battery-bar-wrap {
+      width: 32px;
+      height: 12px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .header-battery-bar .battery-bar-fill {
+      height: 100%;
+      background: var(--ok);
+      transition: width 0.2s ease;
+    }
+    .header-battery-bar .battery-bar-fill.low { background: var(--warn); }
+    .header-battery-bar .battery-bar-fill.critical { background: var(--estop); }
     main {
       flex: 1;
       display: flex;
@@ -52,17 +127,32 @@
       margin: 0 auto;
       width: 100%;
     }
-    .video-section { margin: 0; }
+    .top-row {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1rem;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) {
+      .top-row { grid-template-columns: 1fr; }
+    }
+    .video-section { margin: 0; display: flex; flex-direction: column; }
+    .video-section .video-wrap {
+      min-height: 50vh;
+      aspect-ratio: 16/10;
+      flex: 1;
+      min-height: 200px;
+    }
     .video-label {
       margin: 0 0 0.5rem 0;
       font-size: 0.9rem;
       font-weight: 600;
       color: var(--muted);
+      font-family: var(--font-header);
     }
     .video-wrap {
       position: relative;
-      background: var(--surface);
-      border-radius: 8px;
+      background: #000;
       border: 1px solid var(--border);
       overflow: hidden;
       aspect-ratio: 16/10;
@@ -71,6 +161,21 @@
       justify-content: center;
       min-height: 200px;
     }
+    .video-wrap::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px);
+      pointer-events: none;
+      z-index: 3;
+    }
+    .video-wrap.video-in-motion {
+      animation: video-border-pulse 1s ease-in-out infinite;
+    }
+    @keyframes video-border-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px var(--border); }
+      50% { box-shadow: 0 0 0 2px var(--accent); }
+    }
     .video-wrap video {
       position: absolute;
       inset: 0;
@@ -78,14 +183,69 @@
       height: 100%;
       object-fit: contain;
       background: #000;
+      z-index: 1;
     }
+    .video-wrap .placeholder { z-index: 0; }
+    .video-wrap .video-overlay { z-index: 2; }
+    .video-hud-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+    .video-hud-crosshair {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 20px; height: 20px; border: 1px solid var(--accent); border-radius: 50%; opacity: 0.8;
+    }
+    .video-hud-crosshair::before, .video-hud-crosshair::after {
+      content: ''; position: absolute; background: var(--accent); opacity: 0.8;
+    }
+    .video-hud-crosshair::before { left: 50%; top: 0; width: 1px; height: 100%; margin-left: -0.5px; }
+    .video-hud-crosshair::after { top: 50%; left: 0; height: 1px; width: 100%; margin-top: -0.5px; }
+    .video-hud-timestamp {
+      position: absolute; bottom: 8px; left: 8px;
+      font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent);
+      background: rgba(0,0,0,0.6); padding: 0.2rem 0.5rem;
+    }
+    .video-hud-rec { position: absolute; top: 8px; right: 8px; font-size: 0.75rem; font-family: var(--font-mono); color: var(--estop); display: none; }
+    .video-hud-rec.visible { display: block; }
+    .video-hud-rec::before { content: '● '; }
+    .video-hud-badges { position: absolute; top: 8px; left: 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+    .video-hud-badge {
+      font-size: 0.7rem; font-family: var(--font-mono); padding: 0.2rem 0.4rem;
+      background: rgba(0,0,0,0.7); border-left: 3px solid var(--muted); color: var(--muted);
+    }
+    .video-hud-badge.ok { border-left-color: var(--ok); color: var(--ok); }
+    .video-hud-badge.err { border-left-color: var(--estop); color: #ff6b6b; }
+    .video-fullscreen-btn {
+      position: absolute; bottom: 8px; right: 8px; z-index: 5; pointer-events: auto;
+      background: rgba(0,0,0,0.7); border: 1px solid var(--border); color: var(--accent);
+      font-size: 0.75rem; padding: 0.35rem 0.6rem; cursor: pointer; font-family: var(--font-mono);
+    }
+    .video-fullscreen-btn:hover { background: rgba(0,0,0,0.9); }
     .video-hint {
       margin: 0.5rem 0 0 0;
       font-size: 0.8rem;
       color: var(--muted);
     }
     .video-hint code { font-size: 0.85em; }
-    .video-pipeline { font-size: 0.8em; color: var(--muted, #666); margin-top: 0.35em; }
+    .status-badges {
+      display: none;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .status-badge.ok { background: rgba(63, 185, 80, 0.15); border-color: var(--ok); color: var(--ok); }
+    .status-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .status-badge.ok .status-badge-dot { background: var(--ok); }
     .video-wrap .placeholder {
       position: absolute;
       inset: 0;
@@ -123,16 +283,35 @@
     }
     .map-section {
       background: var(--surface);
-      border-radius: 8px;
       border: 1px solid var(--border);
       overflow: hidden;
+      position: relative;
     }
+    .map-section::before, .map-section::after {
+      content: ''; position: absolute; width: 12px; height: 12px; border-color: var(--accent); border-style: solid; border-width: 0; opacity: 0.6;
+    }
+    .map-section::before { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+    .map-section::after { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+    .map-section.collapsed .map-container-wrap { display: none; }
+    .map-section.collapsed .map-placeholder-tactical {
+      display: flex;
+      min-height: 120px;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      background: repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(245,166,35,0.05) 19px, rgba(245,166,35,0.05) 20px),
+        repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(245,166,35,0.05) 19px, rgba(245,166,35,0.05) 20px);
+    }
+    .map-section:not(.collapsed) .map-placeholder-tactical { display: none; }
     .map-section h2 {
       margin: 0;
       padding: 0.5rem 1rem;
       font-size: 0.9rem;
       font-weight: 600;
       color: var(--muted);
+      font-family: var(--font-header);
       border-bottom: 1px solid var(--border);
     }
     #map {
@@ -151,16 +330,47 @@
     }
     .telemetry-dashboard {
       background: var(--surface);
-      border-radius: 8px;
       border: 1px solid var(--border);
       padding: 1rem;
+      position: relative;
     }
+    .telemetry-dashboard::before, .telemetry-dashboard::after {
+      content: ''; position: absolute; width: 12px; height: 12px; border-color: var(--accent); border-style: solid; border-width: 0; opacity: 0.6;
+    }
+    .telemetry-dashboard::before { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+    .telemetry-dashboard::after { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
     .telemetry-dashboard h2 {
       margin: 0 0 1rem 0;
       font-size: 0.9rem;
       font-weight: 600;
       color: var(--muted);
+      font-family: var(--font-header);
     }
+    .telemetry-section {
+      margin-bottom: 1rem;
+      border-left: 3px solid var(--accent);
+      padding-left: 0.75rem;
+    }
+    .telemetry-section-header {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      font-family: var(--font-header);
+      user-select: none;
+    }
+    .telemetry-section-header::after { content: ' ▼'; font-size: 0.65rem; opacity: 0.8; }
+    .telemetry-section.collapsed .telemetry-section-header::after { content: ' ▶'; }
+    .telemetry-section.collapsed .telemetry-section-body { display: none; }
+    .telemetry-waiting-hint {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.85rem;
+      color: var(--text-muted, #888);
+    }
+    .telemetry-waiting-hint.hidden { display: none; }
     .dashboard-row {
       display: flex;
       flex-wrap: wrap;
@@ -170,8 +380,7 @@
     }
     .dashboard-row:last-child { margin-bottom: 0; }
     .metric-card {
-      background: var(--bg);
-      border-radius: 6px;
+      background: rgba(0,0,0,0.25);
       border: 1px solid var(--border);
       padding: 0.6rem 0.9rem;
       min-width: 80px;
@@ -182,11 +391,23 @@
       text-transform: uppercase;
       letter-spacing: 0.03em;
       margin-bottom: 0.25rem;
+      font-family: var(--font-header);
     }
     .metric-card .value {
       font-size: 1rem;
       font-weight: 600;
+      font-family: var(--font-mono);
     }
+    .metric-card .value.value-flash {
+      animation: value-flash 0.4s ease;
+    }
+    @keyframes value-flash {
+      0% { background: transparent; }
+      30% { background: rgba(245,166,35,0.25); }
+      100% { background: transparent; }
+    }
+    .gps-no-fix { color: var(--estop) !important; font-weight: 700; }
+    .gps-no-fix::before { content: '⚠ '; }
     .bar-wrap {
       width: 100%;
       height: 6px;
@@ -202,25 +423,35 @@
     }
     .bar-fill.battery { background: var(--ok); }
     .bar-fill.battery.low { background: var(--warn); }
-    .bar-fill.battery.critical { background: #f85149; }
+    .bar-fill.battery.critical { background: var(--estop); }
     .bar-fill.signal { background: var(--accent); }
+    .bar-fill.no-data { width: 0 !important; min-width: 0 !important; background: transparent !important; }
+    .bar-wrap:has(.bar-fill.no-data) { background: repeating-linear-gradient(90deg, var(--border) 0, var(--border) 4px, var(--surface) 4px, var(--surface) 8px); }
     .compass-wrap {
-      width: 64px;
-      height: 64px;
+      width: 80px;
+      height: 80px;
       margin: 0.25rem auto 0;
       position: relative;
       border-radius: 50%;
-      background: var(--bg);
+      background: rgba(0,0,0,0.25);
       border: 1px solid var(--border);
+    }
+    .key-telemetry .compass-wrap {
+      width: 110px;
+      height: 110px;
+    }
+    .key-telemetry .compass-arrow {
+      height: 48px;
+      margin-top: -48px;
     }
     .compass-arrow {
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 3px;
-      height: 28px;
-      margin-left: -1.5px;
-      margin-top: -28px;
+      width: 4px;
+      height: 36px;
+      margin-left: -2px;
+      margin-top: -36px;
       background: var(--accent);
       border-radius: 2px;
       transform-origin: 50% 100%;
@@ -230,11 +461,22 @@
       content: '';
       position: absolute;
       left: 50%;
-      top: -4px;
-      margin-left: -4px;
-      border: 4px solid transparent;
+      top: -5px;
+      margin-left: -5px;
+      border: 5px solid transparent;
       border-bottom-color: var(--accent);
       border-top: none;
+    }
+    .compass-wrap.no-data .compass-arrow { visibility: hidden; }
+    .compass-wrap.no-data::after {
+      content: '?';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.25rem;
+      color: var(--muted);
+      pointer-events: none;
     }
     .rpm-bars {
       display: grid;
@@ -310,166 +552,406 @@
     .lamp-switch.on::after { transform: translateX(20px); }
     .control-panel {
       background: var(--surface);
-      border-radius: 8px;
       border: 1px solid var(--border);
       padding: 1rem;
+      position: relative;
     }
+    .control-panel::before, .control-panel::after {
+      content: ''; position: absolute; width: 12px; height: 12px; border-color: var(--accent); border-style: solid; border-width: 0; opacity: 0.6;
+    }
+    .control-panel::before { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+    .control-panel::after { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
     .control-panel h2 {
       margin: 0 0 0.75rem 0;
       font-size: 0.9rem;
       font-weight: 600;
       color: var(--muted);
+      font-family: var(--font-header);
     }
     .control-grid {
       display: grid;
-      grid-template-columns: 1fr 48px 1fr;
-      grid-template-rows: 48px 48px 48px;
-      gap: 4px;
-      width: 160px;
+      grid-template-columns: 56px 56px 56px;
+      grid-template-rows: 56px 56px 56px;
+      gap: 6px;
+      width: 174px;
       margin: 0 auto;
     }
     .control-grid .cell { display: flex; align-items: center; justify-content: center; }
-    .control-grid .cell:nth-child(1) { grid-column: 2; grid-row: 1; }
-    .control-grid .cell:nth-child(2) { grid-column: 1; grid-row: 2; }
-    .control-grid .cell:nth-child(3) { grid-column: 2; grid-row: 2; }
-    .control-grid .cell:nth-child(4) { grid-column: 3; grid-row: 2; }
-    .control-grid .cell:nth-child(5) { grid-column: 2; grid-row: 3; }
+    .control-grid .cell[data-pos="fl"] { grid-column: 1; grid-row: 1; }
+    .control-grid .cell[data-pos="f"]  { grid-column: 2; grid-row: 1; }
+    .control-grid .cell[data-pos="fr"] { grid-column: 3; grid-row: 1; }
+    .control-grid .cell[data-pos="l"]  { grid-column: 1; grid-row: 2; }
+    .control-grid .cell[data-pos="s"]  { grid-column: 2; grid-row: 2; }
+    .control-grid .cell[data-pos="r"]  { grid-column: 3; grid-row: 2; }
+    .control-grid .cell[data-pos="bl"] { grid-column: 1; grid-row: 3; }
+    .control-grid .cell[data-pos="b"]  { grid-column: 2; grid-row: 3; }
+    .control-grid .cell[data-pos="br"] { grid-column: 3; grid-row: 3; }
     .control-btn {
-      width: 48px;
-      height: 48px;
+      width: 56px;
+      height: 56px;
       border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
+      background: rgba(0,0,0,0.25);
       color: var(--text);
-      font-size: 1.25rem;
+      font-size: 1.35rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+      position: relative;
     }
-    .control-btn:hover { background: var(--border); }
-    .control-btn.pressed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-    .speed-level-wrap {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+    .control-btn:hover { background: rgba(245,166,35,0.15); border-color: var(--border-strong); }
+    .control-btn:active { transform: scale(0.96); }
+    .control-btn.pressed {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+      animation: dpad-pulse 0.6s ease-in-out infinite;
+    }
+    @keyframes dpad-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.5); }
+      50% { opacity: 0.95; box-shadow: 0 0 0 8px rgba(245, 166, 35, 0); }
+    }
+    .control-btn .key-label {
+      font-size: 0.6rem;
+      position: absolute;
+      bottom: 3px;
+      right: 4px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .control-btn.pressed .key-label { color: var(--bg); }
+    .speed-slider-wrap {
       margin-bottom: 0.75rem;
     }
-    .speed-level-label {
+    .speed-slider-wrap .speed-slider-label {
       font-size: 0.85rem;
       color: var(--muted);
-      min-width: 3rem;
+      margin-bottom: 0.35rem;
+      font-family: var(--font-header);
     }
-    .speed-level-btns {
+    .speed-slider-wrap .speed-slider-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      margin-bottom: 0.35rem;
+    }
+    .speed-slider-wrap input[type="range"] {
+      width: 100%;
+      height: 8px;
+      -webkit-appearance: none;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+    }
+    .speed-slider-wrap input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+    }
+    .speed-slider-wrap input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+    }
+    .joystick-wrap {
+      position: relative;
+      width: 56px;
+      height: 56px;
       display: flex;
-      gap: 4px;
-    }
-    .speed-level-btn {
-      width: 32px;
-      height: 32px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 0.9rem;
-      font-weight: 600;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
       cursor: pointer;
     }
-    .speed-level-btn:hover { background: var(--border); }
-    .speed-level-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    .joystick-base {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border);
+    }
+    .joystick-thumb {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      left: 50%;
+      top: 50%;
+      margin-left: -11px;
+      margin-top: -11px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 1px solid var(--border);
+      pointer-events: none;
+      transition: transform 0.08s ease-out;
+    }
+    .header-battery { margin-left: auto; }
+    .speed-delta {
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .speed-delta .actual { color: var(--accent); }
+    .speed-delta .delta { color: var(--ok); }
+    .estop-btn {
+      padding: 0.6rem 1.4rem;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      background: var(--estop);
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-header);
+      box-shadow: 0 0 20px rgba(248, 81, 73, 0.4);
+    }
+    .estop-btn:hover { background: #da3633; box-shadow: 0 0 24px rgba(248, 81, 73, 0.5); }
+    .estop-btn:active { transform: scale(0.98); }
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      min-height: 0;
+    }
+    .right-column .key-telemetry { flex: 1; min-height: 0; }
+    .key-telemetry {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.75rem;
+      position: relative;
+    }
+    .key-telemetry::before, .key-telemetry::after {
+      content: ''; position: absolute; width: 12px; height: 12px; border-color: var(--accent); border-style: solid; border-width: 0; opacity: 0.6;
+    }
+    .key-telemetry::before { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+    .key-telemetry::after { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+    .key-telemetry .metric-card { min-width: 0; }
+    .signal-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 24px;
+      margin-top: 0.25rem;
+    }
+    .signal-bars span {
+      width: 6px;
+      min-height: 4px;
+      background: var(--border);
+      border-radius: 1px;
+      transition: background 0.2s ease;
+    }
+    .signal-bars span.filled { background: var(--accent); }
+    .raw-telemetry-toggle {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.5rem 0;
+      font-family: inherit;
+      text-align: left;
+      width: 100%;
+    }
+    .raw-telemetry-toggle:hover { color: var(--text); }
+    .raw-telemetry-content { overflow: hidden; }
+    .raw-telemetry-content.collapsed { display: none; }
+    .map-container-wrap { position: relative; min-height: 200px; }
+    .map-gps-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 20, 25, 0.85);
+      color: var(--muted);
+      font-size: 0.9rem;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .map-gps-overlay.visible { display: flex; }
+    .map-gps-overlay .map-gps-overlay-text { text-align: center; padding: 1rem; }
+    .map-uncertainty-legend {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      z-index: 4;
+      font-size: 0.7rem;
+      color: var(--muted);
+      background: rgba(15, 20, 25, 0.9);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    .robot-marker-icon { background: none !important; border: none !important; }
+    .speed-selected-actual {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+    .speed-selected-actual span { margin-right: 0.75rem; }
+    .telemetry-group-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      margin-top: 1rem;
+      font-family: var(--font-header);
+    }
+    .telemetry-group-title:first-child { margin-top: 0; }
   </style>
 </head>
 <body>
   <header>
     <span class="status" id="status" title="Connection"></span>
     <span id="statusText">Disconnected</span>
+    <span class="header-battery-bar header-battery" id="headerBatteryWrap">
+      <span class="battery-bar-wrap"><span class="battery-bar-fill no-data" id="headerBatteryBar" style="width:0%"></span></span>
+      <span id="headerBattery">Battery —</span>
+    </span>
+    <button type="button" class="estop-btn" id="estopBtn" title="Emergency stop (Spacebar)">E-STOP</button>
   </header>
   <main>
-    <section class="video-section">
-      <h2 class="video-label">Live view — Front camera</h2>
-      <div class="video-wrap">
-        <video id="remoteVideo" autoplay playsinline muted></video>
-        <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
-        <div class="video-overlay" id="videoOverlay" aria-hidden="true">No camera feed — start Earth Rovers SDK (scout_sdk) <code>/v2/front</code> for live video</div>
-      </div>
-      <p class="video-pipeline" id="videoPipeline" aria-live="polite">Signaling: — | Robot: — | Video: —</p>
-      <p class="video-hint">Camera feed comes from the robot SDK. If the video stays black, ensure the Earth Rovers SDK (scout_sdk) is running and the front camera endpoint (<code>/v2/front</code>) is available. If <strong>Robot</strong> stays —, ensure scout_bridge is running (e.g. <code>./cli.sh start</code>) and can reach this server.</p>
-    </section>
-    <section class="control-panel">
-      <h2>Drive</h2>
-      <div class="speed-level-wrap">
-        <span class="speed-level-label">Speed</span>
-        <div class="speed-level-btns" role="group" aria-label="Drive speed level">
-          <button type="button" class="speed-level-btn" data-level="1" title="Speed 1 (slowest)" aria-pressed="false">1</button>
-          <button type="button" class="speed-level-btn" data-level="2" title="Speed 2" aria-pressed="false">2</button>
-          <button type="button" class="speed-level-btn" data-level="3" title="Speed 3" aria-pressed="true">3</button>
-          <button type="button" class="speed-level-btn" data-level="4" title="Speed 4" aria-pressed="false">4</button>
-          <button type="button" class="speed-level-btn" data-level="5" title="Speed 5 (fastest)" aria-pressed="false">5</button>
+    <div class="top-row">
+      <section class="video-section">
+        <h2 class="video-label">Live view — Front camera</h2>
+        <div class="video-wrap" id="videoWrap">
+          <video id="remoteVideo" autoplay playsinline muted></video>
+          <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
+          <div class="video-overlay" id="videoOverlay" aria-hidden="true">No camera feed — start Earth Rovers SDK (scout_sdk) <code>/v2/front</code> for live video</div>
+          <div class="video-hud-overlay">
+            <div class="video-hud-badges" id="videoHudBadges">
+              <span class="video-hud-badge" id="hudBadgeSignaling">Signaling</span>
+              <span class="video-hud-badge" id="hudBadgeRobot">Robot</span>
+              <span class="video-hud-badge" id="hudBadgeVideo">Video</span>
+            </div>
+            <div class="video-hud-crosshair"></div>
+            <span class="video-hud-timestamp" id="videoHudTimestamp">--:--:--</span>
+            <span class="video-hud-rec" id="videoHudRec">REC</span>
+            <button type="button" class="video-fullscreen-btn" id="videoFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+          </div>
         </div>
-      </div>
-      <div class="control-grid">
-        <div class="cell"><button type="button" class="control-btn" id="btnUp" data-key="ArrowUp" title="Forward" aria-label="Forward">&#9650;</button></div>
-        <div class="cell"><button type="button" class="control-btn" id="btnLeft" data-key="ArrowLeft" title="Left" aria-label="Left">&#9664;</button></div>
-        <div class="cell"><button type="button" class="control-btn" id="btnStop" title="Stop" aria-label="Stop">&#9673;</button></div>
-        <div class="cell"><button type="button" class="control-btn" id="btnRight" data-key="ArrowRight" title="Right" aria-label="Right">&#9654;</button></div>
-        <div class="cell"><button type="button" class="control-btn" id="btnDown" data-key="ArrowDown" title="Backward" aria-label="Backward">&#9660;</button></div>
-      </div>
-    </section>
-    <section class="telemetry-dashboard">
-      <h2>Live telemetry</h2>
-      <div id="dashboardContent">
-        <div class="dashboard-row" id="dashboardRow1">
-          <div class="metric-card" id="cardBattery">
+        <div class="status-badges" id="statusBadges" aria-live="polite">
+          <span class="status-badge" id="badgeSignaling"><span class="status-badge-dot"></span>Signaling</span>
+          <span class="status-badge" id="badgeRobot"><span class="status-badge-dot"></span>Robot</span>
+          <span class="status-badge" id="badgeVideo"><span class="status-badge-dot"></span>Video</span>
+        </div>
+      </section>
+      <div class="right-column">
+        <section class="control-panel">
+          <h2>Drive</h2>
+          <div class="speed-slider-wrap">
+            <div class="speed-slider-label">Speed</div>
+            <div class="speed-slider-value" id="speedSliderValue">0.48 m/s</div>
+            <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Drive speed 1–5">
+          </div>
+          <div class="speed-delta" id="speedSelectedActual" aria-live="polite">→ <span class="actual" id="speedActualVal">—</span> m/s <span class="delta" id="speedDeltaVal">∆ —</span></div>
+          <div class="control-grid">
+            <div class="cell" data-pos="fl"><button type="button" class="control-btn" data-linear="1" data-angular="1" title="Forward + left (W+A)" aria-label="Forward left">&#8598;<span class="key-label">W</span></button></div>
+            <div class="cell" data-pos="f"><button type="button" class="control-btn" data-linear="1" data-angular="0" title="Forward (W)" aria-label="Forward">&#9650;<span class="key-label">W</span></button></div>
+            <div class="cell" data-pos="fr"><button type="button" class="control-btn" data-linear="1" data-angular="-1" title="Forward + right (W+D)" aria-label="Forward right">&#8599;<span class="key-label">W</span></button></div>
+            <div class="cell" data-pos="l"><button type="button" class="control-btn" data-linear="0" data-angular="1" title="Left (A)" aria-label="Left">&#9664;<span class="key-label">A</span></button></div>
+            <div class="cell" data-pos="s">
+              <div class="joystick-wrap" id="joystickWrap" role="group" aria-label="Joystick" title="Drag to drive; release to stop">
+                <div class="joystick-base"></div>
+                <div class="joystick-thumb" id="joystickThumb"></div>
+              </div>
+            </div>
+            <div class="cell" data-pos="r"><button type="button" class="control-btn" data-linear="0" data-angular="-1" title="Right (D)" aria-label="Right">&#9654;<span class="key-label">D</span></button></div>
+            <div class="cell" data-pos="bl"><button type="button" class="control-btn" data-linear="-1" data-angular="1" title="Back + left (S+A)" aria-label="Back left">&#8601;<span class="key-label">S</span></button></div>
+            <div class="cell" data-pos="b"><button type="button" class="control-btn" data-linear="-1" data-angular="0" title="Back (S)" aria-label="Back">&#9660;<span class="key-label">S</span></button></div>
+            <div class="cell" data-pos="br"><button type="button" class="control-btn" data-linear="-1" data-angular="-1" title="Back + right (S+D)" aria-label="Back right">&#8600;<span class="key-label">S</span></button></div>
+          </div>
+        </section>
+        <section class="key-telemetry">
+          <div class="metric-card">
             <div class="label">Battery</div>
-            <div class="value" id="valBattery">—</div>
-            <div class="bar-wrap"><div class="bar-fill battery" id="barBattery" style="width:0%"></div></div>
+            <div class="value" id="keyValBattery">—</div>
+            <div class="bar-wrap"><div class="bar-fill battery no-data" id="keyBarBattery" style="width:0%"></div></div>
           </div>
-          <div class="metric-card" id="cardSignal">
-            <div class="label">Signal</div>
-            <div class="value" id="valSignal">—</div>
-            <div class="bar-wrap"><div class="bar-fill signal" id="barSignal" style="width:0%"></div></div>
-          </div>
-          <div class="metric-card" id="cardGps">
-            <div class="label">GPS signal</div>
-            <div class="value" id="valGps">—</div>
-            <div class="bar-wrap"><div class="bar-fill signal" id="barGps" style="width:0%"></div></div>
-          </div>
-          <div class="metric-card" id="cardOrientation">
-            <div class="label">Heading</div>
-            <div class="value" id="valOrientation">—°</div>
-            <div class="compass-wrap"><div class="compass-arrow" id="compassArrow"></div></div>
-          </div>
-          <div class="metric-card" id="cardSpeed">
+          <div class="metric-card">
             <div class="label">Speed</div>
-            <div class="value" id="valSpeed">— m/s</div>
+            <div class="value" id="keyValSpeed">— m/s</div>
           </div>
-          <div class="metric-card" id="cardVibration">
-            <div class="label">Vibration</div>
-            <div class="value" id="valVibration">—</div>
-            <div class="bar-wrap"><div class="bar-fill signal" id="barVibration" style="width:0%"></div></div>
+          <div class="metric-card compass-card">
+            <div class="label">Heading</div>
+            <div class="value" id="keyValOrientation">—°</div>
+            <div class="compass-wrap no-data" id="keyCompassWrap"><div class="compass-arrow" id="keyCompassArrow"></div></div>
           </div>
-          <div class="metric-card" id="cardLamp">
-            <div class="label">Lamp</div>
-            <div class="lamp-switch-wrap">
-              <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
-              <span class="value" id="lampLabel">Off</span>
+          <div class="metric-card">
+            <div class="label">Signal</div>
+            <div class="value" id="keyValSignal">—</div>
+            <div class="signal-bars" id="keySignalBars" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
             </div>
           </div>
-          <div class="metric-card" id="cardLatitude">
-            <div class="label">Latitude</div>
-            <div class="value" id="valLatitude">—</div>
-          </div>
-          <div class="metric-card" id="cardLongitude">
-            <div class="label">Longitude</div>
-            <div class="value" id="valLongitude">—</div>
-          </div>
-          <div class="metric-card" id="cardLastUpdated">
-            <div class="label">Last updated</div>
-            <div class="value" id="valLastUpdated">—</div>
+        </section>
+      </div>
+    </div>
+    <section class="telemetry-dashboard">
+      <h2>Live telemetry</h2>
+      <p class="telemetry-waiting-hint" id="telemetryWaitingHint" aria-live="polite">Waiting for robot telemetry…</p>
+      <div id="dashboardContent">
+        <div class="telemetry-section" id="sectionNav">
+          <div class="telemetry-section-header" data-section="sectionNav">NAVIGATION</div>
+          <div class="telemetry-section-body">
+            <div class="dashboard-row" id="dashboardRowNav">
+              <div class="metric-card" id="cardGps">
+                <div class="label">GPS signal</div>
+                <div class="value" id="valGps">—</div>
+                <div class="bar-wrap"><div class="bar-fill signal no-data" id="barGps" style="width:0%"></div></div>
+              </div>
+              <div class="metric-card" id="cardLatitude">
+                <div class="label">Latitude</div>
+                <div class="value" id="valLatitude">—</div>
+              </div>
+              <div class="metric-card" id="cardLongitude">
+                <div class="label">Longitude</div>
+                <div class="value" id="valLongitude">—</div>
+              </div>
+              <div class="metric-card" id="cardLastUpdated">
+                <div class="label">Last updated</div>
+                <div class="value" id="valLastUpdated">—</div>
+              </div>
+            </div>
           </div>
         </div>
+        <div class="telemetry-section" id="sectionHealth">
+          <div class="telemetry-section-header" data-section="sectionHealth">SYSTEM HEALTH</div>
+          <div class="telemetry-section-body">
+            <div class="dashboard-row" id="dashboardRowHealth">
+              <div class="metric-card" id="cardVibration">
+                <div class="label">Vibration</div>
+                <div class="value" id="valVibration">—</div>
+                <div class="bar-wrap"><div class="bar-fill signal no-data" id="barVibration" style="width:0%"></div></div>
+              </div>
+              <div class="metric-card" id="cardLamp">
+                <div class="label">Lamp</div>
+                <div class="lamp-switch-wrap">
+                  <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
+                  <span class="value" id="lampLabel">Off</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="telemetry-section collapsed" id="sectionRaw">
+          <div class="telemetry-section-header" data-section="sectionRaw">RAW SENSORS</div>
+          <div class="telemetry-section-body">
         <div class="dashboard-row">
           <div class="metric-card">
             <div class="label">Wheel RPM</div>
@@ -507,12 +989,19 @@
             </div>
           </div>
         </div>
+          </div>
+        </div>
       </div>
     </section>
-    <section class="map-section">
+    <section class="map-section collapsed" id="mapSection">
       <h2>Robot position</h2>
-      <div id="mapContainer">
-        <div id="map"></div>
+      <div class="map-placeholder-tactical" id="mapPlaceholderTactical">Tactical map — awaiting GPS fix</div>
+      <div class="map-container-wrap" id="mapContainerWrap">
+        <div class="map-gps-overlay visible" id="mapGpsOverlay"><span class="map-gps-overlay-text">GPS No Fix — position unavailable</span></div>
+        <div class="map-uncertainty-legend" id="mapUncertaintyLegend" aria-hidden="true" style="display: none;">Red circle: position uncertainty (~0.25 mi)</div>
+        <div id="mapContainer">
+          <div id="map"></div>
+        </div>
       </div>
     </section>
   </main>
@@ -522,12 +1011,21 @@
       const statusTextEl = document.getElementById('statusText');
       const remoteVideo = document.getElementById('remoteVideo');
       const videoPlaceholder = document.getElementById('videoPlaceholder');
-      const videoPipelineEl = document.getElementById('videoPipeline');
       var pipelineState = { signaling: false, robot: false, video: false };
       function updatePipelineUI() {
-        if (!videoPipelineEl) return;
         var s = pipelineState;
-        videoPipelineEl.textContent = 'Signaling: ' + (s.signaling ? 'ok' : '—') + ' | Robot: ' + (s.robot ? 'ok' : '—') + ' | Video: ' + (s.video ? 'ok' : '—');
+        var badgeSignaling = document.getElementById('badgeSignaling');
+        var badgeRobot = document.getElementById('badgeRobot');
+        var badgeVideo = document.getElementById('badgeVideo');
+        if (badgeSignaling) badgeSignaling.classList.toggle('ok', s.signaling);
+        if (badgeRobot) badgeRobot.classList.toggle('ok', s.robot);
+        if (badgeVideo) badgeVideo.classList.toggle('ok', s.video);
+        var hS = document.getElementById('hudBadgeSignaling');
+        var hR = document.getElementById('hudBadgeRobot');
+        var hV = document.getElementById('hudBadgeVideo');
+        if (hS) { hS.classList.toggle('ok', s.signaling); hS.classList.toggle('err', !s.signaling); }
+        if (hR) { hR.classList.toggle('ok', s.robot); hR.classList.toggle('err', !s.robot); }
+        if (hV) { hV.classList.toggle('ok', s.video); hV.classList.toggle('err', !s.video); }
       }
 
       // Ask browser for low decode buffer (less latency, more risk of stalls). Set before srcObject.
@@ -546,9 +1044,12 @@
       var ANGULAR_VEL = 1.0;
       var speedLevel = 3; // 1-5, default middle
       var SPEED_MULTIPLIERS = [0.2, 0.4, 0.6, 0.8, 1.0]; // index 0 = level 1, ... index 4 = level 5
-      var keysPressed = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-      var ARROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-      var CONTROL_SEND_INTERVAL_MS = 50; // 20 Hz to match terminal teleop responsiveness
+      var directionLinear = 0;  // -1, 0, or 1 (UI only)
+      var directionAngular = 0; // -1, 0, or 1 (UI only)
+      var joystickActive = false;
+      var joystickNx = 0;
+      var joystickNy = 0;
+      var CONTROL_SEND_INTERVAL_MS = 50; // 20 Hz
       var controlRepeatHandle = null;
       var FRAME_TIME_BASE = 90000;
       var videoTimeUpdateHandle = null;
@@ -556,21 +1057,49 @@
       var mapInstance = null;
       var mapMarker = null;
       var mapCircle = null;
+      var mapGpsOverlayEl = null;
       var RADIUS_METERS = 402; // 0.25 miles
       var mapInited = false;
+      var lastMapHeadingDeg = 0;
+
+      function isValidGps(lat, lng) {
+        if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return false;
+        var latN = Number(lat);
+        var lngN = Number(lng);
+        if (latN < -90 || latN > 90 || lngN < -180 || lngN > 180) return false;
+        if (Math.abs(latN) > 90 || Math.abs(lngN) > 180) return false;
+        if (latN === 1000 && lngN === 1000) return false;
+        return true;
+      }
 
       function initRobotMap() {
         if (mapInited || typeof L === 'undefined') return;
         var mapEl = document.getElementById('map');
         if (!mapEl) return;
-        var lat = lastTelemetry.latitude != null ? lastTelemetry.latitude : 0;
-        var lng = lastTelemetry.longitude != null ? lastTelemetry.longitude : 0;
+        var lat = 0;
+        var lng = 0;
+        if (isValidGps(lastTelemetry.latitude, lastTelemetry.longitude)) {
+          lat = lastTelemetry.latitude;
+          lng = lastTelemetry.longitude;
+        }
         mapInstance = L.map('map').setView([lat, lng], 15);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
           maxZoom: 19,
         }).addTo(mapInstance);
-        mapMarker = L.marker([lat, lng], { title: 'Robot' }).addTo(mapInstance);
+        if (typeof L.control.scale === 'function') {
+          L.control.scale().addTo(mapInstance);
+        }
+        function createRobotMarkerIcon(headingDeg) {
+          return L.divIcon({
+            className: 'robot-marker-icon',
+            html: '<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:20px solid #f5a623;transform:rotate(' + (headingDeg || 0) + 'deg);margin-left:-8px;margin-top:-20px;"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+          });
+        }
+        window.createRobotMarkerIcon = createRobotMarkerIcon;
+        mapMarker = L.marker([lat, lng], { icon: createRobotMarkerIcon(0), title: 'Robot' }).addTo(mapInstance);
         mapCircle = L.circle([lat, lng], {
           radius: RADIUS_METERS,
           color: '#FF0000',
@@ -578,34 +1107,47 @@
           fillOpacity: 0.15,
           weight: 2,
         }).addTo(mapInstance);
+        mapGpsOverlayEl = document.getElementById('mapGpsOverlay');
         mapInited = true;
-        if (lastTelemetry.latitude != null && lastTelemetry.longitude != null) {
+        if (isValidGps(lastTelemetry.latitude, lastTelemetry.longitude)) {
           updateMapPosition(lastTelemetry.latitude, lastTelemetry.longitude);
         }
       }
 
-      function updateMapPosition(lat, lng) {
-        if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return;
+      function updateMapPosition(lat, lng, headingDeg) {
+        if (!isValidGps(lat, lng)) return;
         var latN = Number(lat);
         var lngN = Number(lng);
         var pos = [latN, lngN];
-        if (mapMarker) mapMarker.setLatLng(pos);
+        if (headingDeg != null && isFinite(headingDeg)) lastMapHeadingDeg = ((headingDeg % 360) + 360) % 360;
+        if (mapMarker) {
+          mapMarker.setLatLng(pos);
+          if (typeof window.createRobotMarkerIcon === 'function') {
+            mapMarker.setIcon(window.createRobotMarkerIcon(lastMapHeadingDeg));
+          }
+        }
         if (mapCircle) mapCircle.setLatLng(pos);
         if (mapInstance) mapInstance.panTo(pos);
       }
 
       function renderDashboard(d) {
-        var set = function (id, text) {
+        var set = function (id, text, flash) {
           var el = document.getElementById(id);
-          if (el) el.textContent = text;
+          if (!el) return;
+          if (el.textContent !== String(text)) {
+            el.textContent = text;
+            if (flash) { el.classList.add('value-flash'); setTimeout(function () { el.classList.remove('value-flash'); }, 400); }
+          }
         };
         var setBar = function (id, pct, low, critical) {
           var el = document.getElementById(id);
           if (!el) return;
-          el.style.width = (pct != null && isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0) + '%';
+          var hasData = pct != null && isFinite(pct) && pct > 0;
+          el.style.width = (hasData ? Math.min(100, Math.max(0, pct)) : 0) + '%';
+          el.classList.toggle('no-data', !hasData);
           el.classList.remove('low', 'critical');
-          if (critical && pct <= (critical || 0)) el.classList.add('critical');
-          else if (low && pct <= (low || 0)) el.classList.add('low');
+          if (hasData && critical && pct <= (critical || 0)) el.classList.add('critical');
+          else if (hasData && low && pct <= (low || 0)) el.classList.add('low');
         };
         var setBarVert = function (id, pct, max) {
           var el = document.getElementById(id);
@@ -615,14 +1157,37 @@
         };
 
         if (d.battery != null && isFinite(d.battery)) {
-          set('valBattery', Math.round(d.battery) + '%');
-          setBar('barBattery', d.battery, 20, 10);
-        } else { set('valBattery', '—'); setBar('barBattery', 0); }
+          set('headerBattery', 'Battery ' + Math.round(d.battery) + '%');
+          set('keyValBattery', Math.round(d.battery) + '%', true);
+          setBar('keyBarBattery', d.battery, 20, 10);
+          var headerBar = document.getElementById('headerBatteryBar');
+          if (headerBar) {
+            headerBar.style.width = Math.min(100, Math.max(0, d.battery)) + '%';
+            headerBar.classList.remove('no-data', 'low', 'critical');
+            if (d.battery <= 10) headerBar.classList.add('critical');
+            else if (d.battery <= 20) headerBar.classList.add('low');
+          }
+        } else {
+          set('headerBattery', 'Battery —');
+          set('keyValBattery', '—');
+          setBar('keyBarBattery', 0);
+          var headerBar = document.getElementById('headerBatteryBar');
+          if (headerBar) { headerBar.style.width = '0%'; headerBar.classList.add('no-data'); }
+        }
 
         if (d.signal_level != null && isFinite(d.signal_level)) {
-          set('valSignal', Number(d.signal_level).toFixed(1));
-          setBar('barSignal', (d.signal_level / 5) * 100);
-        } else { set('valSignal', '—'); setBar('barSignal', 0); }
+          set('keyValSignal', Number(d.signal_level).toFixed(1), true);
+          var bars = document.getElementById('keySignalBars');
+          if (bars) {
+            var level = Math.min(5, Math.max(0, Math.round(d.signal_level)));
+            var spans = bars.querySelectorAll('span');
+            for (var i = 0; i < 5; i++) { spans[i].classList.toggle('filled', i < level); }
+          }
+        } else {
+          set('keyValSignal', '—');
+          var bars = document.getElementById('keySignalBars');
+          if (bars) bars.querySelectorAll('span').forEach(function (s) { s.classList.remove('filled'); });
+        }
 
         if (d.gps_signal != null && isFinite(d.gps_signal)) {
           set('valGps', Number(d.gps_signal).toFixed(1));
@@ -630,15 +1195,23 @@
         } else { set('valGps', '—'); setBar('barGps', 0); }
 
         var deg = d.orientation != null ? (d.orientation / 255) * 360 : null;
+        var keyCompassWrap = document.getElementById('keyCompassWrap');
         if (deg != null && isFinite(deg)) {
-          set('valOrientation', deg.toFixed(1) + '°');
-          var arrow = document.getElementById('compassArrow');
-          if (arrow) arrow.style.transform = 'rotate(' + deg + 'deg)';
-        } else { set('valOrientation', '—°'); }
+          deg = ((deg % 360) + 360) % 360;
+          set('keyValOrientation', deg.toFixed(1) + '°');
+          var keyArrow = document.getElementById('keyCompassArrow');
+          if (keyArrow) keyArrow.style.transform = 'rotate(' + deg + 'deg)';
+          if (keyCompassWrap) keyCompassWrap.classList.remove('no-data');
+        } else {
+          set('keyValOrientation', '—°');
+          if (keyCompassWrap) keyCompassWrap.classList.add('no-data');
+        }
 
         if (d.speed != null && isFinite(d.speed)) {
-          set('valSpeed', Number(d.speed).toFixed(4) + ' m/s');
-        } else set('valSpeed', '— m/s');
+          set('keyValSpeed', Number(d.speed).toFixed(4) + ' m/s', true);
+        } else { set('keyValSpeed', '— m/s'); }
+
+        updateSpeedSelectedActual(d.speed);
 
         if (d.vibration != null && isFinite(d.vibration)) {
           set('valVibration', Number(d.vibration).toFixed(2));
@@ -655,12 +1228,17 @@
           document.getElementById('lampLabel').textContent = lampOn ? 'On' : 'Off';
         }
 
-        if (d.latitude != null && isFinite(d.latitude)) {
-          set('valLatitude', Number(d.latitude).toFixed(5));
-        } else set('valLatitude', '—');
-        if (d.longitude != null && isFinite(d.longitude)) {
-          set('valLongitude', Number(d.longitude).toFixed(5));
-        } else set('valLongitude', '—');
+        var latEl = document.getElementById('valLatitude');
+        var lngEl = document.getElementById('valLongitude');
+        if (isValidGps(d.latitude, d.longitude)) {
+          set('valLatitude', Number(d.latitude).toFixed(5), true);
+          set('valLongitude', Number(d.longitude).toFixed(5), true);
+          if (latEl) latEl.classList.remove('gps-no-fix');
+          if (lngEl) lngEl.classList.remove('gps-no-fix');
+        } else {
+          if (latEl) { latEl.textContent = 'No Fix'; latEl.classList.add('gps-no-fix'); }
+          if (lngEl) { lngEl.textContent = 'No Fix'; lngEl.classList.add('gps-no-fix'); }
+        }
         if (d.timestamp != null && isFinite(d.timestamp)) {
           set('valLastUpdated', new Date(d.timestamp * 1000).toLocaleTimeString());
         } else set('valLastUpdated', '—');
@@ -700,6 +1278,32 @@
           set('magY', Number(lastMag[1]).toFixed(0));
           set('magZ', Number(lastMag[2]).toFixed(0));
         } else { set('magX', '—'); set('magY', '—'); set('magZ', '—'); }
+
+        var gpsOverlay = document.getElementById('mapGpsOverlay');
+        var hasGpsFix = isValidGps(d.latitude, d.longitude);
+        if (gpsOverlay) gpsOverlay.classList.toggle('visible', !hasGpsFix);
+        var legend = document.getElementById('mapUncertaintyLegend');
+        if (legend) {
+          legend.setAttribute('aria-hidden', hasGpsFix ? 'false' : 'true');
+          legend.style.display = hasGpsFix ? 'block' : 'none';
+        }
+        var mapSection = document.getElementById('mapSection');
+        if (mapSection) mapSection.classList.toggle('collapsed', !hasGpsFix);
+        if (hasGpsFix && mapInstance && typeof mapInstance.invalidateSize === 'function') mapInstance.invalidateSize();
+      }
+
+      function updateSpeedSelectedActual(actualSpeedMs) {
+        var selectedMs = LINEAR_VEL * getSpeedMultiplier();
+        var actualEl = document.getElementById('speedActualVal');
+        var deltaEl = document.getElementById('speedDeltaVal');
+        if (actualEl) actualEl.textContent = (actualSpeedMs != null && isFinite(actualSpeedMs)) ? Number(actualSpeedMs).toFixed(2) : '—';
+        if (deltaEl) {
+          if (actualSpeedMs != null && isFinite(actualSpeedMs)) {
+            var delta = actualSpeedMs - selectedMs;
+            var sign = delta >= 0 ? '+' : '';
+            deltaEl.textContent = '∆ ' + sign + delta.toFixed(2);
+          } else deltaEl.textContent = '∆ —';
+        }
       }
 
       function setStatus(connected, error, connecting) {
@@ -754,10 +1358,14 @@
         lastTelemetry = merged;
         const d = merged;
 
-        if (merged.latitude != null && merged.longitude != null) {
-          updateMapPosition(merged.latitude, merged.longitude);
+        if (isValidGps(merged.latitude, merged.longitude)) {
+          var deg = merged.orientation != null ? (merged.orientation / 255) * 360 : null;
+          if (deg != null && isFinite(deg)) deg = ((deg % 360) + 360) % 360;
+          updateMapPosition(merged.latitude, merged.longitude, deg);
         }
         renderDashboard(merged);
+        var hint = document.getElementById('telemetryWaitingHint');
+        if (hint) hint.classList.toggle('hidden', isRealTelemetry(merged));
       }
 
       function updateTelemetryForVideoTime() {
@@ -805,6 +1413,8 @@
         updatePipelineUI();
         lastTelemetry = {};
         telemetryBuffer = [];
+        var disconnectHint = document.getElementById('telemetryWaitingHint');
+        if (disconnectHint) disconnectHint.classList.remove('hidden');
         if (videoTimeUpdateHandle != null) {
           if (typeof remoteVideo.cancelVideoFrameCallback === 'function') {
             remoteVideo.cancelVideoFrameCallback(videoTimeUpdateHandle);
@@ -926,7 +1536,7 @@
                 if (remoteVideo.videoWidth === 0) {
                   var ov = document.getElementById('videoOverlay');
                   if (ov) {
-                    ov.textContent = 'Waiting for first frame. If this persists, ensure TURN is running (port 3478) and refresh.';
+                    ov.innerHTML = 'Waiting for first frame. If this persists: ensure the <strong>robot bridge</strong> is running, the camera source (Earth Rovers SDK or ROS <code>/camera/front/compressed</code>) is active, and TURN on port 3478 if over the internet.';
                     ov.classList.add('visible');
                     ov.setAttribute('aria-hidden', 'false');
                   }
@@ -1122,14 +1732,10 @@
         return SPEED_MULTIPLIERS[i];
       }
 
-      function computeVelocityFromKeys() {
+      function computeVelocityFromDirection() {
         var mul = getSpeedMultiplier();
-        var linear_x = 0, angular_z = 0;
-        if (keysPressed.ArrowUp) linear_x += LINEAR_VEL * mul;
-        if (keysPressed.ArrowDown) linear_x -= LINEAR_VEL * mul;
-        if (keysPressed.ArrowLeft) angular_z += ANGULAR_VEL * mul;
-        if (keysPressed.ArrowRight) angular_z -= ANGULAR_VEL * mul;
-        // Normalize diagonal (same as terminal teleop) so combined movement isn't faster
+        var linear_x = directionLinear * LINEAR_VEL * mul;
+        var angular_z = directionAngular * ANGULAR_VEL * mul; // left +, right -
         if (Math.abs(linear_x) > 0.01 && Math.abs(angular_z) > 0.01) {
           var factor = 1.0 / Math.sqrt(2);
           linear_x *= factor;
@@ -1138,38 +1744,45 @@
         return [linear_x, angular_z];
       }
 
-      function updateControlPanelVisual() {
-        ARROW_KEYS.forEach(function (key) {
-          var btn = document.querySelector('.control-btn[data-key="' + key + '"]');
-          if (btn) {
-            if (keysPressed[key]) {
-              btn.classList.add('pressed');
-              btn.setAttribute('aria-pressed', 'true');
-            } else {
-              btn.classList.remove('pressed');
-              btn.setAttribute('aria-pressed', 'false');
-            }
+      function computeVelocity() {
+        if (joystickActive) {
+          var mul = getSpeedMultiplier();
+          var linear_x = LINEAR_VEL * mul * joystickNy;
+          var angular_z = -ANGULAR_VEL * mul * joystickNx;
+          if (Math.abs(linear_x) > 0.01 && Math.abs(angular_z) > 0.01) {
+            var factor = 1.0 / Math.sqrt(2);
+            linear_x *= factor;
+            angular_z *= factor;
           }
-        });
-        document.querySelectorAll('.speed-level-btn').forEach(function (btn) {
-          var level = parseInt(btn.getAttribute('data-level'), 10);
-          var active = level === speedLevel;
-          btn.classList.toggle('active', active);
-          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-        });
+          return [linear_x, angular_z];
+        }
+        return computeVelocityFromDirection();
       }
 
-      function anyKeyPressed() {
-        return keysPressed.ArrowUp || keysPressed.ArrowDown || keysPressed.ArrowLeft || keysPressed.ArrowRight;
+      function updateControlPanelVisual() {
+        document.querySelectorAll('.control-btn[data-linear]').forEach(function (btn) {
+          var lin = parseInt(btn.getAttribute('data-linear'), 10);
+          var ang = parseInt(btn.getAttribute('data-angular'), 10);
+          var pressed = (directionLinear === lin && directionAngular === ang);
+          btn.classList.toggle('pressed', pressed);
+          btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        });
+        var slider = document.getElementById('speedSlider');
+        if (slider) { slider.value = speedLevel; }
+        var sliderVal = document.getElementById('speedSliderValue');
+        if (sliderVal) sliderVal.textContent = (LINEAR_VEL * getSpeedMultiplier()).toFixed(2) + ' m/s';
+        var videoWrap = document.getElementById('videoWrap');
+        if (videoWrap) videoWrap.classList.toggle('video-in-motion', directionLinear !== 0 || directionAngular !== 0 || joystickActive);
       }
 
-      function applyKeysAndSend() {
-        var vel = computeVelocityFromKeys();
+      function applyDirectionAndSend() {
+        var vel = computeVelocity();
         sendControl(vel[0], vel[1]);
         updateControlPanelVisual();
-        if (anyKeyPressed()) {
+        var anyInput = directionLinear !== 0 || directionAngular !== 0 || joystickActive;
+        if (anyInput) {
           if (!controlRepeatHandle) {
-            controlRepeatHandle = setInterval(applyKeysAndSend, CONTROL_SEND_INTERVAL_MS);
+            controlRepeatHandle = setInterval(applyDirectionAndSend, CONTROL_SEND_INTERVAL_MS);
           }
         } else {
           if (controlRepeatHandle) {
@@ -1177,6 +1790,66 @@
             controlRepeatHandle = null;
           }
         }
+      }
+
+      var JOYSTICK_MAX_RADIUS_PX = 22;
+
+      function updateJoystickThumb() {
+        var thumb = document.getElementById('joystickThumb');
+        if (!thumb) return;
+        thumb.style.transform = 'translate(' + (joystickNx * JOYSTICK_MAX_RADIUS_PX) + 'px, ' + (-joystickNy * JOYSTICK_MAX_RADIUS_PX) + 'px)';
+      }
+
+      function joystickPointerDown(e) {
+        e.preventDefault();
+        joystickActive = true;
+        joystickUpdateFromEvent(e);
+        updateJoystickThumb();
+        applyDirectionAndSend();
+      }
+
+      function joystickPointerMove(e) {
+        if (!joystickActive) return;
+        e.preventDefault();
+        joystickUpdateFromEvent(e);
+        updateJoystickThumb();
+        applyDirectionAndSend();
+      }
+
+      function joystickPointerUp(e) {
+        if (!joystickActive) return;
+        e.preventDefault();
+        joystickActive = false;
+        joystickNx = 0;
+        joystickNy = 0;
+        updateJoystickThumb();
+        sendControl(0, 0);
+        if (directionLinear === 0 && directionAngular === 0 && controlRepeatHandle) {
+          clearInterval(controlRepeatHandle);
+          controlRepeatHandle = null;
+        }
+      }
+
+      function joystickUpdateFromEvent(e) {
+        var wrap = document.getElementById('joystickWrap');
+        if (!wrap) return;
+        var rect = wrap.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+        var t = (e.touches && e.touches.length) ? e.touches[0] : (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0] : null;
+        var px = t ? t.clientX : e.clientX;
+        var py = t ? t.clientY : e.clientY;
+        var dx = px - cx;
+        var dy = py - cy;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1e-6) {
+          joystickNx = 0;
+          joystickNy = 0;
+          return;
+        }
+        var r = Math.min(1, dist / JOYSTICK_MAX_RADIUS_PX);
+        joystickNx = r * dx / dist;
+        joystickNy = -r * dy / dist;
       }
 
       document.getElementById('lampSwitch').addEventListener('click', function () {
@@ -1187,49 +1860,141 @@
         sendControl(lastLinearX, lastAngularZ);
       });
 
+      function setDirection(linear, angular) {
+        directionLinear = linear;
+        directionAngular = angular;
+        applyDirectionAndSend();
+      }
+
+      function doEstop() {
+        directionLinear = 0;
+        directionAngular = 0;
+        if (controlRepeatHandle) {
+          clearInterval(controlRepeatHandle);
+          controlRepeatHandle = null;
+        }
+        sendControl(0, 0);
+        updateControlPanelVisual();
+      }
+
+      document.getElementById('estopBtn').addEventListener('click', function () { doEstop(); });
+
+      var keysPressed = {};
+      var DRIVE_KEYS = {
+        w: [1, 0], ArrowUp: [1, 0],
+        s: [-1, 0], ArrowDown: [-1, 0],
+        a: [0, 1], ArrowLeft: [0, 1],
+        d: [0, -1], ArrowRight: [0, -1]
+      };
       document.addEventListener('keydown', function (e) {
-        if (e.repeat) return;
-        if (ARROW_KEYS.indexOf(e.key) === -1) return;
-        keysPressed[e.key] = true;
-        applyKeysAndSend();
-        e.preventDefault();
+        var key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        if (key === ' ') {
+          e.preventDefault();
+          doEstop();
+          return;
+        }
+        var dir = DRIVE_KEYS[key];
+        if (dir) {
+          e.preventDefault();
+          keysPressed[key] = true;
+          var linear = 0;
+          var angular = 0;
+          if (keysPressed.w || keysPressed.ArrowUp) linear = 1;
+          if (keysPressed.s || keysPressed.ArrowDown) linear = -1;
+          if (keysPressed.a || keysPressed.ArrowLeft) angular = 1;
+          if (keysPressed.d || keysPressed.ArrowRight) angular = -1;
+          setDirection(linear, angular);
+        }
       });
       document.addEventListener('keyup', function (e) {
-        if (ARROW_KEYS.indexOf(e.key) === -1) return;
-        keysPressed[e.key] = false;
-        applyKeysAndSend();
-        e.preventDefault();
+        var key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        if (DRIVE_KEYS[key]) {
+          e.preventDefault();
+          keysPressed[key] = false;
+          var linear = 0;
+          var angular = 0;
+          if (keysPressed.w || keysPressed.ArrowUp) linear = 1;
+          if (keysPressed.s || keysPressed.ArrowDown) linear = -1;
+          if (keysPressed.a || keysPressed.ArrowLeft) angular = 1;
+          if (keysPressed.d || keysPressed.ArrowRight) angular = -1;
+          setDirection(linear, angular);
+        }
       });
 
-      function attachArrowButton(btn) {
-        var key = btn.getAttribute('data-key');
-        if (!key) return;
-        function setPressed(pressed) {
-          keysPressed[key] = pressed;
-          applyKeysAndSend();
-        }
-        btn.addEventListener('mousedown', function (e) { e.preventDefault(); setPressed(true); });
-        btn.addEventListener('mouseup', function () { setPressed(false); });
-        btn.addEventListener('mouseleave', function () { setPressed(false); });
-        btn.addEventListener('touchstart', function (e) { e.preventDefault(); setPressed(true); }, { passive: false });
-        btn.addEventListener('touchend', function (e) { e.preventDefault(); setPressed(false); }, { passive: false });
-      }
-      ARROW_KEYS.forEach(function (key) {
-        var btn = document.querySelector('.control-btn[data-key="' + key + '"]');
-        if (btn) attachArrowButton(btn);
-      });
-      document.getElementById('btnStop').addEventListener('click', function () {
-        ARROW_KEYS.forEach(function (k) { keysPressed[k] = false; });
-        applyKeysAndSend();
-      });
-      document.querySelectorAll('.speed-level-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          speedLevel = Math.max(1, Math.min(5, parseInt(this.getAttribute('data-level'), 10)));
-          updateControlPanelVisual();
-          applyKeysAndSend();
+      (function initTelemetrySections() {
+        document.querySelectorAll('.telemetry-section-header').forEach(function (h) {
+          h.addEventListener('click', function () {
+            var id = this.getAttribute('data-section');
+            var section = id ? document.getElementById(id) : null;
+            if (section) section.classList.toggle('collapsed');
+          });
         });
-      });
+      })();
+      (function initVideoHud() {
+        function updateVideoTimestamp() {
+          var el = document.getElementById('videoHudTimestamp');
+          if (el) el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+        }
+        setInterval(updateVideoTimestamp, 1000);
+        updateVideoTimestamp();
+        var fullscreenBtn = document.getElementById('videoFullscreenBtn');
+        var videoWrap = document.getElementById('videoWrap');
+        if (fullscreenBtn && videoWrap) {
+          fullscreenBtn.addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+              videoWrap.requestFullscreen ? videoWrap.requestFullscreen() : videoWrap.webkitRequestFullscreen && videoWrap.webkitRequestFullscreen();
+              fullscreenBtn.textContent = '✕ Exit';
+            } else {
+              document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen && document.webkitExitFullscreen();
+              fullscreenBtn.textContent = '⛶ Fullscreen';
+            }
+          });
+        }
+      })();
+
+      function attachDirectionButton(btn) {
+        var lin = parseInt(btn.getAttribute('data-linear'), 10);
+        var ang = parseInt(btn.getAttribute('data-angular'), 10);
+        btn.addEventListener('mousedown', function (e) { e.preventDefault(); setDirection(lin, ang); });
+        btn.addEventListener('mouseup', function () { setDirection(0, 0); });
+        btn.addEventListener('mouseleave', function () { setDirection(0, 0); });
+        btn.addEventListener('touchstart', function (e) { e.preventDefault(); setDirection(lin, ang); }, { passive: false });
+        btn.addEventListener('touchend', function (e) { e.preventDefault(); setDirection(0, 0); }, { passive: false });
+      }
+      document.querySelectorAll('.control-btn[data-linear]').forEach(attachDirectionButton);
+
+      (function initJoystick() {
+        var wrap = document.getElementById('joystickWrap');
+        if (!wrap) return;
+        wrap.addEventListener('mousedown', joystickPointerDown);
+        wrap.addEventListener('touchstart', function (e) {
+          e.preventDefault();
+          joystickPointerDown(e);
+        }, { passive: false });
+        document.addEventListener('mousemove', joystickPointerMove);
+        document.addEventListener('mouseup', joystickPointerUp);
+        document.addEventListener('touchmove', function (e) {
+          if (joystickActive) e.preventDefault();
+          joystickPointerMove(e);
+        }, { passive: false });
+        document.addEventListener('touchend', joystickPointerUp, { passive: false });
+        document.addEventListener('touchcancel', joystickPointerUp, { passive: false });
+      })();
+
+      (function initSpeedSlider() {
+        var slider = document.getElementById('speedSlider');
+        var sliderVal = document.getElementById('speedSliderValue');
+        if (!slider) return;
+        slider.addEventListener('input', function () {
+          speedLevel = Math.max(1, Math.min(5, parseInt(this.value, 10)));
+          if (sliderVal) sliderVal.textContent = (LINEAR_VEL * getSpeedMultiplier()).toFixed(2) + ' m/s';
+          updateControlPanelVisual();
+          updateSpeedSelectedActual(lastTelemetry.speed);
+          applyDirectionAndSend();
+        });
+      })();
       updateControlPanelVisual();
+      updateSpeedSelectedActual(lastTelemetry.speed);
     })();
   </script>
 </body>
