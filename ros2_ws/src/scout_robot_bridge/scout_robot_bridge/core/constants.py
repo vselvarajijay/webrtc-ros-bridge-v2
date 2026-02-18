@@ -6,8 +6,9 @@ import os
 FRODOBOTS_API_URL = os.getenv(
     "FRODOBOTS_API_URL", "https://frodobots-web-api.onrender.com/api/v1"
 )
-SDK_LOCAL_URL = "http://127.0.0.1:8000"
+SDK_LOCAL_URL = os.getenv("SDK_LOCAL_URL", "http://127.0.0.1:8000")
 SDK_LOCAL_ENDPOINT = f"{SDK_LOCAL_URL}/sdk"
+SDK_FRONT_ENDPOINT = f"{SDK_LOCAL_URL}/v2/front"
 SDK_DATA_ENDPOINT = f"{SDK_LOCAL_URL}/data"
 
 # Velocity limits
@@ -16,7 +17,7 @@ MAX_VELOCITY = 1.0
 
 # Timeouts (in seconds)
 AUTH_TIMEOUT = 15
-SDK_CHECK_TIMEOUT = 1
+SDK_CHECK_TIMEOUT = 10
 BROWSER_ERROR_LOG_INTERVAL = 10.0
 
 # Default viewport dimensions
@@ -41,12 +42,15 @@ DEFAULT_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chr
 CMD_VEL_TOPIC = "/cmd_vel"
 CAMERA_FRONT_COMPRESSED_TOPIC = "/camera/front/compressed"
 CAMERA_FRAME_ID = "camera_front"
+ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"
 
 # ROS parameter defaults
 DEFAULT_ROBOT_TYPE = "earth_rovers_sdk"
 DEFAULT_MAX_LINEAR_SPEED = 1.0
 DEFAULT_MAX_ANGULAR_SPEED = 1.0
-DEFAULT_CAMERA_PUBLISH_RATE = 5.0
+# Limited by SDK /v2/front (HTTP + Playwright capture). 10 Hz is safe; try 15 Hz if SDK keeps up.
+DEFAULT_CAMERA_PUBLISH_RATE = 10.0
+DEFAULT_TELEMETRY_PUBLISH_RATE = 5.0
 DEFAULT_MAP_ZOOM_LEVEL = "18"
 
 # Required auth keys

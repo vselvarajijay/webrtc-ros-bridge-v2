@@ -1,10 +1,64 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    image: webrtc-ros-bridge-v2-app
+    container_name: scout_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/root/workspace
+    working_dir: /root/workspace
+    environment:
+      - PYTHONPATH=/root/workspace
+      - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}
+      - TURN_URL=${TURN_URL:-turn:localhost:3478}
+      - TURN_USERNAME=${TURN_USERNAME:-scout}
+      - TURN_CREDENTIAL=${TURN_CREDENTIAL:-scout}
+    profiles:
+      - webrtc
+
+  scout_turn:
+    image: coturn/coturn:latest
+    container_name: scout_turn
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+    volumes:
+      - ./docker/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    profiles:
+      - webrtc
+
+  scout_sdk:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sdk
+    image: webrtc-ros-bridge-v2-scout_sdk
+    container_name: scout_sdk
+    ports:
+      - "8001:8001"
+    environment:
+      # Browser loads the SDK page from same container (port 8001)
+      - SDK_PAGE_URL=http://127.0.0.1:8001/sdk
+      # Skip headless browser join when Earth Rovers auth is not configured. Set to 0 in .env to enable real front camera.
+      - SDK_SKIP_BROWSER_JOIN=${SDK_SKIP_BROWSER_JOIN:-1}
+    volumes:
+      - ./.env:/app/.env:ro
+    command: ["python3", "-m", "hypercorn", "main:app", "--bind", "0.0.0.0:8001"]
+    profiles:
+      - webrtc
+
   scout_bridge:
     build:
       context: .
       dockerfile: docker/Dockerfile.bridge
     image: webrtc-ros-bridge-v2-scout_bridge
     container_name: scout_bridge
+    depends_on:
+      - scout_sdk
+      - app
     stdin_open: true
     tty: true
     environment:
@@ -12,10 +66,19 @@ services:
       - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=1
+      # Use Docker service names so bridge can reach SDK/app/TURN on all platforms (Mac host networking doesn't share 127.0.0.1)
+      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://scout_sdk:8001}
+      - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://scout_app:8000/ws/signaling}
+      - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}
+      - TURN_URL=${TURN_URL_NODE:-turn:scout_turn:3478}
+      - TURN_USERNAME=${TURN_USERNAME:-scout}
+      - TURN_CREDENTIAL=${TURN_CREDENTIAL:-scout}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
-    network_mode: host
+    # No network_mode: host so bridge can reach scout_sdk via Docker DNS (required on Docker Desktop for Mac)
+    # bridge_node in background, webrtc_node in foreground (same container so /cmd_vel reaches webrtc for telemetry speed)
+    command: ["bash", "-c", "source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash && (ros2 run scout_robot_bridge bridge_node &) && exec ros2 run scout_robot_bridge webrtc_node"]
 
   scout_perception:
     build:
@@ -34,6 +97,34 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
     network_mode: host
+
+  scout_webrtc:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bridge
+    image: webrtc-ros-bridge-v2-scout_bridge
+    container_name: scout_webrtc
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=${DISPLAY:-host.docker.internal:0}
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_LOCALHOST_ONLY=1
+      # Host network: reach app at host's published port 8000 (host.docker.internal works on Mac and Linux Docker 20.10+)
+      - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://host.docker.internal:8000/ws/signaling}
+      # TURN: webrtc node (in Docker VM) reaches TURN at host; browser uses TURN_URL from .env (e.g. turn:localhost:3478)
+      - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}
+      - TURN_URL=${TURN_URL_NODE:-turn:host.docker.internal:3478}
+      - TURN_USERNAME=${TURN_USERNAME:-scout}
+      - TURN_CREDENTIAL=${TURN_CREDENTIAL:-scout}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - .:/root/workspace
+    network_mode: host
+    command: ["bash", "-c", "source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; export TURN_URL=turn:host.docker.internal:3478; source install/setup.bash && exec ros2 run scout_robot_bridge webrtc_node"]
+    profiles:
+      - webrtc
 
   scout_shell:
     build:

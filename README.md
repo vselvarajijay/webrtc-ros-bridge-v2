@@ -95,6 +95,30 @@ python main.py
 
 Then the bridge can load `http://127.0.0.1:8000/sdk` and publish frames. If you don’t need the camera stream, you can ignore this error; move commands and the rest of the bridge still work.
 
+### WebRTC live view
+
+Stream the robot's front camera to the browser over WebRTC and control the robot from the app (arrow keys).
+
+**Startup order:**
+
+1. **Start the stack** with the webrtc profile (app, Earth Rovers SDK, scout_bridge, scout_perception, scout_webrtc):
+
+   ```bash
+   ./cli.sh build   # if not already built
+   ./cli.sh start   # starts app, SDK, bridge, perception, webrtc
+   ```
+
+2. **Open the app** in your browser at `http://localhost:8000`. The page shows a live view area and telemetry panel.
+
+3. **Front camera source:** For the stream to show, the bridge must be publishing `/camera/front/compressed`. The **scout_sdk** container runs the Earth Rovers SDK on port 8001; the bridge uses it by default (`SDK_LOCAL_URL=http://host.docker.internal:8001`). Without the SDK running, the live view stays on "Waiting for robot stream…".
+
+**Containers (webrtc profile):**
+
+- **scout_app** – FastAPI app (signaling WebSocket + static page) on port 8000.
+- **scout_sdk** – Earth Rovers SDK (/v2/front, /data) on port 8001; runs in Docker so no host pip install needed.
+- **scout_bridge** – `bridge_node`: robot control and front camera publisher on `/camera/front/compressed` (gets frames from scout_sdk).
+- **scout_webrtc** – `webrtc_node`: subscribes to the camera topic, sends video over WebRTC to the app. Uses **host network** so it shares the host ROS 2 network with scout_bridge; connects to the app at `ws://host.docker.internal:8000/ws/signaling`.
+
 ---
 
 ## Architecture

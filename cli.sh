@@ -10,13 +10,16 @@ shift || true
 # Shared env for compose (macOS X11)
 export COMPOSE_DISPLAY="${DISPLAY:-host.docker.internal:0}"
 
+# App server (signaling) PID file for start/stop
+APP_PID_FILE="${SCRIPT_DIR}/.cli-app-server.pid"
+
 case "$cmd" in
   build)
-    echo "Building Docker images..."
+    echo "Building Docker images (app, bridge, SDK, ...)..."
     # Try --remove-orphans, fall back if not supported
-    docker compose build --remove-orphans 2>/dev/null || docker compose build
+    docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     echo "Building ROS 2 workspace in container..."
-    docker compose run --rm scout_bridge bash -c \
+    docker compose --profile webrtc run --rm scout_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
     echo "Build complete. Run ./cli.sh start to start services and open a shell."
     ;;
@@ -40,19 +43,32 @@ case "$cmd" in
       fi
     fi
 
-    echo "Starting scout_bridge and scout_perception..."
-    # Try --remove-orphans, fall back if not supported
-    if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose up -d --remove-orphans scout_bridge scout_perception 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose up -d scout_bridge scout_perception
-    else
-      docker compose up -d --remove-orphans scout_bridge scout_perception 2>/dev/null || \
-      docker compose up -d scout_bridge scout_perception
+    # Clear any stale host app PID (app now runs in container when using webrtc profile)
+    if [[ -f "$APP_PID_FILE" ]]; then
+      old_pid=$(cat "$APP_PID_FILE" 2>/dev/null)
+      if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+        kill "$old_pid" 2>/dev/null || true
+        sleep 1
+      fi
+      rm -f "$APP_PID_FILE"
     fi
-    sleep 1
 
-    echo "Opening dev shell (scout_shell)..."
-    RUN_CMD="docker compose --profile shell run --rm -it scout_shell bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash 2>/dev/null || true; exec bash -l'"
+    echo "Starting app (signaling + www), scout_turn, scout_sdk, scout_bridge, scout_perception..."
+    if [[ "$(uname)" == Darwin ]]; then
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception
+    else
+      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || \
+      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception
+    fi
+    # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
+    echo "Waiting for services to be ready..."
+    sleep 5
+    echo "App (signaling + www): http://localhost:8000/"
+    echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
+
+    echo "Opening teleop (keyboard control)..."
+    RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && exec ros2 run scout_robot_bridge teleop_node'"
     if [[ "$USE_XTERM" == true ]]; then
       if command -v xterm &>/dev/null; then
         xterm -e "$RUN_CMD"
@@ -65,8 +81,30 @@ case "$cmd" in
     fi
     ;;
   stop)
-    echo "Stopping scout_bridge and scout_perception..."
-    docker compose stop scout_bridge scout_perception
+    echo "Stopping app, scout_turn, scout_sdk, scout_bridge, scout_perception..."
+    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception
+    if [[ -f "$APP_PID_FILE" ]]; then
+      pid=$(cat "$APP_PID_FILE" 2>/dev/null)
+      if [[ -n "$pid" ]]; then
+        kill "$pid" 2>/dev/null || true
+      fi
+      rm -f "$APP_PID_FILE"
+    fi
+    # Kill any process still listening on 8000 (e.g. host-run app or SDK server)
+    pids=$(lsof -i :8000 -t 2>/dev/null || true)
+    if [[ -n "$pids" ]]; then
+      echo "Stopping process(es) on port 8000: $pids"
+      for pid in $pids; do
+        kill "$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
+      done
+    fi
+    pids=$(lsof -i :8001 -t 2>/dev/null || true)
+    if [[ -n "$pids" ]]; then
+      echo "Stopping process(es) on port 8001: $pids"
+      for pid in $pids; do
+        kill "$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
+      done
+    fi
     echo "Stopped. Run ./cli.sh start to start again."
     ;;
   clean)
@@ -76,18 +114,48 @@ case "$cmd" in
     ;;
   teleop)
     echo "Running teleop_node in scout_bridge container..."
-    docker compose exec scout_bridge bash -c \
+    docker compose --profile webrtc exec scout_bridge bash -c \
       'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
     ;;
+  logs)
+    target="${1:-webrtc}"
+    if [[ "$target" == "webrtc" ]]; then
+      docker compose --profile webrtc logs -f scout_bridge
+    elif [[ "$target" == "app" ]]; then
+      docker compose --profile webrtc logs -f app
+    elif [[ "$target" == "sdk" ]]; then
+      docker compose --profile webrtc logs -f scout_sdk
+    elif [[ "$target" == "bridge" ]]; then
+      docker compose --profile webrtc logs -f scout_bridge
+    elif [[ "$target" == "perception" ]]; then
+      docker compose logs -f scout_perception
+    elif [[ "$target" == "turn" ]]; then
+      docker compose --profile webrtc logs -f scout_turn
+    elif [[ "$target" == "all" ]]; then
+      docker compose --profile webrtc logs -f app scout_turn scout_sdk scout_bridge scout_perception
+    else
+      echo "Usage: $0 logs {webrtc|app|turn|sdk|bridge|perception|all}"
+      echo "  webrtc     Follow scout_bridge logs (WebRTC node runs there)"
+      echo "  app        Follow app server (signaling + www) logs"
+      echo "  turn       Follow scout_turn (TURN server) logs"
+      echo "  sdk        Follow Earth Rovers SDK logs (front camera)"
+      echo "  bridge     Follow scout_bridge logs"
+      echo "  perception Follow scout_perception logs"
+      echo "  all        Follow all container logs"
+      exit 1
+    fi
+    ;;
   *)
-    echo "Usage: $0 {build|start|stop|teleop|clean} [options]"
+    echo "Usage: $0 {build|start|stop|teleop|logs|clean} [options]"
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
-    echo "  start       Start scout_bridge and scout_perception, then open a dev shell"
-    echo "               Options: --xterm  Open the shell in a separate xterm window"
-    echo "  stop        Stop scout_bridge and scout_perception"
+    echo "  start       Start App (signaling + www), TURN, Earth Rovers SDK, scout_bridge, scout_perception, then run teleop"
+    echo "               Options: --xterm  Run teleop in a separate xterm window"
+    echo "  stop        Stop app, scout_turn, scout_sdk, scout_bridge, scout_perception, and any process on port 8000/8001"
     echo "  teleop      Run teleop_node in scout_bridge container (arrow key control)"
+    echo "  logs        Follow container logs. Run in another terminal while start is running."
+    echo "               $0 logs [webrtc|app|turn|sdk|bridge|perception|all]  (default: webrtc)"
     echo "  clean       Remove orphaned containers (ros2-ws, ros2-kilted, etc.)"
     exit 1
     ;;

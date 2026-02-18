@@ -155,6 +155,11 @@ class SmoothTeleop(Node):
             self.controller.tick()
             # Get current velocities for HUD display
             self.cur_linear, self.cur_angular = self.controller.get_current_velocities()
+            # Publish to /cmd_vel so webrtc_node (and others) see speed for telemetry/UI
+            msg = Twist()
+            msg.linear.x = self.cur_linear
+            msg.angular.z = self.cur_angular
+            self.pub.publish(msg)
         else:
             # ── Fallback: ROS publishing mode (old behavior)
             # ── Ramp linear velocity toward target
@@ -316,6 +321,11 @@ class SmoothTeleop(Node):
             angular_normalized = max(-1.0, min(1.0, angular_normalized))
             self.controller.robot.send_velocity(linear_normalized, angular_normalized)
             self.get_logger().info(f"Sent immediate velocity: linear={linear_normalized:.3f}, angular={angular_normalized:.3f}")
+            # Publish to /cmd_vel so webrtc_node can show speed in UI telemetry
+            msg = Twist()
+            msg.linear.x = self.controller.cur_linear
+            msg.angular.z = self.controller.cur_angular
+            self.pub.publish(msg)
             
         except Exception as e:
             self.get_logger().error(f"Error in immediate tick: {e}")

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot WebRTC — Telemetry</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --ok: #3fb950;
+      --warn: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .status.connected { background: var(--ok); }
+    .status.error { background: #f85149; }
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 1rem;
+      padding: 1rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    @media (max-width: 768px) {
+      main { grid-template-columns: 1fr; }
+    }
+    .video-section { margin: 0; }
+    .video-label {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .video-wrap {
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      aspect-ratio: 16/10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+    }
+    .video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+    .video-wrap .placeholder {
+      color: var(--muted);
+      padding: 1rem;
+    }
+    .telemetry-panel {
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 1rem;
+      height: fit-content;
+    }
+    .telemetry-panel h2 {
+      margin: 0 0 0.75rem 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.35rem 1.5rem;
+      align-items: baseline;
+    }
+    .telemetry-grid dt {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .telemetry-grid dd {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    .telemetry-grid dd .unit { color: var(--muted); font-size: 0.85em; }
+    .no-telemetry { color: var(--muted); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="status" id="status" title="Connection"></span>
+    <span id="statusText">Disconnected</span>
+  </header>
+  <main>
+    <section class="video-section">
+      <h2 class="video-label">Live view — Front camera</h2>
+      <div class="video-wrap">
+        <video id="remoteVideo" autoplay playsinline muted></video>
+        <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
+      </div>
+    </section>
+    <aside class="telemetry-panel">
+      <h2>Robot telemetry</h2>
+      <div id="telemetryContent">
+        <p class="no-telemetry" id="noTelemetry">No telemetry yet. Connect to the robot.</p>
+        <dl class="telemetry-grid" id="telemetryGrid" hidden></dl>
+      </div>
+    </aside>
+  </main>
+  <script>
+    (function () {
+      const statusEl = document.getElementById('status');
+      const statusTextEl = document.getElementById('statusText');
+      const remoteVideo = document.getElementById('remoteVideo');
+      const videoPlaceholder = document.getElementById('videoPlaceholder');
+      const noTelemetryEl = document.getElementById('noTelemetry');
+      const telemetryGridEl = document.getElementById('telemetryGrid');
+
+      var lastTelemetry = {};
+
+      function setStatus(connected, error, connecting) {
+        if (error) {
+          statusEl.className = 'status error';
+          statusTextEl.textContent = 'Error';
+        } else if (connected) {
+          statusEl.className = 'status connected';
+          statusTextEl.textContent = 'Connected';
+          if (!telemetryGridEl.querySelector('dt')) {
+            noTelemetryEl.textContent = 'Waiting for telemetry (ensure scout_bridge and scout_sdk are running).';
+          }
+        } else if (connecting) {
+          statusEl.className = 'status';
+          statusTextEl.textContent = 'Connecting…';
+        } else {
+          statusEl.className = 'status';
+          statusTextEl.textContent = 'Disconnected';
+          noTelemetryEl.textContent = 'No telemetry yet. Connect to the robot.';
+        }
+      }
+
+      function isRealTelemetry(data) {
+        return (data.battery != null && data.battery > 0) ||
+          (data.latitude != null && data.longitude != null) ||
+          (data.rpms != null && Array.isArray(data.rpms) && data.rpms.length > 0);
+      }
+
+      function renderTelemetry(data) {
+        if (!data || typeof data !== 'object') return;
+        var merged = Object.assign({}, lastTelemetry);
+        var real = isRealTelemetry(data);
+        if (real) {
+          if (data.battery != null && data.battery > 0) merged.battery = data.battery;
+          if (data.speed != null) merged.speed = data.speed;
+          if (data.latitude != null) merged.latitude = data.latitude;
+          if (data.longitude != null) merged.longitude = data.longitude;
+          if (data.gps_signal != null) merged.gps_signal = data.gps_signal;
+          if (data.orientation != null) merged.orientation = data.orientation;
+          if (data.lamp != null) merged.lamp = data.lamp;
+          if (data.timestamp != null) merged.timestamp = data.timestamp;
+          if (data.rpms != null && Array.isArray(data.rpms) && data.rpms.length > 0) merged.rpms = data.rpms;
+        } else {
+          if (data.speed != null) merged.speed = data.speed;
+          if (data.timestamp != null) merged.timestamp = data.timestamp;
+        }
+        lastTelemetry = merged;
+
+        noTelemetryEl.hidden = true;
+        telemetryGridEl.hidden = false;
+
+        const d = merged;
+        const orientationDeg = d.orientation != null ? ((d.orientation / 255) * 360).toFixed(1) : '—';
+        const ts = d.timestamp != null ? new Date(d.timestamp * 1000).toLocaleTimeString() : '';
+        const rows = [
+          ['Battery', d.battery != null ? `${Number(d.battery).toFixed(0)}%` : '—'],
+          ['Speed', d.speed != null ? `${Number(d.speed).toFixed(4)} m/s` : '—'],
+          ['Latitude', d.latitude != null ? Number(d.latitude).toFixed(5) : '—'],
+          ['Longitude', d.longitude != null ? Number(d.longitude).toFixed(5) : '—'],
+          ['GPS signal', d.gps_signal != null ? Number(d.gps_signal).toFixed(1) : '—'],
+          ['Orientation', orientationDeg + '°'],
+          ['Lamp', d.lamp != null ? (d.lamp ? 'On' : 'Off') : '—'],
+        ];
+        if (ts) rows.push(['Last updated', ts]);
+
+        var rpmStr = '—';
+        var rpms = d.rpms;
+        if (Array.isArray(rpms) && rpms.length > 0) {
+          var last = rpms[rpms.length - 1];
+          if (Array.isArray(last) && last.length >= 4) {
+            rpmStr = 'FL ' + last[0].toFixed(0) + ' FR ' + last[1].toFixed(0) + ' RL ' + last[2].toFixed(0) + ' RR ' + last[3].toFixed(0);
+          }
+        }
+        rows.push(['Wheel RPM', rpmStr]);
+
+        telemetryGridEl.innerHTML = rows.map(([label, value]) =>
+          `<dt>${label}</dt><dd>${value}</dd>`
+        ).join('');
+      }
+
+      const wsScheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsScheme}//${location.host}/ws/signaling`;
+      const defaultIceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+      let iceServers = defaultIceServers;
+
+      let pc = null;
+      let dataChannel = null;
+      let ws = null;
+
+      function disconnect() {
+        setStatus(false, false, false);
+        lastTelemetry = {};
+        if (pc) {
+          pc.close();
+          pc = null;
+        }
+        dataChannel = null;
+        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+        ws = null;
+        videoPlaceholder.hidden = false;
+        remoteVideo.srcObject = null;
+      }
+
+      function createPeerAndSendOffer() {
+        if (pc) return;
+        setStatus(false, false, true);
+        pc = new RTCPeerConnection({
+          iceServers: iceServers,
+        });
+        pc.addTransceiver('video', { direction: 'recvonly' });
+
+        pc.onicecandidate = function (event) {
+          if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'ice',
+              candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate,
+            }));
+          }
+        };
+
+        pc.ontrack = function (event) {
+          videoPlaceholder.hidden = true;
+          var stream = event.streams && event.streams[0];
+          if (!stream && event.track) {
+            stream = new MediaStream([event.track]);
+          }
+          if (stream) {
+            remoteVideo.srcObject = stream;
+            remoteVideo.play().catch(function () {});
+          }
+        };
+
+        pc.onconnectionstatechange = function () {
+          if (pc && pc.connectionState === 'connected') setStatus(true, false, false);
+          if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) setStatus(false, false, false);
+        };
+        pc.oniceconnectionstatechange = function () {
+          if (pc && pc.iceConnectionState === 'connected') setStatus(true, false, false);
+          if (pc && pc.iceConnectionState === 'failed') setStatus(false, true, false);
+        };
+
+        dataChannel = pc.createDataChannel('control', { ordered: true });
+        dataChannel.onopen = function () {
+          console.log('Data channel open');
+        };
+        dataChannel.onmessage = function (event) {
+          try {
+            var msg = JSON.parse(event.data);
+            if (msg.type === 'telemetry' && msg.data) renderTelemetry(msg.data);
+          } catch (err) {}
+        };
+
+        pc.createOffer()
+          .then(function (offer) {
+            return pc.setLocalDescription(offer);
+          })
+          .then(function () {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'offer', sdp: pc.localDescription.sdp }));
+            }
+          })
+          .catch(function (err) {
+            console.error('createOffer/setLocalDescription failed', err);
+            setStatus(false, true, false);
+          });
+      }
+
+      function connect() {
+        disconnect();
+        setStatus(false, false, false);
+        var socket = new WebSocket(wsUrl);
+        ws = socket;
+
+        socket.onopen = function () {
+          if (this.readyState === WebSocket.OPEN) {
+            this.send(JSON.stringify({ role: 'browser' }));
+            // Fallback: if server does not send welcome (e.g. old version), create PC after short delay
+            setTimeout(function () {
+              if (!pc && ws && ws.readyState === WebSocket.OPEN) {
+                createPeerAndSendOffer();
+              }
+            }, 500);
+          }
+        };
+
+        socket.onclose = function () {
+          setStatus(false, false, false);
+          setTimeout(connect, 3000);
+        };
+
+        socket.onerror = function () {
+          setStatus(false, true, false);
+        };
+
+        socket.onmessage = function (event) {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch (e) {
+            return;
+          }
+          const typ = msg.type;
+
+          if (typ === 'welcome') {
+            createPeerAndSendOffer();
+            return;
+          }
+
+          if (typ === 'telemetry') {
+            renderTelemetry(msg.data);
+            return;
+          }
+
+          if (typ === 'answer' && msg.sdp) {
+            if (!pc || pc.signalingState !== 'have-local-offer') return;
+            pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp })).catch(function (err) {
+              console.error('setRemoteDescription failed', err);
+            });
+            return;
+          }
+
+          if (typ === 'ice' || typ === 'ice-candidate' || typ === 'icecandidate') {
+            const cand = msg.candidate;
+            if (!pc || !cand) return;
+            const candidate = typeof cand === 'string' ? { candidate: cand } : cand;
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(function (err) {
+              console.error('addIceCandidate failed', err);
+            });
+            return;
+          }
+        };
+      }
+
+      fetch('/api/config')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.iceServers && data.iceServers.length) iceServers = data.iceServers;
+        })
+        .catch(function () {})
+        .finally(function () { connect(); });
+
+      document.addEventListener('keydown', function (e) {
+        if (!dataChannel || dataChannel.readyState !== 'open') return;
+        const linear = 0.5;
+        const angular = 0.5;
+        let linear_x = 0, angular_z = 0;
+        switch (e.key) {
+          case 'ArrowUp':   linear_x = linear; break;
+          case 'ArrowDown': linear_x = -linear; break;
+          case 'ArrowLeft': angular_z = angular; break;
+          case 'ArrowRight': angular_z = -angular; break;
+          default: return;
+        }
+        e.preventDefault();
+        dataChannel.send(JSON.stringify({ linear_x, angular_z }));
+      });
+      document.addEventListener('keyup', function (e) {
+        if (!dataChannel || dataChannel.readyState !== 'open') return;
+        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key) === -1) return;
+        e.preventDefault();
+        dataChannel.send(JSON.stringify({ linear_x: 0, angular_z: 0 }));
+      });
+    })();
+  </script>
+</body>
+</html>

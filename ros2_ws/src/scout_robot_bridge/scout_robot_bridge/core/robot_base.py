@@ -1,5 +1,6 @@
+import time
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Iterator, Optional
 
 from scout_robot_bridge.core.models.telemetry import TelemetryFrame
 
@@ -57,6 +58,16 @@ class RobotBase(ABC):
     def get_front_camera_frame(self) -> Optional[bytes]:
         """Return latest front camera frame as raw bytes, or None if unavailable."""
         pass
+
+    def get_front_camera_stream(self, stop_event=None) -> Iterator[Optional[bytes]]:
+        """
+        Yield front camera frames continuously at max sustainable rate.
+        Caller can pass a threading.Event; when set, the iterator exits.
+        """
+        while stop_event is None or not stop_event.is_set():
+            frame = self.get_front_camera_frame()
+            yield frame
+            time.sleep(0.01)
 
     @abstractmethod
     def get_telemetry(self) -> Optional[TelemetryFrame]:

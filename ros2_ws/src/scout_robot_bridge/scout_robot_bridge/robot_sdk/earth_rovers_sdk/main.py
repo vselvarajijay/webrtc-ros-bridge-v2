@@ -20,6 +20,18 @@ from rtm_client import RtmClient
 
 load_dotenv()
 
+# Use FRODOBOT_* from .env when SDK_* / BOT_SLUG not set (same credentials, different names)
+if not os.getenv("SDK_API_TOKEN") and os.getenv("FRODOBOT_SDK_API_TOKEN"):
+    os.environ["SDK_API_TOKEN"] = os.environ["FRODOBOT_SDK_API_TOKEN"]
+if not os.getenv("BOT_SLUG") and os.getenv("FRODOBOT_BOT_SLUG"):
+    os.environ["BOT_SLUG"] = os.environ["FRODOBOT_BOT_SLUG"]
+if not os.getenv("MISSION_SLUG") and os.getenv("FRODOBOT_MISSION_SLUG"):
+    os.environ["MISSION_SLUG"] = os.environ["FRODOBOT_MISSION_SLUG"]
+if not os.getenv("CHROME_EXECUTABLE_PATH") and os.getenv("FRODOBOT_CHROME_EXECUTABLE_PATH"):
+    os.environ["CHROME_EXECUTABLE_PATH"] = os.environ["FRODOBOT_CHROME_EXECUTABLE_PATH"]
+if not os.getenv("MAP_ZOOM_LEVEL") and os.getenv("FRODOBOT_MAP_ZOOM_LEVEL"):
+    os.environ["MAP_ZOOM_LEVEL"] = os.environ["FRODOBOT_MAP_ZOOM_LEVEL"]
+
 # Configurar el logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("http_logger")
@@ -443,11 +455,36 @@ async def get_screenshot(view_types: str = "rear,map,front"):
     return JSONResponse(content=response_content)
 
 
+def _empty_telemetry():
+    return {
+        "battery": 0.0,
+        "signal_level": 0,
+        "speed": 0.0,
+        "lamp": 0,
+        "latitude": 0.0,
+        "longitude": 0.0,
+        "gps_signal": 0.0,
+        "orientation": 0,
+        "vibration": None,
+        "accels": [],
+        "gyros": [],
+        "mags": [],
+        "rpms": [],
+        "timestamp": datetime.utcnow().timestamp(),
+    }
+
+
 @app.get("/data")
 async def get_data():
     await need_start_mission()
-    data = await browser_service.data()
-    return JSONResponse(content=data)
+    if os.getenv("SDK_SKIP_BROWSER_JOIN", "").lower() in ("1", "true", "yes"):
+        return JSONResponse(content=_empty_telemetry())
+    try:
+        data = await browser_service.data()
+        return JSONResponse(content=data)
+    except Exception as e:
+        logger.warning("Browser data unavailable: %s", e)
+        return JSONResponse(content=_empty_telemetry())
 
 
 @app.post("/checkpoint-reached")
@@ -589,7 +626,13 @@ if __name__ == "__main__":
 @app.get("/v2/front")
 async def get_front_frame():
     await need_start_mission()
-    front_frame = await browser_service.front()
+    if os.getenv("SDK_SKIP_BROWSER_JOIN", "").lower() in ("1", "true", "yes"):
+        raise HTTPException(status_code=404, detail="Front frame not available")
+    try:
+        front_frame = await browser_service.front()
+    except Exception as e:
+        logger.warning("Browser front frame unavailable: %s", e)
+        raise HTTPException(status_code=404, detail="Front frame not available") from e
     response_data = {}
     if front_frame:
         _, base64_data = front_frame.split(",", 1)
@@ -605,8 +648,13 @@ async def get_rear_frame():
     await need_start_mission()
     if not auth_response_data:
         await auth()
-
-    rear_frame = await browser_service.rear()
+    if os.getenv("SDK_SKIP_BROWSER_JOIN", "").lower() in ("1", "true", "yes"):
+        raise HTTPException(status_code=404, detail="Rear frame not available")
+    try:
+        rear_frame = await browser_service.rear()
+    except Exception as e:
+        logger.warning("Browser rear frame unavailable: %s", e)
+        raise HTTPException(status_code=404, detail="Rear frame not available") from e
     response_data = {}
     if rear_frame:
         _, base64_data = rear_frame.split(",", 1)

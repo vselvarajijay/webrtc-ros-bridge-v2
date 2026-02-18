@@ -1,10 +1,13 @@
+import json
 import os
+import threading
+from dataclasses import asdict
 
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Header
+from std_msgs.msg import Header, String
 
 from scout_robot_bridge.core.config_manager import ConfigManager
 from scout_robot_bridge.core.constants import (
@@ -16,8 +19,10 @@ from scout_robot_bridge.core.constants import (
     DEFAULT_MAX_ANGULAR_SPEED,
     DEFAULT_MAX_LINEAR_SPEED,
     DEFAULT_ROBOT_TYPE,
+    DEFAULT_TELEMETRY_PUBLISH_RATE,
     MAX_VELOCITY,
     MIN_VELOCITY,
+    ROBOT_TELEMETRY_TOPIC,
 )
 from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.core.robot_factory import create_robot
@@ -96,13 +101,13 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase) -> None:
 def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
     """
     Set up camera publisher for front camera feed.
-    
-    Args:
-        node: ROS 2 node
-        robot: Robot instance to get camera frames from
+    When camera_use_stream is True, runs a dedicated thread that pulls from
+    get_front_camera_stream() and publishes every frame; otherwise uses a timer at camera_publish_rate.
     """
     node.declare_parameter('camera_publish_rate', DEFAULT_CAMERA_PUBLISH_RATE)
+    node.declare_parameter('camera_use_stream', True)
     camera_rate = node.get_parameter('camera_publish_rate').value
+    camera_use_stream = node.get_parameter('camera_use_stream').value
     image_format = os.getenv('IMAGE_FORMAT', DEFAULT_IMAGE_FORMAT)
 
     camera_pub = node.create_publisher(
@@ -128,7 +133,57 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
         except Exception as e:
             node.get_logger().debug(f'Failed to get camera frame: {e}')
 
-    node.create_timer(1.0 / camera_rate, on_camera_timer)
+    if camera_use_stream and robot is not None:
+        stop_event = threading.Event()
+        node._camera_stop_event = stop_event
+
+        def camera_stream_loop() -> None:
+            for frame in robot.get_front_camera_stream(stop_event):
+                if frame is None:
+                    continue
+                try:
+                    msg = CompressedImage()
+                    msg.header = Header()
+                    msg.header.stamp = node.get_clock().now().to_msg()
+                    msg.header.frame_id = CAMERA_FRAME_ID
+                    msg.format = image_format
+                    msg.data = list(frame)
+                    camera_pub.publish(msg)
+                except Exception as e:
+                    node.get_logger().debug(f'Failed to publish camera frame: {e}')
+
+        thread = threading.Thread(target=camera_stream_loop, daemon=True)
+        thread.start()
+        node.get_logger().info('Camera publishing from stream (max rate).')
+    else:
+        node.create_timer(1.0 / camera_rate, on_camera_timer)
+
+
+def setup_telemetry_publisher(node: Node, robot: RobotBase) -> None:
+    """
+    Set up telemetry publisher for robot sensor data (velocity, battery, GPS, IMU, etc.).
+    """
+    node.declare_parameter('telemetry_publish_rate', DEFAULT_TELEMETRY_PUBLISH_RATE)
+    telemetry_rate = node.get_parameter('telemetry_publish_rate').value
+    telemetry_pub = node.create_publisher(String, ROBOT_TELEMETRY_TOPIC, 10)
+
+    def on_telemetry_timer() -> None:
+        if robot is None:
+            return
+        try:
+            telemetry = robot.get_telemetry()
+            if telemetry is None:
+                return
+            msg = String()
+            msg.data = json.dumps(asdict(telemetry))
+            telemetry_pub.publish(msg)
+        except Exception as e:
+            node.get_logger().debug(f'Failed to get telemetry: {e}')
+
+    node.create_timer(1.0 / telemetry_rate, on_telemetry_timer)
+    node.get_logger().info(
+        f'Publishing telemetry on {ROBOT_TELEMETRY_TOPIC} at {telemetry_rate} Hz'
+    )
 
 
 def main(args=None):
@@ -151,6 +206,7 @@ def main(args=None):
         # Set up subscribers and publishers
         setup_cmd_vel_subscriber(node, robot)
         setup_camera_publisher(node, robot)
+        setup_telemetry_publisher(node, robot)
 
         # Run node
         try:
@@ -162,6 +218,8 @@ def main(args=None):
     finally:
         # Cleanup
         try:
+            if hasattr(node, '_camera_stop_event'):
+                node._camera_stop_event.set()
             if hasattr(node, 'robot') and node.robot is not None:
                 if hasattr(node.robot, 'cleanup'):
                     node.robot.cleanup()

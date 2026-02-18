@@ -4,7 +4,12 @@ from typing import Optional
 
 import requests
 
-from scout_robot_bridge.core.exceptions import ConfigurationError
+try:
+    from scout_robot_bridge.core.exceptions import ConfigurationError
+except ImportError:
+    class ConfigurationError(Exception):
+        """Raised when configuration is invalid or missing (SDK standalone mode)."""
+        pass
 
 logger = logging.getLogger(__name__)
 

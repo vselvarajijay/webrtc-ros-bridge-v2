@@ -27,6 +27,12 @@ setup(
         'python-dotenv',
         'aiohttp',
         'keyboard',  # For key release event detection
+        # webrtc_node (optional at runtime):
+        'aiortc',
+        'av',
+        'numpy',
+        'opencv-python-headless',
+        'websockets',
         # Note: pynput removed - not needed for direct robot control
         # Terminal input works fine without X11 dependencies
     ],
@@ -44,6 +50,7 @@ setup(
         'console_scripts': [
             'bridge_node = scout_robot_bridge.nodes.bridge_node:main',
             'teleop_node = scout_robot_bridge.nodes.teleop_node:main',
+            'webrtc_node = scout_robot_bridge.nodes.webrtc_node:main',
         ],
     },
 )

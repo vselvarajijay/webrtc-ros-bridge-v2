@@ -29,11 +29,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm /tmp/chrome.deb \
     && rm -rf /var/lib/apt/lists/*
 
+# FFmpeg/libav dev packages required for PyAV (av) used by webrtc_node
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev \
+    libavfilter-dev libswscale-dev libswresample-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Bridge Python deps (colcon does not install setup.py install_requires)
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
+# webrtc_node needs aiortc, av, opencv-python-headless, websockets (use system numpy)
+RUN python3 -m pip install --no-cache-dir --break-system-packages --ignore-installed numpy \
     requests pyppeteer python-dotenv aiohttp keyboard \
-    || python3 -m pip install --no-cache-dir --user \
-    requests pyppeteer python-dotenv aiohttp keyboard
+    aiortc av opencv-python-headless websockets
 
 # Default for container; override with FRODOBOT_CHROME_EXECUTABLE_PATH or CHROME_EXECUTABLE_PATH in .env
 ENV CHROME_EXECUTABLE_PATH=/usr/bin/google-chrome

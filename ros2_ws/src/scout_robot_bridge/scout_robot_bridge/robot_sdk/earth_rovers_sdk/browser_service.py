@@ -131,11 +131,13 @@ class BrowserService:
                 await self.page.setExtraHTTPHeaders(
                     {"Accept-Language": "en-US,en;q=0.9"}
                 )
+                sdk_page_url = os.getenv("SDK_PAGE_URL", SDK_LOCAL_ENDPOINT)
                 await self.page.goto(
-                    SDK_LOCAL_ENDPOINT, {"waitUntil": "networkidle2"}
+                    sdk_page_url, {"waitUntil": "networkidle2", "timeout": 30000}
                 )
+                await self.page.waitForSelector("#join", {"timeout": 10000})
                 await self.page.click("#join")
-                await self.page.waitForSelector("video")
+                await self.page.waitForSelector("video", {"timeout": 15000})
                 await self.page.waitForSelector("#map")
                 await self.page.setViewport(self.default_viewport)
 
@@ -163,6 +165,8 @@ class BrowserService:
 
     async def take_screenshot(self, video_output_folder: str, elements: list):
         await self.initialize_browser()
+        if self.page is None:
+            return {}
 
         dimensions = await self.page.evaluate(
             """() => {
@@ -205,6 +209,8 @@ class BrowserService:
 
     async def data(self) -> dict:
         await self.initialize_browser()
+        if self.page is None:
+            return {}
 
         bot_data = await self.page.evaluate(
             """() => {
@@ -212,10 +218,12 @@ class BrowserService:
         }"""
         )
 
-        return bot_data
+        return bot_data or {}
 
     async def front(self) -> str:
         await self.initialize_browser()
+        if self.page is None:
+            return ""
 
         front_frame = await self.page.evaluate(
             """() => {
@@ -223,10 +231,12 @@ class BrowserService:
         }"""
         )
 
-        return front_frame
+        return front_frame or ""
 
     async def rear(self) -> str:
         await self.initialize_browser()
+        if self.page is None:
+            return ""
 
         rear_frame = await self.page.evaluate(
             """() => {
@@ -234,10 +244,12 @@ class BrowserService:
         }"""
         )
 
-        return rear_frame
+        return rear_frame or ""
 
     async def send_message(self, message: dict):
         await self.initialize_browser()
+        if self.page is None:
+            return
 
         await self.page.evaluate(
             """(message) => {

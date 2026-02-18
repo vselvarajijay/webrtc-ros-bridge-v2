@@ -2,7 +2,8 @@
 # robot_type selects which SDK to use (e.g. earth_rovers_sdk); other SDKs may be added later.
 # FRODOBOT_* parameters are mapped to the SDK env vars when robot_type is earth_rovers_sdk.
 # Set FRODOBOT_SDK_API_TOKEN securely (e.g. from env in launch, or a protected param file).
-# camera_publish_rate: Hz for /camera/front/compressed. cmd_vel_threshold: min |linear.x|/|angular.z| to trigger move.
+# camera_publish_rate: Hz when camera_use_stream is false. camera_use_stream: true = continuous stream at max rate.
+# cmd_vel_threshold: min |linear.x|/|angular.z| to trigger move.
 bridge_node:
   ros__parameters:
     robot_type: "earth_rovers_sdk"
@@ -12,4 +13,5 @@ bridge_node:
     FRODOBOT_MAP_ZOOM_LEVEL: "18"
     FRODOBOT_MISSION_SLUG: ""
     camera_publish_rate: 5.0
+    camera_use_stream: true
     cmd_vel_threshold: 0.1
