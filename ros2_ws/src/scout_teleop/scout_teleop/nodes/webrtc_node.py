@@ -535,6 +535,7 @@ async def _telemetry_sender_loop(
     last_heartbeat = [0.0]
     last_payload_ws = [None]  # last full payload we sent (for heartbeat)
     heartbeat_interval = 2.0  # seconds
+    first_ws_telemetry_logged: list = [False]
 
     while not stop_event.is_set():
         await asyncio.sleep(TELEMETRY_SEND_INTERVAL)
@@ -596,6 +597,9 @@ async def _telemetry_sender_loop(
             payload_str_dc = json.dumps(payload_dc)
             await asyncio.sleep(0)
             try:
+                if not first_ws_telemetry_logged[0]:
+                    first_ws_telemetry_logged[0] = True
+                    LOG.info("First telemetry sent over signaling WebSocket (browser receives via relay)")
                 await ws.send(payload_str_ws)
             except Exception as e:
                 LOG.warning("Telemetry ws.send failed (will retry): %s", e)

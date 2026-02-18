@@ -269,14 +269,18 @@ class ControllerNode(Node):
                 self._target_heading_deg = _normalize_angle_deg(current + goal["angle_deg"])
             else:
                 self._target_heading_deg = _normalize_angle_deg(goal["angle_deg"])
-            # Trapezoidal profile when angular_vel_rad_s is specified
+            # Trapezoidal profile when angular_vel_rad_s is specified, or use default for open-loop turn (no telemetry needed)
             v_ang = goal.get("angular_vel_rad_s")
+            max_angular = self.get_parameter("max_angular_speed").value
             if v_ang is not None and v_ang > 0:
-                max_angular = self.get_parameter("max_angular_speed").value
                 v_max = min(v_ang, max_angular)
-                accel = goal.get("accel_rad_s2") or self.get_parameter("default_angular_accel").value
-                decel = goal.get("decel_rad_s2") or self.get_parameter("default_angular_decel").value
-                total_rad = abs(goal["angle_deg"]) * DEG_TO_RAD
+            else:
+                # No telemetry or no explicit velocity: use open-loop trapezoidal turn so autonomy works without /robot/telemetry
+                v_max = max_angular * 0.5 if max_angular > 0 else 0.4
+            accel = goal.get("accel_rad_s2") or self.get_parameter("default_angular_accel").value
+            decel = goal.get("decel_rad_s2") or self.get_parameter("default_angular_decel").value
+            total_rad = abs(goal["angle_deg"]) * DEG_TO_RAD
+            if total_rad > 0 and v_max > 0 and accel > 0 and decel > 0:
                 t_a, t_h, t_d = _compute_trapezoidal_turn(total_rad, v_max, accel, decel)
                 self._profile_t_accel = t_a
                 self._profile_t_hold = t_h
@@ -315,8 +319,8 @@ class ControllerNode(Node):
         twist.angular.y = 0.0
         twist.angular.z = 0.0
 
+        # When idle, do not publish to /cmd_vel so webrtc_node arrow (manual) commands can take effect.
         if not goals:
-            self._cmd_pub.publish(twist)
             return
 
         now = time.monotonic()
@@ -448,7 +452,3 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-</think>
-Adding `_last_ts` to `__init__` and removing the duplicate property at the end.
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-StrReplace

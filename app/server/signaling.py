@@ -16,6 +16,7 @@ _browser_ws: Optional[WebSocket] = None
 _robot_ws: Optional[WebSocket] = None
 # If browser sends offer before robot connects, hold it and deliver when robot connects
 _pending_offer: Optional[str] = None
+_first_telemetry_relayed: bool = False
 
 
 def _set_connection(role: str, ws: WebSocket) -> None:
@@ -45,7 +46,7 @@ def _clear_connection(role: str) -> None:
 
 
 async def handle_signaling_websocket(websocket: WebSocket) -> None:
-    global _pending_offer
+    global _pending_offer, _first_telemetry_relayed
     await websocket.accept()
     role: Optional[str] = None
 
@@ -119,6 +120,13 @@ async def handle_signaling_websocket(websocket: WebSocket) -> None:
 
             try:
                 await target.send_text(raw)
+                if (
+                    role == "robot"
+                    and payload.get("type") == "telemetry"
+                    and not _first_telemetry_relayed
+                ):
+                    _first_telemetry_relayed = True
+                    logger.info("Signaling: first telemetry relayed to browser (telemetry stream is active)")
             except Exception as e:
                 logger.warning("Failed to relay to peer: %s", e)
     except Exception as e:
@@ -127,3 +135,6 @@ async def handle_signaling_websocket(websocket: WebSocket) -> None:
         if role is not None:
             _clear_connection(role)
             logger.info("Signaling: %s disconnected", role)
+            # Reset so next session gets "first telemetry relayed" log again
+            if role == "robot":
+                _first_telemetry_relayed = False

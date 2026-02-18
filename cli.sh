@@ -84,6 +84,7 @@ case "$cmd" in
       fi
     else
       echo "Drive from the web UI: http://localhost:8000/"
+      echo "Tap on the front camera to orient the robot (rotation only; uses autonomy controller)."
       echo "To use keyboard teleop instead: ./cli.sh teleop   or   ./cli.sh start --teleop"
     fi
     ;;
