@@ -60,6 +60,7 @@
       color: var(--muted);
     }
     .video-wrap {
+      position: relative;
       background: var(--surface);
       border-radius: 8px;
       border: 1px solid var(--border);
@@ -71,14 +72,54 @@
       min-height: 200px;
     }
     .video-wrap video {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       object-fit: contain;
       background: #000;
     }
+    .video-hint {
+      margin: 0.5rem 0 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .video-hint code { font-size: 0.85em; }
+    .video-pipeline { font-size: 0.8em; color: var(--muted, #666); margin-top: 0.35em; }
     .video-wrap .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: var(--muted);
       padding: 1rem;
+      background: var(--surface);
+    }
+    .video-wrap .placeholder[hidden] {
+      display: none !important;
+    }
+    .video-wrap .video-overlay {
+      display: none;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 0.5rem 0.75rem;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      font-size: 0.85rem;
+      text-align: center;
+      pointer-events: none;
+    }
+    .video-wrap .video-overlay.visible {
+      display: block;
+    }
+    .video-wrap .video-overlay code {
+      font-size: 0.9em;
+      background: rgba(255,255,255,0.15);
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
     }
     .map-section {
       background: var(--surface);
@@ -267,6 +308,77 @@
       transition: transform 0.2s ease;
     }
     .lamp-switch.on::after { transform: translateX(20px); }
+    .control-panel {
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 1rem;
+    }
+    .control-panel h2 {
+      margin: 0 0 0.75rem 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr 48px 1fr;
+      grid-template-rows: 48px 48px 48px;
+      gap: 4px;
+      width: 160px;
+      margin: 0 auto;
+    }
+    .control-grid .cell { display: flex; align-items: center; justify-content: center; }
+    .control-grid .cell:nth-child(1) { grid-column: 2; grid-row: 1; }
+    .control-grid .cell:nth-child(2) { grid-column: 1; grid-row: 2; }
+    .control-grid .cell:nth-child(3) { grid-column: 2; grid-row: 2; }
+    .control-grid .cell:nth-child(4) { grid-column: 3; grid-row: 2; }
+    .control-grid .cell:nth-child(5) { grid-column: 2; grid-row: 3; }
+    .control-btn {
+      width: 48px;
+      height: 48px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1.25rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .control-btn:hover { background: var(--border); }
+    .control-btn.pressed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    .speed-level-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .speed-level-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      min-width: 3rem;
+    }
+    .speed-level-btns {
+      display: flex;
+      gap: 4px;
+    }
+    .speed-level-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .speed-level-btn:hover { background: var(--border); }
+    .speed-level-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -280,6 +392,29 @@
       <div class="video-wrap">
         <video id="remoteVideo" autoplay playsinline muted></video>
         <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
+        <div class="video-overlay" id="videoOverlay" aria-hidden="true">No camera feed — start Earth Rovers SDK (scout_sdk) <code>/v2/front</code> for live video</div>
+      </div>
+      <p class="video-pipeline" id="videoPipeline" aria-live="polite">Signaling: — | Robot: — | Video: —</p>
+      <p class="video-hint">Camera feed comes from the robot SDK. If the video stays black, ensure the Earth Rovers SDK (scout_sdk) is running and the front camera endpoint (<code>/v2/front</code>) is available. If <strong>Robot</strong> stays —, ensure scout_bridge is running (e.g. <code>./cli.sh start</code>) and can reach this server.</p>
+    </section>
+    <section class="control-panel">
+      <h2>Drive</h2>
+      <div class="speed-level-wrap">
+        <span class="speed-level-label">Speed</span>
+        <div class="speed-level-btns" role="group" aria-label="Drive speed level">
+          <button type="button" class="speed-level-btn" data-level="1" title="Speed 1 (slowest)" aria-pressed="false">1</button>
+          <button type="button" class="speed-level-btn" data-level="2" title="Speed 2" aria-pressed="false">2</button>
+          <button type="button" class="speed-level-btn" data-level="3" title="Speed 3" aria-pressed="true">3</button>
+          <button type="button" class="speed-level-btn" data-level="4" title="Speed 4" aria-pressed="false">4</button>
+          <button type="button" class="speed-level-btn" data-level="5" title="Speed 5 (fastest)" aria-pressed="false">5</button>
+        </div>
+      </div>
+      <div class="control-grid">
+        <div class="cell"><button type="button" class="control-btn" id="btnUp" data-key="ArrowUp" title="Forward" aria-label="Forward">&#9650;</button></div>
+        <div class="cell"><button type="button" class="control-btn" id="btnLeft" data-key="ArrowLeft" title="Left" aria-label="Left">&#9664;</button></div>
+        <div class="cell"><button type="button" class="control-btn" id="btnStop" title="Stop" aria-label="Stop">&#9673;</button></div>
+        <div class="cell"><button type="button" class="control-btn" id="btnRight" data-key="ArrowRight" title="Right" aria-label="Right">&#9654;</button></div>
+        <div class="cell"><button type="button" class="control-btn" id="btnDown" data-key="ArrowDown" title="Backward" aria-label="Backward">&#9660;</button></div>
       </div>
     </section>
     <section class="telemetry-dashboard">
@@ -387,6 +522,13 @@
       const statusTextEl = document.getElementById('statusText');
       const remoteVideo = document.getElementById('remoteVideo');
       const videoPlaceholder = document.getElementById('videoPlaceholder');
+      const videoPipelineEl = document.getElementById('videoPipeline');
+      var pipelineState = { signaling: false, robot: false, video: false };
+      function updatePipelineUI() {
+        if (!videoPipelineEl) return;
+        var s = pipelineState;
+        videoPipelineEl.textContent = 'Signaling: ' + (s.signaling ? 'ok' : '—') + ' | Robot: ' + (s.robot ? 'ok' : '—') + ' | Video: ' + (s.video ? 'ok' : '—');
+      }
 
       // Ask browser for low decode buffer (less latency, more risk of stalls). Set before srcObject.
       if (typeof remoteVideo.latencyHint !== 'undefined') {
@@ -399,6 +541,15 @@
       var lampOn = false;
       var lastLinearX = 0;
       var lastAngularZ = 0;
+      // Base velocities at speed 5 (bridge normalizes by max_linear=1, max_angular=1 -> robot gets -1..1)
+      var LINEAR_VEL = 0.8;
+      var ANGULAR_VEL = 1.0;
+      var speedLevel = 3; // 1-5, default middle
+      var SPEED_MULTIPLIERS = [0.2, 0.4, 0.6, 0.8, 1.0]; // index 0 = level 1, ... index 4 = level 5
+      var keysPressed = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+      var ARROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+      var CONTROL_SEND_INTERVAL_MS = 50; // 20 Hz to match terminal teleop responsiveness
+      var controlRepeatHandle = null;
       var FRAME_TIME_BASE = 90000;
       var videoTimeUpdateHandle = null;
 
@@ -650,6 +801,8 @@
 
       function disconnect() {
         setStatus(false, false, false);
+        pipelineState = { signaling: false, robot: false, video: false };
+        updatePipelineUI();
         lastTelemetry = {};
         telemetryBuffer = [];
         if (videoTimeUpdateHandle != null) {
@@ -668,15 +821,56 @@
         if (ws && ws.readyState === WebSocket.OPEN) ws.close();
         ws = null;
         videoPlaceholder.hidden = false;
+        videoPlaceholder.textContent = 'Waiting for robot stream…';
         remoteVideo.srcObject = null;
+        var overlay = document.getElementById('videoOverlay');
+        if (overlay) { overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+      }
+
+      function hideVideoPlaceholderAndOverlay() {
+        if (videoPlaceholder) videoPlaceholder.hidden = true;
+        var ov = document.getElementById('videoOverlay');
+        if (ov) { ov.classList.remove('visible'); ov.setAttribute('aria-hidden', 'true'); }
+      }
+
+      function attachAnyRemoteVideoTrack() {
+        if (!pc || !remoteVideo) return;
+        try {
+          var receivers = pc.getReceivers ? pc.getReceivers() : [];
+          for (var i = 0; i < receivers.length; i++) {
+            var rec = receivers[i];
+            var track = rec.track;
+            if (track && track.kind === 'video') {
+              var existing = remoteVideo.srcObject;
+              var alreadyHas = existing && existing.getTracks && existing.getTracks().indexOf(track) !== -1;
+              if (alreadyHas) return;
+              console.log('[video] attaching remote video track from getReceivers (fallback)');
+              pipelineState.video = true;
+              updatePipelineUI();
+              hideVideoPlaceholderAndOverlay();
+              var stream = new MediaStream([track]);
+              remoteVideo.srcObject = stream;
+              track.enabled = true;
+              remoteVideo.play().catch(function (e) { console.warn('[video] play failed', e); });
+              return;
+            }
+          }
+        } catch (e) { console.debug('[video] attachAnyRemoteVideoTrack:', e); }
       }
 
       function createPeerAndSendOffer() {
         if (pc) return;
         setStatus(false, false, true);
-        pc = new RTCPeerConnection({
-          iceServers: iceServers,
+        var hasTurn = iceServers.some(function (s) {
+          var u = s.urls || s.url;
+          return (typeof u === 'string' && u.indexOf('turn:') === 0) || (Array.isArray(u) && u.some(function (x) { return x.indexOf('turn:') === 0; }));
         });
+        var config = { iceServers: iceServers };
+        if (hasTurn) {
+          config.iceTransportPolicy = 'relay';
+          console.log('[webrtc] TURN detected, using iceTransportPolicy: relay so media reaches browser via TURN');
+        }
+        pc = new RTCPeerConnection(config);
         pc.addTransceiver('video', { direction: 'recvonly' });
 
         pc.onicecandidate = function (event) {
@@ -690,25 +884,55 @@
 
         pc.ontrack = function (event) {
           console.log('[video] ontrack: kind=', event.track.kind, 'id=', event.track.id, 'streams=', event.streams ? event.streams.length : 0);
-          videoPlaceholder.hidden = true;
+          pipelineState.video = true;
+          updatePipelineUI();
+          hideVideoPlaceholderAndOverlay();
           var stream = event.streams && event.streams[0];
           if (!stream && event.track) {
             stream = new MediaStream([event.track]);
           }
           if (stream) {
             remoteVideo.srcObject = stream;
-            console.log('[video] srcObject set, track enabled=', event.track.enabled);
+            event.track.enabled = true;
+            console.log('[video] srcObject set, track enabled=', event.track.enabled, 'stream id=', stream.id);
             remoteVideo.addEventListener('loadedmetadata', function onMeta() {
               console.log('[video] loadedmetadata: width=', remoteVideo.videoWidth, 'height=', remoteVideo.videoHeight);
+              hideVideoPlaceholderAndOverlay();
+            }, { once: true });
+            remoteVideo.addEventListener('playing', function onPlaying() {
+              hideVideoPlaceholderAndOverlay();
             }, { once: true });
             remoteVideo.addEventListener('error', function (e) {
               console.error('[video] element error:', remoteVideo.error ? (remoteVideo.error.code + ' ' + remoteVideo.error.message) : e);
             }, { once: true });
-            remoteVideo.play().then(function () {
-              console.log('[video] play() started');
-            }).catch(function (err) {
-              console.error('[video] play() failed:', err);
-            });
+            function tryPlay() {
+              var p = remoteVideo.play();
+              if (p && typeof p.then === 'function') {
+                p.then(function () { console.log('[video] play() started'); }).catch(function (err) { console.error('[video] play() failed:', err); });
+              }
+            }
+            tryPlay();
+            var checkNoFrames = 0;
+            var checkInterval = setInterval(function () {
+              if (remoteVideo.videoWidth > 0) {
+                clearInterval(checkInterval);
+                hideVideoPlaceholderAndOverlay();
+                return;
+              }
+              checkNoFrames += 500;
+              tryPlay();
+              if (checkNoFrames >= 2000) {
+                clearInterval(checkInterval);
+                if (remoteVideo.videoWidth === 0) {
+                  var ov = document.getElementById('videoOverlay');
+                  if (ov) {
+                    ov.textContent = 'Waiting for first frame. If this persists, ensure TURN is running (port 3478) and refresh.';
+                    ov.classList.add('visible');
+                    ov.setAttribute('aria-hidden', 'false');
+                  }
+                }
+              }
+            }, 500);
             function onVideoFrame() {
               updateTelemetryForVideoTime();
               if (remoteVideo && typeof remoteVideo.requestVideoFrameCallback === 'function') {
@@ -728,7 +952,11 @@
           if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) setStatus(false, false, false);
         };
         pc.oniceconnectionstatechange = function () {
-          if (pc && pc.iceConnectionState === 'connected') setStatus(true, false, false);
+          if (pc && pc.iceConnectionState === 'connected') {
+            setStatus(true, false, false);
+            attachAnyRemoteVideoTrack();
+            setTimeout(attachAnyRemoteVideoTrack, 200);
+          }
           if (pc && pc.iceConnectionState === 'failed') setStatus(false, true, false);
         };
 
@@ -771,6 +999,8 @@
 
         socket.onopen = function () {
           if (this.readyState === WebSocket.OPEN) {
+            pipelineState.signaling = true;
+            updatePipelineUI();
             this.send(JSON.stringify({ role: 'browser' }));
             // Fallback: if server does not send welcome (e.g. old version), create PC after short delay
             setTimeout(function () {
@@ -805,6 +1035,8 @@
           }
 
           if (typ === 'telemetry') {
+            pipelineState.robot = true;
+            updatePipelineUI();
             if (msg.frame_pts != null && msg.data) {
               pushTelemetryWithPts(msg.frame_pts, msg.frame_time_base, msg.data);
             } else if (msg.data) {
@@ -815,7 +1047,17 @@
 
           if (typ === 'answer' && msg.sdp) {
             if (!pc || pc.signalingState !== 'have-local-offer') return;
-            pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp })).catch(function (err) {
+            pipelineState.robot = true;
+            updatePipelineUI();
+            if (videoPlaceholder && !videoPlaceholder.hidden) {
+              videoPlaceholder.textContent = 'Robot replied; establishing video…';
+            }
+            var hasVideo = msg.sdp.indexOf('m=video') !== -1;
+            console.log('[webrtc] received answer, has m=video in SDP:', hasVideo, 'setting remote description');
+            pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp })).then(function () {
+              console.log('[webrtc] remote description set; video track should fire ontrack if present in SDP');
+              attachAnyRemoteVideoTrack();
+            }).catch(function (err) {
               console.error('setRemoteDescription failed', err);
             });
             return;
@@ -875,6 +1117,68 @@
         }));
       }
 
+      function getSpeedMultiplier() {
+        var i = Math.max(1, Math.min(5, speedLevel)) - 1;
+        return SPEED_MULTIPLIERS[i];
+      }
+
+      function computeVelocityFromKeys() {
+        var mul = getSpeedMultiplier();
+        var linear_x = 0, angular_z = 0;
+        if (keysPressed.ArrowUp) linear_x += LINEAR_VEL * mul;
+        if (keysPressed.ArrowDown) linear_x -= LINEAR_VEL * mul;
+        if (keysPressed.ArrowLeft) angular_z += ANGULAR_VEL * mul;
+        if (keysPressed.ArrowRight) angular_z -= ANGULAR_VEL * mul;
+        // Normalize diagonal (same as terminal teleop) so combined movement isn't faster
+        if (Math.abs(linear_x) > 0.01 && Math.abs(angular_z) > 0.01) {
+          var factor = 1.0 / Math.sqrt(2);
+          linear_x *= factor;
+          angular_z *= factor;
+        }
+        return [linear_x, angular_z];
+      }
+
+      function updateControlPanelVisual() {
+        ARROW_KEYS.forEach(function (key) {
+          var btn = document.querySelector('.control-btn[data-key="' + key + '"]');
+          if (btn) {
+            if (keysPressed[key]) {
+              btn.classList.add('pressed');
+              btn.setAttribute('aria-pressed', 'true');
+            } else {
+              btn.classList.remove('pressed');
+              btn.setAttribute('aria-pressed', 'false');
+            }
+          }
+        });
+        document.querySelectorAll('.speed-level-btn').forEach(function (btn) {
+          var level = parseInt(btn.getAttribute('data-level'), 10);
+          var active = level === speedLevel;
+          btn.classList.toggle('active', active);
+          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+      }
+
+      function anyKeyPressed() {
+        return keysPressed.ArrowUp || keysPressed.ArrowDown || keysPressed.ArrowLeft || keysPressed.ArrowRight;
+      }
+
+      function applyKeysAndSend() {
+        var vel = computeVelocityFromKeys();
+        sendControl(vel[0], vel[1]);
+        updateControlPanelVisual();
+        if (anyKeyPressed()) {
+          if (!controlRepeatHandle) {
+            controlRepeatHandle = setInterval(applyKeysAndSend, CONTROL_SEND_INTERVAL_MS);
+          }
+        } else {
+          if (controlRepeatHandle) {
+            clearInterval(controlRepeatHandle);
+            controlRepeatHandle = null;
+          }
+        }
+      }
+
       document.getElementById('lampSwitch').addEventListener('click', function () {
         lampOn = !lampOn;
         this.className = 'lamp-switch ' + (lampOn ? 'on' : 'off');
@@ -884,26 +1188,48 @@
       });
 
       document.addEventListener('keydown', function (e) {
-        if (!dataChannel || dataChannel.readyState !== 'open') return;
-        const linear = 0.5;
-        const angular = 0.5;
-        let linear_x = 0, angular_z = 0;
-        switch (e.key) {
-          case 'ArrowUp':   linear_x = linear; break;
-          case 'ArrowDown': linear_x = -linear; break;
-          case 'ArrowLeft': angular_z = angular; break;
-          case 'ArrowRight': angular_z = -angular; break;
-          default: return;
-        }
+        if (e.repeat) return;
+        if (ARROW_KEYS.indexOf(e.key) === -1) return;
+        keysPressed[e.key] = true;
+        applyKeysAndSend();
         e.preventDefault();
-        sendControl(linear_x, angular_z);
       });
       document.addEventListener('keyup', function (e) {
-        if (!dataChannel || dataChannel.readyState !== 'open') return;
-        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key) === -1) return;
+        if (ARROW_KEYS.indexOf(e.key) === -1) return;
+        keysPressed[e.key] = false;
+        applyKeysAndSend();
         e.preventDefault();
-        sendControl(0, 0);
       });
+
+      function attachArrowButton(btn) {
+        var key = btn.getAttribute('data-key');
+        if (!key) return;
+        function setPressed(pressed) {
+          keysPressed[key] = pressed;
+          applyKeysAndSend();
+        }
+        btn.addEventListener('mousedown', function (e) { e.preventDefault(); setPressed(true); });
+        btn.addEventListener('mouseup', function () { setPressed(false); });
+        btn.addEventListener('mouseleave', function () { setPressed(false); });
+        btn.addEventListener('touchstart', function (e) { e.preventDefault(); setPressed(true); }, { passive: false });
+        btn.addEventListener('touchend', function (e) { e.preventDefault(); setPressed(false); }, { passive: false });
+      }
+      ARROW_KEYS.forEach(function (key) {
+        var btn = document.querySelector('.control-btn[data-key="' + key + '"]');
+        if (btn) attachArrowButton(btn);
+      });
+      document.getElementById('btnStop').addEventListener('click', function () {
+        ARROW_KEYS.forEach(function (k) { keysPressed[k] = false; });
+        applyKeysAndSend();
+      });
+      document.querySelectorAll('.speed-level-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          speedLevel = Math.max(1, Math.min(5, parseInt(this.getAttribute('data-level'), 10)));
+          updateControlPanelVisual();
+          applyKeysAndSend();
+        });
+      });
+      updateControlPanelVisual();
     })();
   </script>
 </body>

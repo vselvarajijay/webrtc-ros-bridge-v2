@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .ice_servers import get_ice_servers
 from .signaling import handle_signaling_websocket
@@ -28,6 +28,11 @@ def read_root():
         return FileResponse(index)
     return {"hello": "world"}
 
+
+@app.get("/favicon.ico")
+def favicon():
+    """Avoid 404 in console when browser requests favicon."""
+    return Response(status_code=204)
 
 @app.get("/health")
 def health():

@@ -68,7 +68,7 @@ services:
       - ROS_LOCALHOST_ONLY=1
       # Use Docker service names so bridge can reach SDK/app/TURN on all platforms (Mac host networking doesn't share 127.0.0.1)
       - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://scout_sdk:8001}
-      - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://scout_app:8000/ws/signaling}
+      - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://app:8000/ws/signaling}
       - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}
       - TURN_URL=${TURN_URL_NODE:-turn:scout_turn:3478}
       - TURN_USERNAME=${TURN_USERNAME:-scout}

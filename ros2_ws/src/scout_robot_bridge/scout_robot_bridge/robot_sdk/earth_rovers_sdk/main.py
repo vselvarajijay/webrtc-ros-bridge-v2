@@ -6,6 +6,8 @@ import os
 from datetime import datetime
 import asyncio
 
+import cv2
+import numpy as np
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -623,24 +625,62 @@ if __name__ == "__main__":
     config.bind = ["0.0.0.0:8000"]
 
 
+# Placeholder frame when SDK_SKIP_BROWSER_JOIN=1 so bridge gets frames and UI shows "No camera feed" instead of 404/black.
+_PLACEHOLDER_FRAME_JPEG_B64 = None
+
+
+def _get_placeholder_front_frame_b64() -> str:
+    """Return a small 'No camera feed' image as JPEG base64 (cached)."""
+    global _PLACEHOLDER_FRAME_JPEG_B64
+    if _PLACEHOLDER_FRAME_JPEG_B64 is not None:
+        return _PLACEHOLDER_FRAME_JPEG_B64
+    w, h = 320, 240
+    img = np.full((h, w, 3), 60, dtype=np.uint8)
+    cv2.putText(
+        img, "No camera feed", (10, h // 2 - 5),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2,
+    )
+    cv2.putText(
+        img, "Set SDK_SKIP_BROWSER_JOIN=0 for live video", (10, h // 2 + 25),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1,
+    )
+    _, jpeg = cv2.imencode(".jpg", img)
+    _PLACEHOLDER_FRAME_JPEG_B64 = base64.b64encode(jpeg.tobytes()).decode("ascii")
+    return _PLACEHOLDER_FRAME_JPEG_B64
+
+
 @app.get("/v2/front")
 async def get_front_frame():
     await need_start_mission()
     if os.getenv("SDK_SKIP_BROWSER_JOIN", "").lower() in ("1", "true", "yes"):
-        raise HTTPException(status_code=404, detail="Front frame not available")
+        # Return placeholder so bridge/webrtc pipeline stays active and UI shows message instead of black.
+        response_data = {
+            "front_frame": _get_placeholder_front_frame_b64(),
+            "timestamp": datetime.utcnow().timestamp(),
+        }
+        return JSONResponse(content=response_data)
     try:
         front_frame = await browser_service.front()
     except Exception as e:
         logger.warning("Browser front frame unavailable: %s", e)
-        raise HTTPException(status_code=404, detail="Front frame not available") from e
+        # Return placeholder so bridge/webrtc keep publishing; UI shows "No camera feed" instead of black.
+        response_data = {
+            "front_frame": _get_placeholder_front_frame_b64(),
+            "timestamp": datetime.utcnow().timestamp(),
+        }
+        return JSONResponse(content=response_data)
     response_data = {}
     if front_frame:
         _, base64_data = front_frame.split(",", 1)
         response_data["front_frame"] = base64_data
         response_data["timestamp"] = datetime.utcnow().timestamp()
         return JSONResponse(content=response_data)
-    else:
-        raise HTTPException(status_code=404, detail="Front frame not available")
+    # No frame from browser (e.g. not joined yet); return placeholder so pipeline stays active.
+    response_data = {
+        "front_frame": _get_placeholder_front_frame_b64(),
+        "timestamp": datetime.utcnow().timestamp(),
+    }
+    return JSONResponse(content=response_data)
 
 
 @app.get("/v2/rear")

@@ -23,6 +23,7 @@ from scout_robot_bridge.core.constants import (
     MAX_VELOCITY,
     MIN_VELOCITY,
     ROBOT_TELEMETRY_TOPIC,
+    SDK_FRONT_ENDPOINT,
 )
 from scout_robot_bridge.core.robot_base import RobotBase
 from scout_robot_bridge.core.robot_factory import create_robot
@@ -146,7 +147,9 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     if none_count >= 50 and not no_frame_logged[0]:
                         no_frame_logged[0] = True
                         node.get_logger().warning(
-                            "No camera frames from SDK (SDK_SKIP_BROWSER_JOIN=0 and browser joined?). Video will stay black until get_front_camera_stream returns frames."
+                            "No camera frames from SDK after 50 attempts. Check SDK is running, %s is reachable, "
+                            "and with SDK_SKIP_BROWSER_JOIN=0 that auth/channel are configured and browser has joined.",
+                            SDK_FRONT_ENDPOINT,
                         )
                     continue
                 none_count = 0

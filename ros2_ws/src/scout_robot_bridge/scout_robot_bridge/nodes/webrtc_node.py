@@ -20,6 +20,7 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from av import VideoFrame
+from av.video.frame import PictureType
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
@@ -54,7 +55,22 @@ try:
         VideoStreamTrack,
     )
     from aiortc.exceptions import InvalidStateError as AiortcInvalidStateError
+    from aiortc.rtcrtpsender import RTCRtpSender
     HAS_AIORTC = True
+
+    # aiortc only sets force_keyframe when it receives PLI from the browser; the first frame
+    # is always encoded with force_keyframe=False, so the browser never gets a keyframe.
+    # Patch so the first video frame is encoded as keyframe (encoder is None on first frame).
+    _orig_next_encoded_frame = RTCRtpSender._next_encoded_frame
+
+    async def _patched_next_encoded_frame(self, codec):
+        encoder = getattr(self, "_RTCRtpSender__encoder", None)
+        kind = getattr(self, "_RTCRtpSender__kind", "")
+        if encoder is None and kind == "video":
+            setattr(self, "_RTCRtpSender__force_keyframe", True)
+        return await _orig_next_encoded_frame(self, codec)
+
+    RTCRtpSender._next_encoded_frame = _patched_next_encoded_frame
 except ImportError:
     HAS_AIORTC = False
     AiortcInvalidStateError = None  # type: ignore[misc, assignment]
@@ -70,6 +86,11 @@ SIGNALING_WS_URL = os.getenv("SIGNALING_WS_URL", "ws://localhost:8000/ws/signali
 # Keep only latest frame to minimize latency (no backlog).
 FRAME_QUEUE_MAXSIZE = 1
 FRAME_CLOCK_RATE = 90000
+# Send a keyframe (I-frame) at least this often so the browser decoder can display (and recover after packet loss).
+# 5 Hz video (previously working rate; steady keyframes help browser decode)
+CAMERA_TRACK_FPS = 5
+KEYFRAME_INTERVAL_FRAMES = 15  # ~3 s at 5 fps
+KEYFRAME_BURST_FIRST_N = 5  # First N frames as keyframes so browser gets one even if first packets are lost
 
 
 def _webrtc_ice_config() -> Optional[RTCConfiguration]:
@@ -134,6 +155,37 @@ def _decode_compressed_image(data: bytes, fmt: str) -> Optional[np.ndarray]:
     return img
 
 
+def _make_placeholder_frame() -> np.ndarray:
+    """Create a single 'No camera feed' placeholder image (BGR, same size as video output)."""
+    h, w = VIDEO_OUTPUT_HEIGHT, VIDEO_OUTPUT_WIDTH
+    # Brighter background so it's obvious even if video is small or dim
+    img = np.full((h, w, 3), 80, dtype=np.uint8)
+    if HAS_CV2:
+        try:
+            # Large, high-contrast text so it's visible when scaled
+            cv2.putText(
+                img,
+                "No camera feed",
+                (10, h // 2 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 255, 255),
+                2,
+            )
+            cv2.putText(
+                img,
+                "Start Earth Rovers SDK (scout_sdk) /v2/front",
+                (10, h // 2 + 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (220, 220, 220),
+                1,
+            )
+        except Exception:
+            pass
+    return img
+
+
 class CameraTrack(VideoStreamTrack):
     """Video track that yields frames from a thread-safe queue (ROS camera topic)."""
 
@@ -148,20 +200,29 @@ class CameraTrack(VideoStreamTrack):
         self._clock_rate = clock_rate
         self._pts = 0
         self._last_frame: Optional[np.ndarray] = None
+        self._placeholder_frame: Optional[np.ndarray] = None
         self._last_frame_pts_ref = last_frame_pts_ref
         self._recv_count = 0
 
     async def recv(self):
         # Prefer latest frame from queue; else reuse last frame to keep stream alive
+        got_from_queue = False
         try:
             self._last_frame = self._queue.get_nowait()
+            got_from_queue = True
         except queue.Empty:
             pass
         if self._last_frame is None:
-            # No frame yet: yield a black frame at output resolution to satisfy recv
-            self._last_frame = np.zeros((VIDEO_OUTPUT_HEIGHT, VIDEO_OUTPUT_WIDTH, 3), dtype=np.uint8)
+            # No frame yet: show placeholder so user sees a message instead of black
+            if self._placeholder_frame is None:
+                self._placeholder_frame = _make_placeholder_frame()
+                LOG.info(
+                    "CameraTrack: no frames from %s yet; showing placeholder. Start Earth Rovers SDK (scout_sdk) for live feed.",
+                    CAMERA_FRONT_COMPRESSED_TOPIC,
+                )
+            self._last_frame = self._placeholder_frame
         if self._recv_count == 0:
-            LOG.info("CameraTrack: first frame sent (from_queue=%s)", self._last_frame is not None)
+            LOG.info("CameraTrack: first frame sent (from_queue=%s)", got_from_queue)
         elif self._recv_count < 3 or self._recv_count % 100 == 0:
             LOG.debug(
                 "CameraTrack recv frame %d pts=%d",
@@ -172,9 +233,17 @@ class CameraTrack(VideoStreamTrack):
         frame = VideoFrame.from_ndarray(self._last_frame, format="bgr24")
         frame.pts = self._pts
         frame.time_base = Fraction(1, self._clock_rate)
+        # Force keyframe (I-frame) for first frames and periodically so the browser decoder can display.
+        if (
+            self._recv_count <= KEYFRAME_BURST_FIRST_N
+            or (self._recv_count % KEYFRAME_INTERVAL_FRAMES) == 1
+        ):
+            frame.pict_type = PictureType.I
         if self._last_frame_pts_ref is not None:
             self._last_frame_pts_ref[0] = self._pts
-        self._pts += 3000  # ~30fps at 90k clock
+        self._pts += int(self._clock_rate / CAMERA_TRACK_FPS)
+        # Rate-limit to CAMERA_TRACK_FPS so encoder and browser get steady keyframes.
+        await asyncio.sleep(1.0 / CAMERA_TRACK_FPS)
         return frame
 
 
@@ -494,10 +563,31 @@ async def run_signaling_and_webrtc(
                             )
                             track = CameraTrack(frame_queue, last_frame_pts_ref=last_frame_pts_ref)
                             pc.addTrack(track)
-                            LOG.info("Video track added to peer connection (source: %s)", CAMERA_FRONT_COMPRESSED_TOPIC)
+                            LOG.debug("Video track added to peer connection (source: %s)", CAMERA_FRONT_COMPRESSED_TOPIC)
 
-                            # Only publish when (linear, angular, lamp) changes to avoid flooding and reorder issues
-                            last_sent_control: list = [None]  # (linear_x, angular_z, lamp) or None
+                            first_control_logged: list = [False]
+
+                            @pc.on("icecandidate")
+                            def on_ice_candidate(event):
+                                """Send our ICE candidates to the browser so the peer connection can complete."""
+                                if event.candidate is None:
+                                    return
+                                try:
+                                    c = event.candidate
+                                    payload = {"type": "ice", "candidate": c.candidate}
+                                    if getattr(c, "sdpMid", None) is not None:
+                                        payload["sdpMid"] = c.sdpMid
+                                    if getattr(c, "sdpMLineIndex", None) is not None:
+                                        payload["sdpMLineIndex"] = c.sdpMLineIndex
+                                    asyncio.ensure_future(_send_ice(ws, payload))
+                                except Exception as e:
+                                    LOG.debug("icecandidate send: %s", e)
+
+                            async def _send_ice(websocket, payload: dict) -> None:
+                                try:
+                                    await websocket.send(json.dumps(payload))
+                                except Exception as e:
+                                    LOG.debug("send ICE to browser: %s", e)
 
                             @pc.on("datachannel")
                             def on_datachannel(channel):
@@ -511,15 +601,19 @@ async def run_signaling_and_webrtc(
                                             data = json.loads(message)
                                             twist = _twist_from_control(data)
                                             if twist is not None:
+                                                if not first_control_logged[0]:
+                                                    first_control_logged[0] = True
+                                                    LOG.info(
+                                                        "First control received on data channel (linear_x=%.2f angular_z=%.2f)",
+                                                        twist.linear.x,
+                                                        twist.angular.z,
+                                                    )
                                                 # Update lamp only when message includes it; otherwise keep current
                                                 if "lamp" in data:
                                                     last_lamp_ref[0] = 1 if data.get("lamp") else 0
                                                 lamp = last_lamp_ref[0]
-                                                key = (float(twist.linear.x), float(twist.angular.z), lamp)
-                                                prev = last_sent_control[0]
-                                                if prev != key:
-                                                    last_sent_control[0] = key
-                                                    _put_latest(control_queue, (twist, lamp))
+                                                # Always queue so robot gets a continuous stream (no deduplication)
+                                                _put_latest(control_queue, (twist, lamp))
                                                 # Always push partial telemetry so UI shows commanded speed
                                                 partial = {"speed": float(twist.linear.x), "timestamp": time.time()}
                                                 _put_latest(telemetry_queue, json.dumps(partial))

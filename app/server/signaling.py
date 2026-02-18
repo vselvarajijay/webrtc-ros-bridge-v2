@@ -87,10 +87,10 @@ async def handle_signaling_websocket(websocket: WebSocket) -> None:
             except json.JSONDecodeError:
                 continue
 
-            # Log telemetry from robot (velocity, battery, GPS, IMU, etc.)
+            # Log telemetry from robot at debug level to avoid flooding logs
             if role == "robot" and payload.get("type") == "telemetry":
                 data = payload.get("data") or {}
-                logger.info(
+                logger.debug(
                     "telemetry | battery=%.0f%% speed=%.2f gps_signal=%.1f lat=%.4f lon=%.4f orientation=%s rpms=%s",
                     data.get("battery", 0),
                     data.get("speed", 0),

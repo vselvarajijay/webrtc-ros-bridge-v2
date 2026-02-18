@@ -25,10 +25,13 @@ case "$cmd" in
     ;;
   start)
     USE_XTERM=false
+    RUN_TELEOP=false
     for arg in "$@"; do
       if [[ "$arg" == "--xterm" ]]; then
         USE_XTERM=true
-        break
+        RUN_TELEOP=true
+      elif [[ "$arg" == "--teleop" ]]; then
+        RUN_TELEOP=true
       fi
     done
 
@@ -66,18 +69,22 @@ case "$cmd" in
     sleep 5
     echo "App (signaling + www): http://localhost:8000/"
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
-
-    echo "Opening teleop (keyboard control)..."
-    RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && exec ros2 run scout_robot_bridge teleop_node'"
-    if [[ "$USE_XTERM" == true ]]; then
-      if command -v xterm &>/dev/null; then
-        xterm -e "$RUN_CMD"
+    if [[ "$RUN_TELEOP" == true ]]; then
+      echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."
+      RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && exec ros2 run scout_robot_bridge teleop_node'"
+      if [[ "$USE_XTERM" == true ]]; then
+        if command -v xterm &>/dev/null; then
+          xterm -e "$RUN_CMD"
+        else
+          echo "xterm not found; running in current terminal."
+          eval "$RUN_CMD"
+        fi
       else
-        echo "xterm not found; running in current terminal."
         eval "$RUN_CMD"
       fi
     else
-      eval "$RUN_CMD"
+      echo "Drive from the web UI: http://localhost:8000/"
+      echo "To use keyboard teleop instead: ./cli.sh teleop   or   ./cli.sh start --teleop"
     fi
     ;;
   stop)
@@ -156,8 +163,10 @@ case "$cmd" in
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
-    echo "  start       Start App (signaling + www), TURN, Earth Rovers SDK, scout_bridge, scout_perception, then run teleop"
-    echo "               Options: --xterm  Run teleop in a separate xterm window"
+    echo "  start       Start App (signaling + www), TURN, Earth Rovers SDK, scout_bridge, scout_perception"
+    echo "               By default only containers start; drive from http://localhost:8000/ (no conflict with web UI)"
+    echo "               Options: --teleop  Also run CLI keyboard teleop (don't use with web UI at same time)"
+    echo "                        --xterm   Run teleop in a separate xterm window (implies --teleop)"
     echo "  stop        Stop app, scout_turn, scout_sdk, scout_bridge, scout_perception, and any process on port 8000/8001"
     echo "  teleop      Run teleop_node in scout_bridge container (arrow key control)"
     echo "  test        Run all ROS 2 workspace tests (colcon test in scout_bridge container)"
