@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import threading
 from pathlib import Path
 import rclpy
 from rclpy.node import Node
@@ -41,9 +42,14 @@ class DepthAnything3Node(Node):
         
         self.cv_bridge = CvBridge()
         
-        # Topics
+        # Latest-only: one pending image, process when idle
+        self._latest_msg = None
+        self._processing = False
+        self._lock = threading.Lock()
+        
+        # Topics (queue size 1 so we don't buffer multiple images)
         self.subscription = self.create_subscription(
-            CompressedImage, '/camera/front/compressed', self.listener_callback, 10
+            CompressedImage, '/camera/front/compressed', self.listener_callback, 1
         )
         self.pub_depth = self.create_publisher(Image, '/da3/depth', 10)
         self.pub_depth_colored = self.create_publisher(CompressedImage, '/da3/depth_colored', 10)
@@ -66,46 +72,51 @@ class DepthAnything3Node(Node):
         
         self.get_logger().info(f"Camera intrinsics: fx={self.fx:.2f}, fy={self.fy:.2f}, cx={self.cx:.2f}, cy={self.cy:.2f}")
         self.get_logger().info("DA3 Node ready!")
+        
+        self.create_timer(0.05, self._process_latest)  # 20 Hz
 
-    def listener_callback(self, msg):
+    def _process_latest(self):
+        """Take latest image (if any), run inference at full resolution and publish. Only one frame in flight."""
+        with self._lock:
+            if self._processing:
+                return
+            if self._latest_msg is None:
+                return
+            msg = self._latest_msg
+            self._latest_msg = None
+            self._processing = True
         try:
-            # Input Image (Original Resolution)
             cv_img = self.cv_bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
             orig_h, orig_w = cv_img.shape[:2]
-
-            # Depth Inference
             pred = self.model.inference([cv_img])
             depth = pred.depth[0]
             metric_depth = (self.focal * depth) / 300.0
-            depth = metric_depth
+            depth = metric_depth.astype(np.float32)
             if depth.shape[0] != orig_h or depth.shape[1] != orig_w:
                 depth = cv2.resize(depth, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-            
-            # Ensure depth is float32
-            depth = depth.astype(np.float32)
-
-            # Publish Depth Image
             header = msg.header
             if not header.frame_id:
                 header.frame_id = "front_camera_link"
-            
             d_msg = self.cv_bridge.cv2_to_imgmsg(depth, "32FC1")
             d_msg.header = header
             self.pub_depth.publish(d_msg)
-            
-            # Create colored depth visualization for UI
             depth_colored = self.depth_to_colored(depth)
             self._draw_safe_distance_overlay(depth_colored, depth)
             depth_colored_msg = self.cv_bridge.cv2_to_compressed_imgmsg(depth_colored, "jpeg")
             depth_colored_msg.header = header
             self.pub_depth_colored.publish(depth_colored_msg)
-            
-            # Convert depth to PointCloud2
             pointcloud_msg = self.depth_to_pointcloud(depth, header)
             self.pub_pointcloud.publish(pointcloud_msg)
-            
         except Exception as e:
-            self.get_logger().error(f"Error in callback: {e}", exc_info=True)
+            self.get_logger().error(f"Error in _process_latest: {e}", exc_info=True)
+        finally:
+            with self._lock:
+                self._processing = False
+
+    def listener_callback(self, msg):
+        """Store latest image only; processing happens in _process_latest."""
+        with self._lock:
+            self._latest_msg = msg
 
     def safe_distance_meters(self, depth_image):
         """Minimum valid depth in lower-center region (path in front of robot). Returns meters or nan."""
@@ -156,8 +167,16 @@ class DepthAnything3Node(Node):
         depth_colored = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_JET)
         return depth_colored
     
-    def depth_to_pointcloud(self, depth_image, header):
-        """Convert depth image to PointCloud2 message."""
+    def depth_to_pointcloud(self, depth_image, header, fx=None, fy=None, cx=None, cy=None):
+        """Convert depth image to PointCloud2 message. Intrinsics default to node calib if not given."""
+        if fx is None:
+            fx = self.fx
+        if fy is None:
+            fy = self.fy
+        if cx is None:
+            cx = self.cx
+        if cy is None:
+            cy = self.cy
         height, width = depth_image.shape
         
         # Create PointCloud2 message
@@ -189,8 +208,8 @@ class DepthAnything3Node(Node):
                     x = y = z = float('nan')
                 else:
                     # Convert pixel coordinates to 3D points
-                    x = (u - self.cx) * depth / self.fx
-                    y = (v - self.cy) * depth / self.fy
+                    x = (u - cx) * depth / fx
+                    y = (v - cy) * depth / fy
                     z = depth
                 
                 # Pack as 3 floats (12 bytes)
