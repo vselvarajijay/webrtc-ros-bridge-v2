@@ -1,4 +1,4 @@
-# scout_robot_bridge: ROS 2 Kilted + Python deps for bridge_node
+# bunny_robot_bridge: ROS 2 Kilted + Python deps for bridge_node
 FROM osrf/ros:kilted-desktop
 
 # Install Google Chrome for Pyppeteer (front camera). More reliable in Docker than chromium-browser.
@@ -52,4 +52,4 @@ ENV CHROME_EXECUTABLE_PATH=/usr/bin/google-chrome
 
 # Workspace is mounted at /root/workspace at runtime
 WORKDIR /root/workspace/ros2_ws
-CMD ["bash", "-c", "source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash && exec ros2 run scout_robot_bridge bridge_node"]
+CMD ["bash", "-c", "source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source install/setup.bash && exec ros2 run bunny_robot_bridge bridge_node"]

@@ -80,7 +80,9 @@ services:
       - .:/root/workspace
     # No network_mode: host so bridge can reach scout_sdk via Docker DNS (required on Docker Desktop for Mac)
     # bridge_node, controller_node, foxglove_bridge in background; webrtc_node in foreground (same container so /cmd_vel reaches webrtc for telemetry; controller_node handles /autonomy/command for tap-to-orient)
-    command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && source install/setup.bash && (ros2 run scout_robot_bridge bridge_node &) && (ros2 run scout_controller controller_node &) && (ros2 run foxglove_bridge foxglove_bridge &) && sleep 0.5 && exec ros2 run scout_teleop webrtc_node"]
+    command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && source install/setup.bash && (ros2 run bunny_robot_bridge bridge_node &) && (ros2 run bunny_controller controller_node &) && (ros2 run foxglove_bridge foxglove_bridge &) && sleep 1 && exec ros2 run bunny_teleop webrtc_node"]
+    profiles:
+      - webrtc
 
   scout_perception:
     build:
@@ -99,6 +101,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
     network_mode: host
+    profiles:
+      - webrtc
 
   scout_webrtc:
     build:
@@ -124,7 +128,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
     network_mode: host
-    command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && export TURN_URL=turn:host.docker.internal:3478 && source install/setup.bash && exec ros2 run scout_teleop webrtc_node"]
+    command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && export TURN_URL=turn:host.docker.internal:3478 && source install/setup.bash && exec ros2 run bunny_teleop webrtc_node"]
     profiles:
       - webrtc
 

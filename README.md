@@ -31,7 +31,7 @@
 
 ```bash
 # In the dev shell, run teleop with arrow keys
-ros2 run scout_robot_bridge teleop_node
+ros2 run bunny_robot_bridge teleop_node
 ```
 
 Use **Up** (forward), **Down** (back), **Left** / **Right** (turn). Ctrl+C to quit.
@@ -61,10 +61,10 @@ To add support for a new robot, you need to:
 Create a new robot class that inherits from `RobotBase` and implements all abstract methods:
 
 ```python
-# ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robots/my_robot.py
+# ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/robots/my_robot.py
 
-from scout_robot_bridge.core.robot_base import RobotBase
-from scout_robot_bridge.core.models.telemetry import TelemetryFrame
+from bunny_robot_bridge.core.robot_base import RobotBase
+from bunny_robot_bridge.core.models.telemetry import TelemetryFrame
 
 class MyRobot(RobotBase):
     """Robot implementation for MyRobot SDK."""
@@ -116,9 +116,9 @@ class MyRobot(RobotBase):
 Add your robot to the factory:
 
 ```python
-# ros2_ws/src/scout_robot_bridge/scout_robot_bridge/core/robot_factory.py
+# ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/core/robot_factory.py
 
-from scout_robot_bridge.robots.my_robot import MyRobot
+from bunny_robot_bridge.robots.my_robot import MyRobot
 
 def create_robot(robot_type: str) -> Optional[RobotBase]:
     if robot_type == "earth_rovers_sdk":
@@ -190,7 +190,7 @@ Planned features (not yet implemented):
 
 The `EarthRoversRobot` class demonstrates a complete implementation:
 
-- **Location:** `ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robots/earth_rovers_robot.py`
+- **Location:** `ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/robots/earth_rovers_robot.py`
 - **SDK:** Uses Earth Rovers SDK via RTM (Real-Time Messaging) client
 - **Configuration:** Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` with required credentials
 
@@ -203,8 +203,8 @@ See the implementation for reference when adding your own robot.
 ### Project Structure
 
 ```
-ros2_ws/src/scout_robot_bridge/
-├── scout_robot_bridge/
+ros2_ws/src/bunny_robot_bridge/
+├── bunny_robot_bridge/
 │   ├── core/
 │   │   ├── robot_base.py      # Abstract base class
 │   │   ├── robot_factory.py   # Robot creation

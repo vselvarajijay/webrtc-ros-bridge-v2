@@ -19,19 +19,19 @@ _pending_offer: Optional[str] = None
 _first_telemetry_relayed: bool = False
 
 
-def _set_connection(role: str, ws: WebSocket) -> None:
+async def _set_connection(role: str, ws: WebSocket) -> None:
     global _browser_ws, _robot_ws
     if role == "browser":
         if _browser_ws is not None:
             try:
-                _browser_ws.close()
+                await _browser_ws.close()
             except Exception:
                 pass
         _browser_ws = ws
     elif role == "robot":
         if _robot_ws is not None:
             try:
-                _robot_ws.close()
+                await _robot_ws.close()
             except Exception:
                 pass
         _robot_ws = ws
@@ -60,7 +60,7 @@ async def handle_signaling_websocket(websocket: WebSocket) -> None:
                 await websocket.close(code=4000, reason="Invalid role")
                 return
             role = r
-            _set_connection(role, websocket)
+            await _set_connection(role, websocket)
             logger.info("Signaling: %s connected", role)
             # So browser knows it is registered before sending offer
             if role == "browser":
