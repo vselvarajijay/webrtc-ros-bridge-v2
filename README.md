@@ -1,12 +1,6 @@
 # WebRTC ROS Bridge v2
 
-## Overview
-
-**Write once, run on any robot.** This bridge lets you build ROS 2 control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC, and your autonomy stack stays hardware-agnostic. Each robot maintains its own configuration while sharing the same control logic.
-
-## What's in this repo
-
-A ROS 2 (Kilted) workspace with WebRTC bridge, containerized with Docker. Connect your robot SDK to the bridge and your control system can communicate with that hardware.
+**Write once, run on any robot.** This bridge lets you build ROS 2 control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC, and your autonomy stack stays hardware-agnostic.
 
 ---
 
@@ -19,136 +13,144 @@ A ROS 2 (Kilted) workspace with WebRTC bridge, containerized with Docker. Connec
   - Open XQuartz → **Preferences → Security**
   - Enable **"Allow connections from network clients"**
   - Restart XQuartz after changing this setting
-- **Optional**: `xterm` for separate terminal windows
 
-### Build and run
-
-Each ROS 2 package runs in its own container. From the project root:
+### Build and Run
 
 ```bash
 # Build Docker images and the ROS 2 workspace (run once after clone or when deps change)
 ./cli.sh build
 
-# Start scout_bridge and scout_perception, then open a dev shell (for teleop, rqt, etc.)
+# Start the bridge and open a dev shell
 ./cli.sh start
 
-# Open the dev shell in a separate xterm window
-./cli.sh start --xterm
-
-# Stop the bridge and perception containers
+# Stop the bridge
 ./cli.sh stop
 ```
 
-**Containers:**
-
-- **scout_bridge** – runs `bridge_node` (robot control and front camera).
-- **scout_perception** – placeholder for the perception node (runs until you add the node).
-- **scout_shell** – dev shell with ROS 2 and workspace sourced; used by `./cli.sh start` for interactive use.
-
-The workspace is mounted in all containers, so one `./cli.sh build` is shared by every service.
-
-### Robot controls
-
-**Arrow keys (recommended):**
+### Test Robot Control
 
 ```bash
+# In the dev shell, run teleop with arrow keys
 ros2 run scout_robot_bridge teleop_node
 ```
 
 Use **Up** (forward), **Down** (back), **Left** / **Right** (turn). Ctrl+C to quit.
 
-**Alternative (i/j/k/l):** `ros2 run teleop_twist_keyboard teleop_twist_keyboard`
+### WebRTC Live View
 
-The bridge subscribes to `/cmd_vel` and maps Twist to discrete move commands, then sends them to the robot via the Earth Rovers SDK (RTM).
+Once configured, you can access the WebRTC live view interface in your browser at `http://localhost:8000`. The interface provides:
 
-**If commands don’t reach the robot** (teleop shows "Publishing" but bridge never shows "cmd_vel received"):
+- **Live video feed** - Real-time camera stream from the robot
+- **Robot controls** - Drive the robot with keyboard or on-screen controls
+- **Telemetry dashboard** - Monitor battery, speed, heading, and signal strength
+- **Connection status** - WebRTC signaling and data channel status
 
-- **Run teleop in the same container as the bridge** so ROS 2 discovery works. In a **new terminal** on the host:
+![WebRTC Live View Interface](docs/assets/screenshot.png)
 
-  ```bash
-  docker compose exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 run scout_robot_bridge teleop_node'
-  ```
+---
 
-  Watch bridge logs in another terminal: `docker compose logs -f scout_bridge` — you should see `cmd_vel received: linear.x=...` for each keypress.
+## Configuring a Robot
 
-- **Confirm the bridge is running:** `docker compose ps` — `scout_bridge` should be Up.
+To add support for a new robot, you need to:
 
-- **If you see `cmd_vel received but no robot`:** the bridge has no robot instance (check `.env`: `SDK_API_TOKEN`, `BOT_SLUG`, etc.).
+1. **Implement the `RobotBase` class**
+2. **Configure environment variables** in `.env`
 
-- **Rebuild after code changes:** `./cli.sh build` then `./cli.sh stop` and `./cli.sh start`.
+### Step 1: Implement RobotBase
 
-### Front camera
+Create a new robot class that inherits from `RobotBase` and implements all abstract methods:
 
-The bridge publishes the front camera on `/camera/front/compressed` by loading the Earth Rovers SDK page in a headless browser. If you see:
+```python
+# ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robots/my_robot.py
 
-```text
-Error initializing browser: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:8000/sdk
+from scout_robot_bridge.core.robot_base import RobotBase
+from scout_robot_bridge.core.models.telemetry import TelemetryFrame
+
+class MyRobot(RobotBase):
+    """Robot implementation for MyRobot SDK."""
+    
+    def __init__(self):
+        # Initialize your robot SDK here
+        pass
+    
+    def move_forward(self) -> None:
+        # Send forward command to robot
+        pass
+    
+    def move_backward(self) -> None:
+        # Send backward command to robot
+        pass
+    
+    def move_left(self) -> None:
+        # Send left turn command to robot
+        pass
+    
+    def move_right(self) -> None:
+        # Send right turn command to robot
+        pass
+    
+    def stop(self) -> None:
+        # Send stop command to robot
+        pass
+    
+    def get_front_camera_frame(self):
+        # Return latest camera frame as bytes, or None if unavailable
+        return None
+    
+    def get_telemetry(self) -> TelemetryFrame:
+        # Return latest telemetry data, or None if unavailable
+        return None
 ```
 
-then nothing is serving that URL. The bridge expects the **Earth Rovers SDK web app** to be running at `http://127.0.0.1:8000`. With `network_mode: host`, the container uses the host’s network, so run the SDK server on the host (or in another container with port 8000 published to the host). For example, from the repo:
+**Required methods:**
+- `move_forward()`, `move_backward()`, `move_left()`, `move_right()`, `stop()` - Control robot movement
+- `get_front_camera_frame()` - Return camera frame as bytes (or `None`)
+- `get_telemetry()` - Return `TelemetryFrame` with sensor data (or `None`)
+
+**Optional methods:**
+- `send_velocity(linear, angular)` - Override for continuous velocity control (default converts to discrete commands)
+- `set_lamp(lamp)` - Override if robot supports lamps
+
+### Step 2: Register Your Robot
+
+Add your robot to the factory:
+
+```python
+# ros2_ws/src/scout_robot_bridge/scout_robot_bridge/core/robot_factory.py
+
+from scout_robot_bridge.robots.my_robot import MyRobot
+
+def create_robot(robot_type: str) -> Optional[RobotBase]:
+    if robot_type == "earth_rovers_sdk":
+        return EarthRoversRobot()
+    elif robot_type == "my_robot":  # Add your robot type
+        return MyRobot()
+    return None
+```
+
+### Step 3: Configure .env
+
+Copy `.env.example` to `.env` and set your robot configuration:
 
 ```bash
-cd ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robot_sdk/earth_rovers_sdk
-pip install -r requirements.txt   # or install deps as needed
-python main.py
+# Select which robot SDK to use
+ROBOT_TYPE=my_robot
+
+# Add your robot-specific environment variables
+MY_ROBOT_API_KEY=your_api_key_here
+MY_ROBOT_HOST=192.168.1.100
 ```
 
-Then the bridge can load `http://127.0.0.1:8000/sdk` and publish frames. If you don’t need the camera stream, you can ignore this error; move commands and the rest of the bridge still work.
+The bridge reads `ROBOT_TYPE` from `.env` and creates the corresponding robot instance. Any other environment variables your robot needs can be added to `.env` and accessed via `os.getenv()` in your robot class.
 
-### WebRTC live view
+**Example:** For the Earth Rovers robot, the `.env` file includes:
+- `ROBOT_TYPE=earth_rovers_sdk`
+- `FRODOBOT_SDK_API_TOKEN` - API token for authentication
+- `FRODOBOT_BOT_SLUG` - Robot identifier
+- `FRODOBOT_MISSION_SLUG` - Mission identifier
+- `FRODOBOT_CHROME_EXECUTABLE_PATH` - Path to Chrome (for camera capture)
 
-Stream the robot's front camera to the browser over WebRTC and control the robot from the app (arrow keys).
-
-**Startup order:**
-
-1. **Start the stack** with the webrtc profile (app, Earth Rovers SDK, scout_bridge, scout_perception, scout_webrtc):
-
-   ```bash
-   ./cli.sh build   # if not already built
-   ./cli.sh start   # starts app, SDK, bridge, perception, webrtc
-   ```
-
-2. **Open the app** in your browser at `http://localhost:8000`. The page shows a live view area and telemetry panel.
-
-3. **Front camera source:** For the stream to show, the bridge must be publishing `/camera/front/compressed`. The **scout_sdk** container runs the Earth Rovers SDK on port 8001; the bridge uses it by default (`SDK_LOCAL_URL=http://host.docker.internal:8001`). Without the SDK running, the live view stays on "Waiting for robot stream…".
-
-**Containers (webrtc profile):**
-
-- **scout_app** – FastAPI app (signaling WebSocket + static page) on port 8000.
-- **scout_sdk** – Earth Rovers SDK (/v2/front, /data) on port 8001; runs in Docker so no host pip install needed.
-- **scout_bridge** – `bridge_node`: robot control and front camera publisher on `/camera/front/compressed` (gets frames from scout_sdk). Also runs **foxglove_bridge** for Foxglove Studio (port 8765).
-- **scout_webrtc** – `webrtc_node`: subscribes to the camera topic, sends video over WebRTC to the app. Uses **host network** so it shares the host ROS 2 network with scout_bridge; connects to the app at `ws://host.docker.internal:8000/ws/signaling`.
-
-**Foxglove Studio (ROS 2 visualization):**
-
-After `./cli.sh start`, the Foxglove WebSocket bridge runs inside **scout_bridge** on port 8765. To view topics (e.g. `/cmd_vel`, `/camera/front/compressed`, `/robot/telemetry`) in Foxglove Studio:
-
-1. Open [Foxglove Studio](https://app.foxglove.dev/) (browser) or install the [desktop app](https://foxglove.dev/download).
-2. **Add connection** → **Foxglove WebSocket**.
-3. Set **URL** to `ws://localhost:8765` and connect.
-
-No extra parameters are required; the bridge exposes all ROS 2 topics by default.
-
-**Troubleshooting Foxglove (ws://localhost:8765):**
-
-- **Connection refused or nothing on 8765**  
-  The `foxglove_bridge` node must be installed in the Docker image and started with the bridge. If the image was built before the Foxglove setup was added, rebuild so the package is installed:
-
-  ```bash
-  ./cli.sh stop
-  docker compose --profile webrtc build --no-cache scout_bridge
-  ./cli.sh build
-  ./cli.sh start
-  ```
-
-- **Check that something is listening on 8765 (on your Mac):**  
-  `lsof -i :8765` — you should see Docker (or the Foxglove process) listening.
-
-- **Check that the bridge is running inside the container:**  
-  `docker compose --profile webrtc exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && ros2 pkg list | grep foxglove'` — should print `foxglove_bridge`. If it doesn’t, the package isn’t installed in the image; rebuild as above.
-
-- **Check ROS topics:**  
-  `docker compose --profile webrtc exec scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && ros2 topic list'` — you should see `/cmd_vel`, `/camera/front/compressed`, `/robot/telemetry`, etc.
+See `.env.example` for the full list of available configuration options.
 
 ---
 
@@ -159,16 +161,86 @@ Robot SDK (native) ←→ WebRTC ←→ Bridge ←→ ROS 2 (your control logic)
 ```
 
 The bridge handles:
-- Protocol translation between robot SDK and ROS 2
-- Message standardization across different platforms
-- Robot-specific configuration management
-- Real-time WebRTC communication
+- **Protocol translation** between robot SDK and ROS 2
+- **Message standardization** across different platforms
+- **Robot-specific configuration** management
+- **Real-time WebRTC communication**
+
+### Current Status
+
+This project is in early development. Currently implemented:
+
+- ✅ **Robot control** - Send movement commands via ROS 2 `/cmd_vel` topic
+- ✅ **Camera streaming** - Front camera published to `/camera/front/compressed`
+- ✅ **Telemetry** - Robot sensor data published to `/robot/telemetry`
+- ✅ **WebRTC live view** - Stream camera to browser with real-time control
+
+### Future Modules
+
+Planned features (not yet implemented):
+
+- 🔲 **Localization** - Robot position tracking and mapping
+- 🔲 **Perception** - Object detection, obstacle avoidance
+- 🔲 **Navigation** - Path planning and autonomous navigation
+- 🔲 **Multi-robot support** - Coordinate multiple robots
 
 ---
 
-## Next Steps
+## Example: Earth Rovers Robot
 
-1. **Add your robot SDK** to the bridge
-2. **Configure** robot-specific parameters (topics, limits, transforms)
-3. **Deploy** your ROS 2 control logic
-4. **Scale** to additional robot types using the same codebase
+The `EarthRoversRobot` class demonstrates a complete implementation:
+
+- **Location:** `ros2_ws/src/scout_robot_bridge/scout_robot_bridge/robots/earth_rovers_robot.py`
+- **SDK:** Uses Earth Rovers SDK via RTM (Real-Time Messaging) client
+- **Configuration:** Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` with required credentials
+
+See the implementation for reference when adding your own robot.
+
+---
+
+## Development
+
+### Project Structure
+
+```
+ros2_ws/src/scout_robot_bridge/
+├── scout_robot_bridge/
+│   ├── core/
+│   │   ├── robot_base.py      # Abstract base class
+│   │   ├── robot_factory.py   # Robot creation
+│   │   └── config_manager.py  # Configuration handling
+│   ├── robots/
+│   │   └── earth_rovers_robot.py  # Example implementation
+│   └── nodes/
+│       └── bridge_node.py     # Main ROS 2 node
+```
+
+### Building
+
+```bash
+./cli.sh build
+```
+
+### Running
+
+```bash
+./cli.sh start
+```
+
+This starts:
+- **scout_bridge** - Main bridge node (robot control and camera)
+- **scout_shell** - Development shell with ROS 2 environment
+
+---
+
+## Troubleshooting
+
+**Robot commands don't work:**
+- Check `.env` file has correct `ROBOT_TYPE` and required credentials
+- Verify robot SDK is running and accessible
+- Check bridge logs: `docker compose logs -f scout_bridge`
+
+**Camera not showing:**
+- Ensure robot SDK provides camera endpoint
+- Check camera is enabled in robot configuration
+- Verify `/camera/front/compressed` topic is publishing: `ros2 topic echo /camera/front/compressed`
