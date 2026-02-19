@@ -44,8 +44,21 @@ Once configured, you can access the WebRTC live view interface in your browser a
 - **Robot controls** - Drive the robot with keyboard or on-screen controls
 - **Telemetry dashboard** - Monitor battery, speed, heading, and signal strength
 - **Connection status** - WebRTC signaling and data channel status
+- **Depth image** - Depth estimation (right panel), when perception and the depth relay are running
 
 ![WebRTC Live View Interface](docs/assets/screenshot.png)
+
+### Depth in the UI
+
+The depth panel (right side) shows depth estimation from the `da3_node`. The **depth relay** subscribes to ROS2 `/da3/depth_colored` and POSTs frames to the app so the UI can display them.
+
+1. **Run once:** `python3 scripts/download_models.py` (creates `models/DA3Metric-Large`).
+2. **Start:** `./cli.sh start` — scout_perception runs the relay and da3_node automatically.
+3. **Test:** `./scripts/test_perception.sh` — checks container status, app reachability from the relay, ROS topic rates, and the depth API.
+
+On Docker Desktop for Mac, the relay uses `APP_URL=http://host.docker.internal:8000` so it can reach the app. On Linux you can set `APP_URL=http://127.0.0.1:8000` in `.env` if needed. If depth stays 503, check `docker compose --profile webrtc logs scout_perception` and ensure `/camera/front/compressed` is publishing (bridge + robot/SDK).
+
+Depth updates when new frames arrive; it is slower than the live video feed.
 
 ---
 

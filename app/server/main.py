@@ -1,12 +1,14 @@
 import logging
 import time
+import threading
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .ice_servers import get_ice_servers
-from .signaling import handle_signaling_websocket
+from .signaling import get_last_telemetry, handle_signaling_websocket
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,10 +16,54 @@ app = FastAPI()
 
 WWW_DIR = Path(__file__).resolve().parent.parent / "www"
 
+# Global variable to store latest depth image and its frame timestamp (Unix seconds)
+_latest_depth_image: Optional[bytes] = None
+_latest_depth_image_timestamp: Optional[float] = None
+_depth_image_lock = threading.Lock()
+
+# ROS2 subscriber thread (optional, only if ROS2 is available)
+_depth_subscriber_thread: Optional[threading.Thread] = None
+
+
+def _ros2_depth_subscriber():
+    """Background thread to subscribe to ROS2 depth image topic."""
+    try:
+        import rclpy
+        from rclpy.node import Node
+        from sensor_msgs.msg import CompressedImage
+        
+        rclpy.init()
+        node = Node("depth_image_server")
+        
+        def depth_callback(msg: CompressedImage):
+            global _latest_depth_image, _latest_depth_image_timestamp
+            stamp = msg.header.stamp
+            frame_time = stamp.sec + stamp.nanosec * 1e-9
+            with _depth_image_lock:
+                _latest_depth_image = bytes(msg.data)
+                _latest_depth_image_timestamp = frame_time
+        
+        node.create_subscription(
+            CompressedImage,
+            '/da3/depth_colored',
+            depth_callback,
+            10
+        )
+        
+        logger.info("ROS2 depth subscriber started")
+        rclpy.spin(node)
+    except ImportError:
+        logger.warning("ROS2 not available, depth image endpoint will return placeholder")
+    except Exception as e:
+        logger.error(f"ROS2 subscriber error: {e}")
 
 @app.on_event("startup")
 async def startup():
     logger.info("App starting: WebSocket /ws/signaling and /ws/signaling/")
+    # Start ROS2 subscriber in background thread
+    global _depth_subscriber_thread
+    _depth_subscriber_thread = threading.Thread(target=_ros2_depth_subscriber, daemon=True)
+    _depth_subscriber_thread.start()
 
 
 @app.get("/")
@@ -99,14 +145,8 @@ def v2_front():
     )
 
 
-@app.get("/data")
-def data():
-    """
-    Stub for Earth Rovers SDK /data endpoint.
-    Scout_bridge polls this when it expects the SDK on port 8000.
-    Returns minimal telemetry so the bridge does not 404; real telemetry
-    flows via ROS from the bridge and is sent to the browser over WebRTC.
-    """
+def _stub_telemetry():
+    """Minimal telemetry when no robot data is available."""
     return {
         "battery": 0.0,
         "signal_level": 0,
@@ -125,6 +165,19 @@ def data():
     }
 
 
+@app.get("/data")
+def data():
+    """
+    Telemetry endpoint. Bridge (scout_bridge) polls this when SDK is expected on port 8000.
+    Returns last telemetry received from robot via signaling when available;
+    otherwise returns minimal stub so the bridge does not 404 and the UI can show something.
+    """
+    last = get_last_telemetry()
+    if last is not None:
+        return last
+    return _stub_telemetry()
+
+
 @app.websocket("/ws/signaling")
 async def ws_signaling(websocket: WebSocket):
     """WebRTC signaling: exchange offer/answer and ICE between browser and robot."""
@@ -135,3 +188,52 @@ async def ws_signaling(websocket: WebSocket):
 async def ws_signaling_trailing(websocket: WebSocket):
     """Same as /ws/signaling for clients that send a trailing slash."""
     await handle_signaling_websocket(websocket)
+
+
+# Max body size for depth ingest (e.g. 5 MB JPEG)
+_DEPTH_INGEST_MAX_BYTES = 5 * 1024 * 1024
+
+
+@app.post("/api/depth_image_ingest")
+async def depth_image_ingest(request: Request):
+    """Accept JPEG depth image from relay (ROS2 subscriber posts here). Updates latest depth for GET /api/depth_image."""
+    global _latest_depth_image, _latest_depth_image_timestamp
+    content_type = request.headers.get("content-type", "")
+    if content_type and "image/jpeg" not in content_type and "application/octet-stream" not in content_type:
+        return Response(status_code=415, content="Content-Type must be image/jpeg or application/octet-stream")
+    frame_time_header = request.headers.get("X-Depth-Frame-Time", "").strip()
+    try:
+        frame_time = float(frame_time_header) if frame_time_header else time.time()
+    except ValueError:
+        frame_time = time.time()
+    body = await request.body()
+    if len(body) > _DEPTH_INGEST_MAX_BYTES:
+        return Response(status_code=413, content="Body too large")
+    with _depth_image_lock:
+        _latest_depth_image = bytes(body)
+        _latest_depth_image_timestamp = frame_time
+    return Response(status_code=204)
+
+
+@app.get("/api/depth_image")
+def depth_image():
+    """Serve the latest depth image as JPEG."""
+    global _latest_depth_image, _latest_depth_image_timestamp
+    with _depth_image_lock:
+        if _latest_depth_image is None:
+            # Return placeholder if no image available
+            return Response(
+                status_code=503,
+                content="Depth image not available. Ensure da3_node is running.",
+                media_type="text/plain"
+            )
+        body = _latest_depth_image
+        frame_time = _latest_depth_image_timestamp
+    headers = {}
+    if frame_time is not None:
+        headers["X-Depth-Frame-Time"] = str(frame_time)
+    return Response(
+        content=body,
+        media_type="image/jpeg",
+        headers=headers
+    )

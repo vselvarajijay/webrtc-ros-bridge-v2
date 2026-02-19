@@ -308,3 +308,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Model files (large, download separately)
+models/
+*.onnx
+*.engine
+*.trt

@@ -4,6 +4,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Use BuildKit for cache mounts (apt, pip, cv_bridge) in scout_perception Dockerfile
+export DOCKER_BUILDKIT=1
+
 cmd="${1:-}"
 shift || true
 
@@ -79,6 +82,8 @@ case "$cmd" in
     echo "  2. Add connection → Foxglove WebSocket"
     echo "  3. URL: ws://localhost:8765"
     echo "  4. Connect to view /cmd_vel, /camera/front/compressed, /robot/telemetry, and other ROS 2 topics."
+    echo ""
+    echo "Depth (right panel): scout_perception runs the depth node and relay automatically. Run once: python3 scripts/download_models.py"
     echo ""
     if [[ "$RUN_TELEOP" == true ]]; then
       echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."

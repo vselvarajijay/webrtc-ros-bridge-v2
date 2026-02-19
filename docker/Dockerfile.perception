@@ -1,5 +1,95 @@
+# syntax=docker/dockerfile:1
 # bunny_perception_cpp: ROS 2 Kilted base for perception node
+# Build with: DOCKER_BUILDKIT=1 docker compose build scout_perception
+# All 3rd-party deps use cache mounts so second build reuses apt, pip, and cv_bridge.
 FROM osrf/ros:kilted-desktop
+
+# Apt: cache downloaded .deb and package lists so rebuilds don't re-download
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    python3-opencv \
+    python3-full \
+    build-essential \
+    libjpeg-dev \
+    zlib1g-dev \
+    libffi-dev \
+    libssl-dev \
+    curl \
+    git \
+    cmake \
+    libopencv-dev \
+    libboost-dev \
+    libboost-python-dev \
+    python3-dev \
+    python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cv_bridge: cache the workspace so we reuse clone + build on subsequent builds
+RUN --mount=type=cache,target=/tmp/cv_bridge_ws \
+    bash -c 'set -e; \
+    if [ -d /tmp/cv_bridge_ws/install/cv_bridge ]; then \
+      echo "Using cached cv_bridge build"; \
+      mkdir -p /opt/ros/kilted/include/cv_bridge /opt/ros/kilted/lib /opt/ros/kilted/share/cv_bridge; \
+      cp -r /tmp/cv_bridge_ws/install/cv_bridge/include/cv_bridge/* /opt/ros/kilted/include/cv_bridge/; \
+      cp -r /tmp/cv_bridge_ws/install/cv_bridge/lib/* /opt/ros/kilted/lib/ 2>/dev/null || true; \
+      cp -r /tmp/cv_bridge_ws/install/cv_bridge/share/cv_bridge/* /opt/ros/kilted/share/cv_bridge/ 2>/dev/null || true; \
+    else \
+      mkdir -p /tmp/cv_bridge_ws/src && cd /tmp/cv_bridge_ws/src && \
+      git clone --branch kilted https://github.com/ros-perception/vision_opencv.git && \
+      cd /tmp/cv_bridge_ws && source /opt/ros/kilted/setup.bash && \
+      colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+      mkdir -p /opt/ros/kilted/include/cv_bridge /opt/ros/kilted/lib /opt/ros/kilted/share/cv_bridge && \
+      cp -r install/cv_bridge/include/cv_bridge/* /opt/ros/kilted/include/cv_bridge/ && \
+      cp -r install/cv_bridge/lib/* /opt/ros/kilted/lib/ 2>/dev/null || true && \
+      cp -r install/cv_bridge/share/cv_bridge/* /opt/ros/kilted/share/cv_bridge/ 2>/dev/null || true; \
+    fi'
+
+# Check Python version for debugging
+RUN python3 --version
+
+# Install Python packages for DA3
+# Use --break-system-packages flag for Python 3.12+ externally-managed-environment protection
+# This is acceptable in Docker containers as they are isolated environments
+# Install PyTorch from regular PyPI (CPU version will be installed by default if no CUDA)
+# Using BuildKit cache mount for pip cache - persists between builds for faster rebuilds
+# Syntax: --mount=type=cache,target=/root/.cache/pip
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=300 \
+    torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+
+# Install remaining packages individually to identify failures
+# Increase timeout and add retry logic for network issues
+# Each RUN creates a separate layer that Docker can cache
+# Using BuildKit cache mount for pip cache persistence
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --retries=3 transformers || \
+    (sleep 5 && python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 transformers)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --retries=3 huggingface_hub || \
+    (sleep 5 && python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 huggingface_hub)
+
+# Install depth-anything-3 dependencies first
+# This layer will be cached unless dependencies change
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 \
+    einops pillow imageio "numpy<2" safetensors omegaconf requests
+
+# Install depth-anything-3 from GitHub (more reliable than PyPI)
+# Use --ignore-installed to handle system-managed package conflicts (typing-extensions, etc.)
+# Try main repo first, fallback to ByteDance repo, then PyPI
+# This is the slowest step - will only rebuild if depth-anything-3 changes
+# Using BuildKit cache mount for pip cache persistence
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --ignore-installed \
+    "git+https://github.com/Depth-Anything-3/Depth-Anything-3.git" || \
+    (echo "First repo failed, trying ByteDance repo..." && \
+     python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --ignore-installed \
+     "git+https://github.com/ByteDance-Seed/Depth-Anything-3.git") || \
+    (echo "GitHub install failed, trying PyPI..." && \
+     python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --ignore-installed \
+     depth-anything-3)
 
 # Add any apt deps the C++ package needs (e.g. OpenCV, cv_bridge are in desktop)
 # Workspace is mounted at /root/workspace at runtime

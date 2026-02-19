@@ -50,7 +50,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       position: relative;
-      padding: 1rem;
+      padding: 1.25rem;
     }
     .panel::before, .panel::after {
       content: '';
@@ -71,7 +71,7 @@
       top: 0;
       z-index: 10;
       background: var(--bg);
-      padding: 0.75rem 1rem;
+      padding: 1rem 1.5rem;
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
@@ -98,33 +98,245 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
-      padding: 1rem;
-      max-width: 1400px;
-      margin: 0 auto;
+      gap: 1.5rem;
+      padding: 1.5rem;
       width: 100%;
     }
     .top-row {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .controls-row {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 900px) {
+      .controls-row { flex-direction: column; }
+    }
+    .drive-telemetry-band {
       display: grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: 1fr 2fr 2fr 2fr;
+      align-items: stretch;
+      gap: 16px;
+      width: 100%;
+    }
+    @media (max-width: 1200px) {
+      .drive-telemetry-band { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 800px) {
+      .drive-telemetry-band { grid-template-columns: 1fr; }
+    }
+    .drive-band-drive {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+    .drive-band-drive .control-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .drive-band-telemetry {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+    .drive-band-telemetry .key-telemetry {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 0.5rem;
+    }
+    .drive-band-telemetry .key-telemetry .metric-card {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .drive-band-telemetry .key-telemetry .metric-card .value { flex: 0 0 auto; }
+    .drive-band-telemetry .key-telemetry .metric-card .bar-wrap,
+    .drive-band-telemetry .key-telemetry .metric-card .compass-wrap,
+    .drive-band-telemetry .key-telemetry .metric-card .signal-strength-icon {
+      flex: 1 1 auto;
+      min-height: 0;
+      margin-top: 0.25rem;
+    }
+    .drive-band-telemetry .key-telemetry .compass-wrap {
+      width: 100%;
+      max-width: 56px;
+      height: auto;
+      aspect-ratio: 1;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .drive-band-nav-health {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+      border-left: 1px solid rgba(245, 166, 35, 0.2);
+    }
+    .drive-band-nav-health .nav-health-panel {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .drive-band-raw {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+    .raw-sensors-panel {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .raw-sensors-panel .raw-section .telemetry-section-header { margin-bottom: 0.4rem; padding-bottom: 0.25rem; }
+    .raw-sensors-grid-inline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .raw-sensors-grid-inline { grid-template-columns: repeat(2, 1fr); }
+    }
+    .raw-sensors-panel .raw-sensors-grid-inline > .metric-card {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .raw-sensors-panel .metric-card {
+      padding: 0.5rem 0.6rem;
+      min-width: 0;
+    }
+    .raw-sensors-panel .metric-card .label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+    .raw-sensors-panel .metric-card .value {
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .raw-sensors-panel .imu-group {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem;
+      width: 100%;
+    }
+    .raw-sensors-panel .imu-group .metric-card {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .raw-sensors-panel .imu-group .metric-card .value {
+      text-align: right;
+    }
+    .raw-sensors-panel .rpm-bars {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.4rem;
+      min-width: 0;
+      width: 100%;
+    }
+    .raw-sensors-panel .rpm-bar-wrap {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .raw-sensors-panel .rpm-bar-wrap .label { font-size: 0.6rem; }
+    .raw-sensors-panel .rpm-bar-wrap .bar-wrap {
+      height: 28px;
+      width: 100%;
+      min-width: 0;
+    }
+    .telemetry-dashboard-footer { padding: 0.75rem 1.5rem; }
+    .telemetry-dashboard-footer .telemetry-waiting-hint { margin: 0; font-size: 0.8rem; }
+    .nav-health-panel .telemetry-section { margin-bottom: 0.5rem; }
+    .nav-health-panel .telemetry-section:last-child { margin-bottom: 0; }
+    .drive-controls-inner {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .drive-controls-left {
+      flex: 0 1 200px;
+      min-width: 160px;
+    }
+    .drive-controls-right {
+      flex: 0 0 auto;
+    }
+    .videos-container {
+      display: flex;
+      flex-direction: row;
       gap: 1rem;
       align-items: stretch;
     }
-    @media (max-width: 900px) {
-      .top-row { grid-template-columns: 1fr; }
+    .videos-container .video-section { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    @media (max-width: 1200px) {
+      .videos-container { flex-direction: column; }
     }
-    .video-section { margin: 0; display: flex; flex-direction: column; }
-    .video-section .video-wrap {
-      min-height: 50vh;
-      aspect-ratio: 16/10;
-      flex: 1;
+    .video-section { margin: 0; display: flex; flex-direction: column; min-width: 0; }
+    .video-section .video-label { min-height: 2.5rem; }
+    .depth-section .depth-hint { margin-bottom: 0.35rem; min-height: 1.2rem; }
+    .videos-container .video-section .video-wrap {
+      flex: 0 0 auto;
+      width: 100%;
+      aspect-ratio: 16/9;
       min-height: 200px;
+    }
+    .depth-section .video-wrap {
+      background: var(--surface);
+    }
+    .depth-section #depthImage {
+      display: none;
+    }
+    .depth-section #depthImage.loaded {
+      display: block;
+    }
+    .depth-section #depthPlaceholder[hidden] {
+      display: none !important;
+    }
+    .depth-section .depth-hint {
+      margin: 0 0 0.35rem 0;
+      font-size: 0.75rem;
+      color: var(--muted, #666);
+    }
+    .video-section .video-wrap {
+      aspect-ratio: 16/9;
+      min-height: 200px;
+      width: 100%;
     }
     .video-label {
       margin: 0 0 0.5rem 0;
       font-size: 0.9rem;
       font-weight: 600;
-      color: var(--muted);
+      color: rgba(235, 245, 255, 0.9);
       font-family: var(--font-header);
     }
     .video-wrap {
@@ -133,7 +345,7 @@
       cursor: pointer;
       border: 1px solid var(--border);
       overflow: hidden;
-      aspect-ratio: 16/10;
+      aspect-ratio: 16/9;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -218,29 +430,41 @@
       display: none;
     }
     .connection-debug {
-      font-size: 0.7rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.75rem;
       font-family: var(--font-mono);
-      color: var(--muted);
-      margin-top: 0.35rem;
-      padding: 0.4rem 0.5rem;
-      background: rgba(0,0,0,0.2);
-      border-radius: 4px;
-      border-left: 3px solid var(--border);
     }
-    .connection-debug .row { margin-bottom: 0.2rem; }
-    .connection-debug .row:last-child { margin-bottom: 0; }
-    .connection-debug .ok { color: var(--ok); }
-    .connection-debug .err { color: var(--estop); }
-    .connection-debug .warn { color: var(--warn); }
+    .connection-debug .row {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .connection-debug .row .ok { color: var(--ok); font-weight: 600; }
+    .connection-debug .row .err { color: var(--estop); font-weight: 600; }
+    .connection-debug .row .warn { color: var(--warn); font-weight: 600; }
+    .connection-debug .row.has-ok { border-color: rgba(57, 255, 20, 0.4); background: rgba(57, 255, 20, 0.08); }
+    .connection-debug .row.has-err { border-color: rgba(248, 81, 73, 0.4); background: rgba(248, 81, 73, 0.08); }
     .troubleshoot-hint {
       font-size: 0.75rem;
       color: var(--muted);
-      margin-top: 0.5rem;
-      padding: 0.5rem;
+      margin-left: auto;
+      padding: 0.35rem 0.6rem;
       background: rgba(0,0,0,0.2);
-      border-radius: 4px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
     }
-    .troubleshoot-hint summary { cursor: pointer; }
+    .troubleshoot-hint summary { cursor: pointer; list-style: none; }
+    .troubleshoot-hint summary::-webkit-details-marker { display: none; }
+    .troubleshoot-hint[open] { border-radius: 6px; padding: 0.5rem 0.75rem; }
+    .troubleshoot-hint[open] summary { margin-bottom: 0.35rem; }
     .ice-warning-banner {
       font-size: 0.8rem;
       color: var(--warn);
@@ -299,6 +523,18 @@
     .video-wrap .video-overlay.visible {
       display: block;
     }
+    .depth-latency-overlay {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      z-index: 3;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--accent);
+      background: rgba(0,0,0,0.6);
+      padding: 0.2rem 0.5rem;
+      pointer-events: none;
+    }
     .video-wrap .video-overlay code {
       font-size: 0.9em;
       background: rgba(255,255,255,0.15);
@@ -355,7 +591,7 @@
     .telemetry-dashboard {
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 1rem;
+      padding: 1.5rem;
       position: relative;
     }
     .telemetry-dashboard::before, .telemetry-dashboard::after {
@@ -377,7 +613,7 @@
     }
     .telemetry-section-header {
       font-size: 0.75rem;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--accent);
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -396,10 +632,10 @@
     }
     .telemetry-waiting-hint.hidden { display: none; }
     .dashboard-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem 1.5rem;
-      align-items: flex-start;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1rem;
+      align-items: start;
       margin-bottom: 1rem;
     }
     .dashboard-row:last-child { margin-bottom: 0; }
@@ -411,7 +647,8 @@
     }
     .metric-card .label {
       font-size: 0.7rem;
-      color: var(--muted);
+      color: rgba(235, 245, 255, 0.85);
+      font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.03em;
       margin-bottom: 0.25rem;
@@ -434,6 +671,7 @@
     .gps-no-fix::before { content: '⚠ '; }
     .bar-wrap {
       width: 100%;
+      min-width: 0;
       height: 6px;
       background: var(--border);
       border-radius: 3px;
@@ -459,14 +697,6 @@
       border-radius: 50%;
       background: rgba(0,0,0,0.25);
       border: 1px solid var(--border);
-    }
-    .key-telemetry .compass-wrap {
-      width: 110px;
-      height: 110px;
-    }
-    .key-telemetry .compass-arrow {
-      height: 48px;
-      margin-top: -48px;
     }
     .compass-arrow {
       position: absolute;
@@ -583,7 +813,7 @@
     .control-panel {
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 1rem;
+      padding: 1.25rem;
       position: relative;
     }
     .control-panel::before, .control-panel::after {
@@ -725,13 +955,22 @@
       transition: transform 0.08s ease-out;
     }
     .speed-delta {
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       font-family: var(--font-mono);
-      color: var(--muted);
-      margin-bottom: 0.75rem;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
     }
-    .speed-delta .actual { color: var(--accent); }
-    .speed-delta .delta { color: var(--ok); }
+    .speed-delta .actual { color: var(--accent); font-weight: 600; }
+    .speed-delta .delta {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(57, 255, 20, 0.15);
+      color: var(--ok);
+      font-weight: 700;
+    }
+    .speed-delta .delta.negative { background: rgba(248, 81, 73, 0.15); color: var(--estop); }
     .estop-btn {
       padding: 0.6rem 1.4rem;
       font-size: 1rem;
@@ -745,20 +984,14 @@
     }
     .estop-btn:hover { background: #da3633; box-shadow: 0 0 24px rgba(248, 81, 73, 0.5); }
     .estop-btn:active { transform: scale(0.98); }
-    .right-column {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      min-height: 0;
-    }
-    .right-column .key-telemetry { flex: 1; min-height: 0; }
+    .drive-band-telemetry .key-telemetry { width: 100%; min-width: 0; }
     .key-telemetry {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 0.5rem;
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 0.75rem;
+      padding: 1rem;
       position: relative;
     }
     .key-telemetry::before, .key-telemetry::after {
@@ -766,7 +999,22 @@
     }
     .key-telemetry::before { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
     .key-telemetry::after { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
-    .key-telemetry .metric-card { min-width: 0; }
+    .key-telemetry .metric-card { min-width: 0; min-height: 88px; display: flex; flex-direction: column; }
+    .key-telemetry .metric-card .value { flex: 0 0 auto; }
+    .key-telemetry .metric-card .bar-wrap,
+    .key-telemetry .metric-card .compass-wrap,
+    .key-telemetry .metric-card .signal-strength-icon { flex: 1 0 auto; margin-top: 0.25rem; }
+    .key-telemetry .metric-card .bar-wrap { width: 100%; min-width: 0; }
+    .key-telemetry .compass-wrap {
+      width: 56px;
+      height: 56px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .key-telemetry .compass-arrow {
+      height: 28px;
+      margin-top: -28px;
+    }
     .signal-bars {
       display: flex;
       align-items: flex-end;
@@ -782,6 +1030,26 @@
       transition: background 0.2s ease;
     }
     .signal-bars span.filled { background: var(--accent); }
+    .signal-strength-icon {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 20px;
+      margin-top: 0.25rem;
+    }
+    .signal-strength-icon span {
+      width: 5px;
+      min-height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+    .signal-strength-icon span:nth-child(1) { height: 20%; }
+    .signal-strength-icon span:nth-child(2) { height: 40%; }
+    .signal-strength-icon span:nth-child(3) { height: 60%; }
+    .signal-strength-icon span:nth-child(4) { height: 80%; }
+    .signal-strength-icon span:nth-child(5) { height: 100%; }
+    .signal-strength-icon span.filled { background: var(--accent); }
     .raw-telemetry-toggle {
       background: none;
       border: none;
@@ -842,6 +1110,26 @@
       font-family: var(--font-header);
     }
     .telemetry-group-title:first-child { margin-top: 0; }
+    .position-card { min-width: 180px; }
+    .position-card .position-row { font-size: 0.85rem; margin-bottom: 0.2rem; display: flex; align-items: baseline; gap: 0.5rem; }
+    .position-card .position-row:last-child { margin-bottom: 0; }
+    .position-card .position-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; min-width: 3.5rem; font-family: var(--font-header); }
+    .position-card .position-updated .position-label { min-width: 4rem; }
+    .position-card .value { font-weight: 600; font-family: var(--font-mono); }
+    .telemetry-section.raw-section .telemetry-section-header { border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 0.5rem; }
+    .telemetry-section.raw-section:not(.collapsed) .telemetry-section-header { color: var(--accent); }
+    .raw-sensors-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .raw-sensors-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .raw-sensors-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -850,9 +1138,12 @@
     <span id="statusText">Disconnected</span>
     <button type="button" class="estop-btn" id="estopBtn" title="Emergency stop (Spacebar)">E-STOP</button>
     <div class="connection-debug" id="connectionDebug" aria-live="polite">
-      <div class="row">Signaling: <span id="dbgSignaling">—</span></div>
-      <div class="row">Offer: <span id="dbgOffer">—</span> → Answer: <span id="dbgAnswer">—</span></div>
-      <div class="row">ICE: <span id="dbgIce">—</span> | Connection: <span id="dbgConn">—</span> | Data: <span id="dbgData">—</span></div>
+      <div class="row" id="rowSignaling">Signaling <span id="dbgSignaling">—</span></div>
+      <div class="row" id="rowOffer">Offer <span id="dbgOffer">—</span></div>
+      <div class="row" id="rowAnswer">Answer <span id="dbgAnswer">—</span></div>
+      <div class="row" id="rowIce">ICE <span id="dbgIce">—</span></div>
+      <div class="row" id="rowConn">Connection <span id="dbgConn">—</span></div>
+      <div class="row" id="rowData">Data <span id="dbgData">—</span></div>
     </div>
     <div class="ice-warning-banner" id="iceWarningBanner" role="alert" aria-live="assertive" hidden>
       WebRTC not connected (ICE: <span id="iceWarningState">—</span>). Video, controls and data-channel telemetry need ICE. Use TURN (port 3478) or run browser and robot on the same network. Telemetry may still appear here via signaling.
@@ -864,41 +1155,60 @@
   </header>
   <main>
     <div class="top-row">
-      <section class="video-section">
-        <h2 class="video-label">Live view — Front camera (tap to orient: rotation only, no forward/back)</h2>
-        <div class="video-wrap" id="videoWrap">
-          <video id="remoteVideo" autoplay playsinline muted></video>
-          <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
-          <div class="video-overlay" id="videoOverlay" aria-hidden="true">No camera feed — start Earth Rovers SDK (scout_sdk) <code>/v2/front</code> for live video</div>
-          <div class="video-hud-overlay">
-            <div class="video-hud-badges" id="videoHudBadges">
-              <span class="video-hud-badge" id="hudBadgeSignaling">Signaling</span>
-              <span class="video-hud-badge" id="hudBadgeRobot">Robot</span>
-              <span class="video-hud-badge" id="hudBadgeVideo">Video</span>
+      <div class="videos-container">
+        <section class="video-section">
+          <h2 class="video-label">Live view — Front camera (tap to orient: rotation only, no forward/back)</h2>
+          <div class="video-wrap" id="videoWrap">
+            <video id="remoteVideo" autoplay playsinline muted></video>
+            <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
+            <div class="video-overlay" id="videoOverlay" aria-hidden="true">No camera feed — start Earth Rovers SDK (scout_sdk) <code>/v2/front</code> for live video</div>
+            <div class="video-hud-overlay">
+              <div class="video-hud-badges" id="videoHudBadges">
+                <span class="video-hud-badge" id="hudBadgeSignaling">Signaling</span>
+                <span class="video-hud-badge" id="hudBadgeRobot">Robot</span>
+                <span class="video-hud-badge" id="hudBadgeVideo">Video</span>
+              </div>
+              <div class="video-hud-crosshair"></div>
+              <span class="video-hud-timestamp" id="videoHudTimestamp">--:--:--</span>
+              <span class="video-hud-rec" id="videoHudRec">REC</span>
+              <button type="button" class="video-fullscreen-btn" id="videoFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+              <div class="tap-orient-toast" id="tapOrientToast" aria-live="polite">Tap to orient</div>
             </div>
-            <div class="video-hud-crosshair"></div>
-            <span class="video-hud-timestamp" id="videoHudTimestamp">--:--:--</span>
-            <span class="video-hud-rec" id="videoHudRec">REC</span>
-            <button type="button" class="video-fullscreen-btn" id="videoFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
-            <div class="tap-orient-toast" id="tapOrientToast" aria-live="polite">Tap to orient</div>
           </div>
-        </div>
-        <div class="status-badges" id="statusBadges" aria-live="polite">
-          <span class="status-badge" id="badgeSignaling"><span class="status-badge-dot"></span>Signaling</span>
-          <span class="status-badge" id="badgeRobot"><span class="status-badge-dot"></span>Robot</span>
-          <span class="status-badge" id="badgeVideo"><span class="status-badge-dot"></span>Video</span>
-        </div>
-      </section>
-      <div class="right-column">
+          <div class="status-badges" id="statusBadges" aria-live="polite">
+            <span class="status-badge" id="badgeSignaling"><span class="status-badge-dot"></span>Signaling</span>
+            <span class="status-badge" id="badgeRobot"><span class="status-badge-dot"></span>Robot</span>
+            <span class="status-badge" id="badgeVideo"><span class="status-badge-dot"></span>Video</span>
+          </div>
+        </section>
+        <section class="video-section depth-section">
+          <h2 class="video-label">Depth Image</h2>
+          <p class="depth-hint">Depth (updates when new frames are available)</p>
+          <div class="video-wrap" id="depthWrap">
+            <img id="depthImage" alt="Depth image" style="width: 100%; height: 100%; object-fit: contain;">
+            <span class="placeholder" id="depthPlaceholder">Waiting for depth… (slower than video)</span>
+            <div class="video-overlay" id="depthOverlay" aria-hidden="true">No depth image — ensure <code>da3_node</code> is running and depth relay / app reachable</div>
+            <span class="depth-latency-overlay" id="depthLatencyOverlay" aria-live="polite">— ms</span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="controls-row">
+      <div class="drive-telemetry-band">
+        <div class="drive-band-drive">
         <section class="control-panel">
           <h2>Drive</h2>
-          <div class="speed-slider-wrap">
-            <div class="speed-slider-label">Speed</div>
-            <div class="speed-slider-value" id="speedSliderValue">0.48 m/s</div>
-            <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Drive speed 1–5">
-          </div>
-          <div class="speed-delta" id="speedSelectedActual" aria-live="polite">→ <span class="actual" id="speedActualVal">—</span> m/s <span class="delta" id="speedDeltaVal">∆ —</span></div>
-          <div class="commands-status" id="commandsStatus" aria-live="polite">Commands: connecting…</div>
+          <div class="drive-controls-inner">
+            <div class="drive-controls-left">
+              <div class="speed-slider-wrap">
+                <div class="speed-slider-label">Speed</div>
+                <div class="speed-slider-value" id="speedSliderValue">0.48 m/s</div>
+                <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Drive speed 1–5">
+              </div>
+              <div class="speed-delta" id="speedSelectedActual" aria-live="polite">→ <span class="actual" id="speedActualVal">—</span> m/s <span class="delta" id="speedDeltaVal">∆ —</span></div>
+              <div class="commands-status" id="commandsStatus" aria-live="polite">Commands: connecting…</div>
+            </div>
+            <div class="drive-controls-right">
           <div class="control-grid">
             <div class="cell" data-pos="fl"><button type="button" class="control-btn" data-linear="1" data-angular="1" title="Forward + left (W+A)" aria-label="Forward left">&#8598;<span class="key-label">W</span></button></div>
             <div class="cell" data-pos="f"><button type="button" class="control-btn" data-linear="1" data-angular="0" title="Forward (W)" aria-label="Forward">&#9650;<span class="key-label">W</span></button></div>
@@ -915,7 +1225,11 @@
             <div class="cell" data-pos="b"><button type="button" class="control-btn" data-linear="-1" data-angular="0" title="Back (S)" aria-label="Back">&#9660;<span class="key-label">S</span></button></div>
             <div class="cell" data-pos="br"><button type="button" class="control-btn" data-linear="-1" data-angular="-1" title="Back + right (S+D)" aria-label="Back right">&#8600;<span class="key-label">S</span></button></div>
           </div>
+            </div>
+          </div>
         </section>
+        </div>
+        <div class="drive-band-telemetry">
         <section class="key-telemetry">
           <div class="metric-card">
             <div class="label">Battery</div>
@@ -934,103 +1248,102 @@
           <div class="metric-card">
             <div class="label">Signal</div>
             <div class="value" id="keyValSignal">—</div>
-            <div class="signal-bars" id="keySignalBars" aria-hidden="true">
+            <div class="signal-strength-icon" id="keySignalStrength" aria-hidden="true">
               <span></span><span></span><span></span><span></span><span></span>
             </div>
           </div>
         </section>
-      </div>
-    </div>
-    <section class="telemetry-dashboard">
-      <h2>Live telemetry</h2>
-      <p class="telemetry-waiting-hint" id="telemetryWaitingHint" aria-live="polite">Waiting for robot telemetry. Ensure <strong>bridge_node</strong> and <strong>webrtc_node</strong> are running (same ROS) and robot SDK is up for live data.</p>
-      <div id="dashboardContent">
-        <div class="telemetry-section" id="sectionNav">
-          <div class="telemetry-section-header" data-section="sectionNav">NAVIGATION</div>
-          <div class="telemetry-section-body">
-            <div class="dashboard-row" id="dashboardRowNav">
-              <div class="metric-card" id="cardGps">
-                <div class="label">GPS signal</div>
-                <div class="value" id="valGps">—</div>
-                <div class="bar-wrap"><div class="bar-fill signal no-data" id="barGps" style="width:0%"></div></div>
-              </div>
-              <div class="metric-card" id="cardLatitude">
-                <div class="label">Latitude</div>
-                <div class="value" id="valLatitude">—</div>
-              </div>
-              <div class="metric-card" id="cardLongitude">
-                <div class="label">Longitude</div>
-                <div class="value" id="valLongitude">—</div>
-              </div>
-              <div class="metric-card" id="cardLastUpdated">
-                <div class="label">Last updated</div>
-                <div class="value" id="valLastUpdated">—</div>
-              </div>
-            </div>
-          </div>
         </div>
-        <div class="telemetry-section" id="sectionHealth">
-          <div class="telemetry-section-header" data-section="sectionHealth">SYSTEM HEALTH</div>
-          <div class="telemetry-section-body">
-            <div class="dashboard-row" id="dashboardRowHealth">
-              <div class="metric-card" id="cardVibration">
-                <div class="label">Vibration</div>
-                <div class="value" id="valVibration">—</div>
-                <div class="bar-wrap"><div class="bar-fill signal no-data" id="barVibration" style="width:0%"></div></div>
-              </div>
-              <div class="metric-card" id="cardLamp">
-                <div class="label">Lamp</div>
-                <div class="lamp-switch-wrap">
-                  <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
-                  <span class="value" id="lampLabel">Off</span>
+        <div class="drive-band-nav-health">
+          <section class="panel nav-health-panel">
+            <div class="telemetry-section" id="sectionNav">
+              <div class="telemetry-section-header" data-section="sectionNav">NAVIGATION</div>
+              <div class="telemetry-section-body">
+                <div class="dashboard-row" id="dashboardRowNav">
+                  <div class="metric-card" id="cardGps">
+                    <div class="label">GPS signal</div>
+                    <div class="value" id="valGps">—</div>
+                    <div class="bar-wrap"><div class="bar-fill signal no-data" id="barGps" style="width:0%"></div></div>
+                  </div>
+                  <div class="metric-card position-card" id="cardPosition">
+                    <div class="label">Position</div>
+                    <div class="position-row"><span class="position-label">Lat</span> <span class="value" id="valLatitude">—</span></div>
+                    <div class="position-row"><span class="position-label">Lon</span> <span class="value" id="valLongitude">—</span></div>
+                    <div class="position-row position-updated"><span class="position-label">Updated</span> <span class="value" id="valLastUpdated">—</span></div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+            <div class="telemetry-section" id="sectionHealth">
+              <div class="telemetry-section-header" data-section="sectionHealth">SYSTEM HEALTH</div>
+              <div class="telemetry-section-body">
+                <div class="dashboard-row" id="dashboardRowHealth">
+                  <div class="metric-card" id="cardVibration">
+                    <div class="label">Vibration</div>
+                    <div class="value" id="valVibration">—</div>
+                    <div class="bar-wrap"><div class="bar-fill signal no-data" id="barVibration" style="width:0%"></div></div>
+                  </div>
+                  <div class="metric-card" id="cardLamp">
+                    <div class="label">Lamp</div>
+                    <div class="lamp-switch-wrap">
+                      <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
+                      <span class="value" id="lampLabel">Off</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="telemetry-section collapsed" id="sectionRaw">
-          <div class="telemetry-section-header" data-section="sectionRaw">RAW SENSORS</div>
-          <div class="telemetry-section-body">
-        <div class="dashboard-row">
-          <div class="metric-card">
-            <div class="label">Wheel RPM</div>
-            <div class="rpm-bars">
-              <div class="rpm-bar-wrap"><div class="label">FL</div><div class="bar-wrap"><div class="bar-fill" id="rpmFL" style="height:0%"></div></div></div>
-              <div class="rpm-bar-wrap"><div class="label">FR</div><div class="bar-wrap"><div class="bar-fill" id="rpmFR" style="height:0%"></div></div></div>
-              <div class="rpm-bar-wrap"><div class="label">RL</div><div class="bar-wrap"><div class="bar-fill" id="rpmRL" style="height:0%"></div></div></div>
-              <div class="rpm-bar-wrap"><div class="label">RR</div><div class="bar-wrap"><div class="bar-fill" id="rpmRR" style="height:0%"></div></div></div>
+        <div class="drive-band-raw">
+          <section class="panel raw-sensors-panel">
+            <div class="telemetry-section raw-section" id="sectionRaw">
+              <div class="telemetry-section-header" data-section="sectionRaw">RAW SENSORS</div>
+              <div class="telemetry-section-body">
+                <div class="raw-sensors-grid raw-sensors-grid-inline">
+                  <div class="metric-card">
+                    <div class="label">Wheel RPM</div>
+                    <div class="rpm-bars">
+                      <div class="rpm-bar-wrap"><div class="label">FL</div><div class="bar-wrap"><div class="bar-fill" id="rpmFL" style="height:0%"></div></div></div>
+                      <div class="rpm-bar-wrap"><div class="label">FR</div><div class="bar-wrap"><div class="bar-fill" id="rpmFR" style="height:0%"></div></div></div>
+                      <div class="rpm-bar-wrap"><div class="label">RL</div><div class="bar-wrap"><div class="bar-fill" id="rpmRL" style="height:0%"></div></div></div>
+                      <div class="rpm-bar-wrap"><div class="label">RR</div><div class="bar-wrap"><div class="bar-fill" id="rpmRR" style="height:0%"></div></div></div>
+                    </div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="label">Accel (last) x,y,z</div>
+                    <div class="imu-group">
+                      <div class="metric-card"><div class="label">X</div><div class="value" id="accelX">—</div></div>
+                      <div class="metric-card"><div class="label">Y</div><div class="value" id="accelY">—</div></div>
+                      <div class="metric-card"><div class="label">Z</div><div class="value" id="accelZ">—</div></div>
+                    </div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="label">Gyro (last) x,y,z</div>
+                    <div class="imu-group">
+                      <div class="metric-card"><div class="label">X</div><div class="value" id="gyroX">—</div></div>
+                      <div class="metric-card"><div class="label">Y</div><div class="value" id="gyroY">—</div></div>
+                      <div class="metric-card"><div class="label">Z</div><div class="value" id="gyroZ">—</div></div>
+                    </div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="label">Mag (last) x,y,z</div>
+                    <div class="imu-group">
+                      <div class="metric-card"><div class="label">X</div><div class="value" id="magX">—</div></div>
+                      <div class="metric-card"><div class="label">Y</div><div class="value" id="magY">—</div></div>
+                      <div class="metric-card"><div class="label">Z</div><div class="value" id="magZ">—</div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div class="dashboard-row">
-          <div class="metric-card">
-            <div class="label">Accel (last) x,y,z</div>
-            <div class="imu-group">
-              <div class="metric-card"><div class="label">X</div><div class="value" id="accelX">—</div></div>
-              <div class="metric-card"><div class="label">Y</div><div class="value" id="accelY">—</div></div>
-              <div class="metric-card"><div class="label">Z</div><div class="value" id="accelZ">—</div></div>
-            </div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Gyro (last) x,y,z</div>
-            <div class="imu-group">
-              <div class="metric-card"><div class="label">X</div><div class="value" id="gyroX">—</div></div>
-              <div class="metric-card"><div class="label">Y</div><div class="value" id="gyroY">—</div></div>
-              <div class="metric-card"><div class="label">Z</div><div class="value" id="gyroZ">—</div></div>
-            </div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Mag (last) x,y,z</div>
-            <div class="imu-group">
-              <div class="metric-card"><div class="label">X</div><div class="value" id="magX">—</div></div>
-              <div class="metric-card"><div class="label">Y</div><div class="value" id="magY">—</div></div>
-              <div class="metric-card"><div class="label">Z</div><div class="value" id="magZ">—</div></div>
-            </div>
-          </div>
-        </div>
-          </div>
+          </section>
         </div>
       </div>
+    </div>
+    <section class="telemetry-dashboard telemetry-dashboard-footer" id="telemetryDashboardFooter">
+      <p class="telemetry-waiting-hint" id="telemetryWaitingHint" aria-live="polite">Waiting for robot telemetry. Ensure <strong>bridge_node</strong> and <strong>webrtc_node</strong> are running (same ROS) and robot SDK is up for live data.</p>
+      <div id="dashboardContent"></div>
     </section>
   </main>
   <script>
@@ -1194,7 +1507,7 @@
 
         if (d.signal_level != null && isFinite(d.signal_level)) {
           set('keyValSignal', Number(d.signal_level).toFixed(1), true);
-          var bars = document.getElementById('keySignalBars');
+          var bars = document.getElementById('keySignalStrength');
           if (bars) {
             var level = Math.min(5, Math.max(0, Math.round(d.signal_level)));
             var spans = bars.querySelectorAll('span');
@@ -1202,7 +1515,7 @@
           }
         } else {
           set('keyValSignal', '—');
-          var bars = document.getElementById('keySignalBars');
+          var bars = document.getElementById('keySignalStrength');
           if (bars) bars.querySelectorAll('span').forEach(function (s) { s.classList.remove('filled'); });
         }
 
@@ -1308,7 +1621,11 @@
             var delta = actualSpeedMs - selectedMs;
             var sign = delta >= 0 ? '+' : '';
             deltaEl.textContent = '∆ ' + sign + delta.toFixed(2);
-          } else deltaEl.textContent = '∆ —';
+            deltaEl.classList.toggle('negative', delta < 0);
+          } else {
+            deltaEl.textContent = '∆ —';
+            deltaEl.classList.remove('negative');
+          }
         }
       }
 
@@ -1335,6 +1652,12 @@
         el.classList.remove('ok', 'err', 'warn');
         if (ok === true) el.classList.add('ok');
         if (ok === false) el.classList.add('err');
+        var row = el.closest('.row');
+        if (row) {
+          row.classList.remove('has-ok', 'has-err');
+          if (ok === true) row.classList.add('has-ok');
+          if (ok === false) row.classList.add('has-err');
+        }
       }
 
       function isRealTelemetry(data) {
@@ -1757,12 +2080,16 @@
         };
       }
 
-      fetch('/data')
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data && typeof data === 'object') renderTelemetry(data);
-        })
-        .catch(function () {});
+      function fetchAndRenderTelemetry() {
+        fetch('/data')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data && typeof data === 'object') renderTelemetry(data);
+          })
+          .catch(function () {});
+      }
+      fetchAndRenderTelemetry();
+      setInterval(fetchAndRenderTelemetry, 4000);
 
       (function loadLeafletThenInit() {
         if (typeof L !== 'undefined') {
@@ -2205,6 +2532,88 @@
       })();
       updateControlPanelVisual();
       updateSpeedSelectedActual(lastTelemetry.speed);
+    })();
+
+    // Depth image polling
+    (function initDepthImage() {
+      var depthImg = document.getElementById('depthImage');
+      var depthPlaceholder = document.getElementById('depthPlaceholder');
+      var depthOverlay = document.getElementById('depthOverlay');
+      var depthLatencyOverlay = document.getElementById('depthLatencyOverlay');
+      if (!depthImg) return;
+
+      var depthImageUrl = '/api/depth_image';
+      var lastUpdateTime = 0;
+      var updateInterval = 100; // Update every 100ms (10 FPS)
+      var lastFrameTime = null;
+
+      function formatLatency(delayMs) {
+        if (delayMs >= 1000) return (delayMs / 1000).toFixed(1) + ' s';
+        return Math.round(delayMs) + ' ms';
+      }
+
+      function refreshLatencyOverlay() {
+        if (!depthLatencyOverlay) return;
+        if (lastFrameTime === null) {
+          depthLatencyOverlay.textContent = '— ms';
+          return;
+        }
+        var delayMs = Math.max(0, (Date.now() / 1000 - lastFrameTime) * 1000);
+        depthLatencyOverlay.textContent = formatLatency(delayMs);
+      }
+
+      setInterval(refreshLatencyOverlay, 200);
+
+      function updateDepthImage() {
+        var now = Date.now();
+        if (now - lastUpdateTime < updateInterval) {
+          requestAnimationFrame(updateDepthImage);
+          return;
+        }
+        lastUpdateTime = now;
+
+        fetch(depthImageUrl + '?t=' + now)
+          .then(function(response) {
+            if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/')) {
+              throw new Error('Not an image');
+            }
+            var frameTimeStr = response.headers.get('X-Depth-Frame-Time');
+            if (frameTimeStr) {
+              var n = parseFloat(frameTimeStr);
+              lastFrameTime = isFinite(n) ? n : null;
+            } else {
+              lastFrameTime = null;
+            }
+            return response.blob();
+          })
+          .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            if (depthImg.src) {
+              URL.revokeObjectURL(depthImg.src);
+            }
+            depthImg.src = url;
+            depthImg.classList.add('loaded');
+            if (depthPlaceholder) depthPlaceholder.hidden = true;
+            if (depthOverlay) {
+              depthOverlay.classList.remove('visible');
+              depthOverlay.setAttribute('aria-hidden', 'true');
+            }
+            refreshLatencyOverlay();
+          })
+          .catch(function(err) {
+            if (depthPlaceholder) depthPlaceholder.hidden = false;
+            if (depthOverlay) {
+              depthOverlay.classList.add('visible');
+              depthOverlay.setAttribute('aria-hidden', 'false');
+            }
+            depthImg.classList.remove('loaded');
+          })
+          .finally(function() {
+            requestAnimationFrame(updateDepthImage);
+          });
+      }
+
+      updateDepthImage();
     })();
   </script>
 </body>

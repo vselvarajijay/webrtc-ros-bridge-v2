@@ -97,10 +97,14 @@ services:
       - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=1
+      # Relay posts depth to app; on Docker Desktop Mac (host network = VM) use host.docker.internal to reach app on Mac
+      - APP_URL=${APP_URL:-http://host.docker.internal:8000}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
+      - pip_cache:/root/.cache/pip
     network_mode: host
+    command: ["bash", "-c", "cd /root/workspace && ./scripts/run_perception_with_relay.sh"]
     profiles:
       - webrtc
 
@@ -151,3 +155,7 @@ services:
     network_mode: host
     profiles:
       - shell
+
+volumes:
+  pip_cache:
+    driver: local

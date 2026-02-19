@@ -7,10 +7,40 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(cv_bridge REQUIRED)
-find_package(image_transport REQUIRED)
+find_package(cv_bridge QUIET)
+find_package(image_transport QUIET)
+find_package(OpenCV QUIET)
+
+# Include directories
+include_directories(include)
+
+# C++ executable only when explicitly requested (e.g. in scout_perception image with cv_bridge).
+# Default OFF so colcon build in scout_bridge (no cv_bridge) succeeds; Python node (da3_node) always works.
+# To build the C++ node: colcon build --cmake-args -DBUILD_DA3_CPP=ON
+option(BUILD_DA3_CPP "Build C++ da3_node_cpp (requires cv_bridge)" OFF)
+if(BUILD_DA3_CPP AND cv_bridge_FOUND AND image_transport_FOUND AND OpenCV_FOUND)
+  add_executable(da3_node_cpp src/da3_node.cpp)
+  target_link_libraries(da3_node_cpp PUBLIC
+    rclcpp::rclcpp
+    sensor_msgs::sensor_msgs_library
+    cv_bridge::cv_bridge
+    image_transport::image_transport
+    ${OpenCV_LIBS}
+  )
+  install(TARGETS da3_node_cpp DESTINATION lib/${PROJECT_NAME})
+endif()
+
+install(DIRECTORY include/
+  DESTINATION include
+)
+
+# Python package installation
+ament_python_install_package(${PROJECT_NAME}
+  PACKAGE_DIR bunny_perception_cpp
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

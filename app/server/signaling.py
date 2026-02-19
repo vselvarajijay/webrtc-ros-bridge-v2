@@ -17,6 +17,8 @@ _robot_ws: Optional[WebSocket] = None
 # If browser sends offer before robot connects, hold it and deliver when robot connects
 _pending_offer: Optional[str] = None
 _first_telemetry_relayed: bool = False
+# Last telemetry payload received from robot (so /data can serve it when WebSocket path fails or browser polls)
+_last_telemetry_from_robot: Optional[dict] = None
 
 
 async def _set_connection(role: str, ws: WebSocket) -> None:
@@ -45,8 +47,13 @@ def _clear_connection(role: str) -> None:
         _robot_ws = None
 
 
+def get_last_telemetry() -> Optional[dict]:
+    """Return the last telemetry dict received from the robot (for /data fallback)."""
+    return _last_telemetry_from_robot
+
+
 async def handle_signaling_websocket(websocket: WebSocket) -> None:
-    global _pending_offer, _first_telemetry_relayed
+    global _pending_offer, _first_telemetry_relayed, _last_telemetry_from_robot
     await websocket.accept()
     role: Optional[str] = None
 
@@ -88,9 +95,14 @@ async def handle_signaling_websocket(websocket: WebSocket) -> None:
             except json.JSONDecodeError:
                 continue
 
-            # Log telemetry from robot at debug level to avoid flooding logs
+            # Log and store telemetry from robot (so /data has it for polling even when no browser connected)
             if role == "robot" and payload.get("type") == "telemetry":
                 data = payload.get("data") or {}
+                if isinstance(data, dict):
+                    _last_telemetry_from_robot = data
+                if not _first_telemetry_relayed:
+                    _first_telemetry_relayed = True
+                    logger.info("Signaling: first telemetry received from robot (stream active; /data will serve it)")
                 logger.debug(
                     "telemetry | battery=%.0f%% speed=%.2f gps_signal=%.1f lat=%.4f lon=%.4f orientation=%s rpms=%s",
                     data.get("battery", 0),
@@ -120,13 +132,6 @@ async def handle_signaling_websocket(websocket: WebSocket) -> None:
 
             try:
                 await target.send_text(raw)
-                if (
-                    role == "robot"
-                    and payload.get("type") == "telemetry"
-                    and not _first_telemetry_relayed
-                ):
-                    _first_telemetry_relayed = True
-                    logger.info("Signaling: first telemetry relayed to browser (telemetry stream is active)")
             except Exception as e:
                 logger.warning("Failed to relay to peer: %s", e)
     except Exception as e:
