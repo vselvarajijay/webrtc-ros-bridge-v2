@@ -1,6 +1,6 @@
-# WebRTC ROS Bridge v2
+# Bunny
 
-**Write once, run on any robot.** This bridge lets you build ROS 2 control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC, and your autonomy stack stays hardware-agnostic.
+**Write once, run on any robot.** Bunny lets you build ROS 2 control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC, and your autonomy stack stays hardware-agnostic.
 
 ---
 
@@ -141,7 +141,7 @@ MY_ROBOT_API_KEY=your_api_key_here
 MY_ROBOT_HOST=192.168.1.100
 ```
 
-The bridge reads `ROBOT_TYPE` from `.env` and creates the corresponding robot instance. Any other environment variables your robot needs can be added to `.env` and accessed via `os.getenv()` in your robot class.
+Bunny reads `ROBOT_TYPE` from `.env` and creates the corresponding robot instance. Any other environment variables your robot needs can be added to `.env` and accessed via `os.getenv()` in your robot class.
 
 **Example:** For the Earth Rovers robot, the `.env` file includes:
 - `ROBOT_TYPE=earth_rovers_sdk`
@@ -160,7 +160,7 @@ See `.env.example` for the full list of available configuration options.
 Robot SDK (native) ←→ WebRTC ←→ Bridge ←→ ROS 2 (your control logic)
 ```
 
-The bridge handles:
+Bunny handles:
 - **Protocol translation** between robot SDK and ROS 2
 - **Message standardization** across different platforms
 - **Robot-specific configuration** management
@@ -168,7 +168,7 @@ The bridge handles:
 
 ### Current Status
 
-This project is in early development. Currently implemented:
+Bunny is in early development. Currently implemented:
 
 - ✅ **Robot control** - Send movement commands via ROS 2 `/cmd_vel` topic
 - ✅ **Camera streaming** - Front camera published to `/camera/front/compressed`
