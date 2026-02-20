@@ -405,16 +405,23 @@ function getCodec() {
 }
 
 async function captureFrameAsBase64(videoTrack) {
-  const frame = await videoTrack.getCurrentFrameData();
-  const canvas = document.createElement("canvas");
-  canvas.width = frame.width;
-  canvas.height = frame.height;
-  const ctx = canvas.getContext("2d");
-  ctx.putImageData(frame, 0, 0);
-  return canvas.toDataURL(
-    `image/${window.imageParams["imageFormat"]}`,
-    window.imageParams["imageQuality"]
-  );
+  try {
+    const frame = await videoTrack.getCurrentFrameData();
+    if (!frame || frame.width === 0 || frame.height === 0) {
+      return null;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = frame.width;
+    canvas.height = frame.height;
+    const ctx = canvas.getContext("2d");
+    ctx.putImageData(frame, 0, 0);
+    return canvas.toDataURL(
+      `image/${window.imageParams["imageFormat"]}`,
+      window.imageParams["imageQuality"]
+    );
+  } catch (e) {
+    return null;
+  }
 }
 
 // Add at the beginning of the file
