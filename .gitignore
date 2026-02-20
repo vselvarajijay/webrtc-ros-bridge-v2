@@ -311,6 +311,6 @@ __marimo__/
 
 # Model files (large, download separately)
 models/
-*.onnx
+models/DA3Metric-Large/
 *.engine
 *.trt

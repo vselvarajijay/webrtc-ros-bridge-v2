@@ -501,15 +501,6 @@
     .depth-section .video-wrap {
       background: var(--surface);
     }
-    .depth-section #depthImage {
-      display: none;
-    }
-    .depth-section #depthImage.loaded {
-      display: block;
-    }
-    .depth-section #depthPlaceholder[hidden] {
-      display: none !important;
-    }
     .optical-flow-section #opticalFlowImage {
       display: none;
     }
@@ -811,18 +802,6 @@
     }
     .video-wrap .video-overlay.visible {
       display: block;
-    }
-    .depth-latency-overlay {
-      position: absolute;
-      bottom: 8px;
-      left: 8px;
-      z-index: 3;
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      color: var(--accent);
-      background: rgba(0,0,0,0.6);
-      padding: 0.2rem 0.5rem;
-      pointer-events: none;
     }
     .video-wrap .video-overlay code {
       font-size: 0.9em;
@@ -1556,7 +1535,7 @@
       <div class="videos-container">
         <section class="video-section">
           <h2 class="video-label">Live view</h2>
-          <p class="video-hint">Depth (updates when new frames are available)</p>
+          <p class="video-hint">Live camera (updates when new frames are available)</p>
           <div class="video-wrap" id="videoWrap">
             <video id="remoteVideo" autoplay playsinline muted></video>
             <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
@@ -1578,19 +1557,6 @@
             <span class="status-badge" id="badgeSignaling"><span class="status-badge-dot"></span>Signaling</span>
             <span class="status-badge" id="badgeRobot"><span class="status-badge-dot"></span>Robot</span>
             <span class="status-badge" id="badgeVideo"><span class="status-badge-dot"></span>Video</span>
-          </div>
-        </section>
-        <section class="video-section depth-section">
-          <h2 class="video-label">Depth Image</h2>
-          <p class="depth-hint">Depth (updates when new frames are available)</p>
-          <div class="video-wrap" id="depthWrap">
-            <img id="depthImage" alt="Depth image" style="width: 100%; height: 100%; object-fit: contain;">
-            <span class="placeholder" id="depthPlaceholder">Waiting for depth… (slower than video)</span>
-            <div class="video-overlay" id="depthOverlay" aria-hidden="true">No depth image — ensure <code>da3_node</code> is running and depth relay / app reachable</div>
-            <span class="depth-latency-overlay" id="depthLatencyOverlay" aria-live="polite">— ms</span>
-            <div class="video-hud-overlay">
-              <button type="button" class="video-fullscreen-btn" id="depthFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
-            </div>
           </div>
         </section>
         <section class="video-section depth-section optical-flow-section">
@@ -2986,20 +2952,6 @@
             }
           });
         }
-        // Depth fullscreen button
-        var depthFullscreenBtn = document.getElementById('depthFullscreenBtn');
-        var depthWrap = document.getElementById('depthWrap');
-        if (depthFullscreenBtn && depthWrap) {
-          depthFullscreenBtn.addEventListener('click', function () {
-            if (!document.fullscreenElement) {
-              depthWrap.requestFullscreen ? depthWrap.requestFullscreen() : depthWrap.webkitRequestFullscreen && depthWrap.webkitRequestFullscreen();
-              depthFullscreenBtn.textContent = '✕ Exit';
-            } else {
-              document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen && document.webkitExitFullscreen();
-              depthFullscreenBtn.textContent = '⛶ Fullscreen';
-            }
-          });
-        }
         // Optical Flow fullscreen button
         var opticalFlowFullscreenBtn = document.getElementById('opticalFlowFullscreenBtn');
         var opticalFlowWrap = document.getElementById('opticalFlowWrap');
@@ -3113,88 +3065,6 @@
       })();
       updateControlPanelVisual();
       updateSpeedSelectedActual(lastTelemetry.speed);
-    })();
-
-    // Depth image polling
-    (function initDepthImage() {
-      var depthImg = document.getElementById('depthImage');
-      var depthPlaceholder = document.getElementById('depthPlaceholder');
-      var depthOverlay = document.getElementById('depthOverlay');
-      var depthLatencyOverlay = document.getElementById('depthLatencyOverlay');
-      if (!depthImg) return;
-
-      var depthImageUrl = '/api/depth_image';
-      var lastUpdateTime = 0;
-      var updateInterval = 100; // Update every 100ms (10 FPS)
-      var lastFrameTime = null;
-
-      function formatLatency(delayMs) {
-        if (delayMs >= 1000) return (delayMs / 1000).toFixed(1) + ' s';
-        return Math.round(delayMs) + ' ms';
-      }
-
-      function refreshLatencyOverlay() {
-        if (!depthLatencyOverlay) return;
-        if (lastFrameTime === null) {
-          depthLatencyOverlay.textContent = '— ms';
-          return;
-        }
-        var delayMs = Math.max(0, (Date.now() / 1000 - lastFrameTime) * 1000);
-        depthLatencyOverlay.textContent = formatLatency(delayMs);
-      }
-
-      setInterval(refreshLatencyOverlay, 200);
-
-      function updateDepthImage() {
-        var now = Date.now();
-        if (now - lastUpdateTime < updateInterval) {
-          requestAnimationFrame(updateDepthImage);
-          return;
-        }
-        lastUpdateTime = now;
-
-        fetch(depthImageUrl + '?t=' + now)
-          .then(function(response) {
-            if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/')) {
-              throw new Error('Not an image');
-            }
-            var frameTimeStr = response.headers.get('X-Depth-Frame-Time');
-            if (frameTimeStr) {
-              var n = parseFloat(frameTimeStr);
-              lastFrameTime = isFinite(n) ? n : null;
-            } else {
-              lastFrameTime = null;
-            }
-            return response.blob();
-          })
-          .then(function(blob) {
-            var url = URL.createObjectURL(blob);
-            if (depthImg.src) {
-              URL.revokeObjectURL(depthImg.src);
-            }
-            depthImg.src = url;
-            depthImg.classList.add('loaded');
-            if (depthPlaceholder) depthPlaceholder.hidden = true;
-            if (depthOverlay) {
-              depthOverlay.classList.remove('visible');
-              depthOverlay.setAttribute('aria-hidden', 'true');
-            }
-            refreshLatencyOverlay();
-          })
-          .catch(function(err) {
-            if (depthPlaceholder) depthPlaceholder.hidden = false;
-            if (depthOverlay) {
-              depthOverlay.classList.add('visible');
-              depthOverlay.setAttribute('aria-hidden', 'false');
-            }
-            depthImg.classList.remove('loaded');
-          })
-          .finally(function() {
-            requestAnimationFrame(updateDepthImage);
-          });
-      }
-
-      updateDepthImage();
     })();
 
     // Optical flow image polling (backs off to 2s when 503 to avoid console spam)

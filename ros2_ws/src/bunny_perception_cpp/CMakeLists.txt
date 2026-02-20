@@ -7,46 +7,54 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(OpenCV REQUIRED)
+# cv_bridge and image_transport are optional - we use OpenCV directly for image handling
 find_package(cv_bridge QUIET)
 find_package(image_transport QUIET)
-find_package(OpenCV QUIET)
 
 # Include directories
 include_directories(include)
 
-# C++ executable only when explicitly requested (e.g. in scout_perception image with cv_bridge).
-# Default OFF so colcon build in scout_bridge (no cv_bridge) succeeds; Python node (da3_node) always works.
-# To build the C++ node: colcon build --cmake-args -DBUILD_DA3_CPP=ON
-option(BUILD_DA3_CPP "Build C++ da3_node_cpp (requires cv_bridge)" OFF)
-if(BUILD_DA3_CPP AND cv_bridge_FOUND AND image_transport_FOUND AND OpenCV_FOUND)
-  add_executable(da3_node_cpp src/da3_node.cpp)
-  target_link_libraries(da3_node_cpp PUBLIC
-    rclcpp::rclcpp
-    sensor_msgs::sensor_msgs_library
-    cv_bridge::cv_bridge
-    image_transport::image_transport
-    ${OpenCV_LIBS}
-  )
-  install(TARGETS da3_node_cpp DESTINATION lib/${PROJECT_NAME})
+# Build all C++ executables
+add_executable(optical_flow_node src/optical_flow_node.cpp)
+target_include_directories(optical_flow_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(optical_flow_node PUBLIC
+  rclcpp::rclcpp
+  sensor_msgs::sensor_msgs_library
+  ${OpenCV_LIBS}
+)
+if(cv_bridge_FOUND)
+  target_link_libraries(optical_flow_node PUBLIC cv_bridge::cv_bridge)
 endif()
+target_compile_features(optical_flow_node PUBLIC c_std_99 cxx_std_17)
+
+add_executable(floor_mask_node src/floor_mask_node.cpp)
+target_include_directories(floor_mask_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(floor_mask_node PUBLIC
+  rclcpp::rclcpp
+  sensor_msgs::sensor_msgs_library
+  ${OpenCV_LIBS}
+)
+if(cv_bridge_FOUND)
+  target_link_libraries(floor_mask_node PUBLIC cv_bridge::cv_bridge)
+endif()
+target_compile_features(floor_mask_node PUBLIC c_std_99 cxx_std_17)
+
+install(TARGETS optical_flow_node floor_mask_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(DIRECTORY include/
   DESTINATION include
-)
-
-# Python package installation
-ament_python_install_package(${PROJECT_NAME}
-  PACKAGE_DIR bunny_perception_cpp
-)
-
-# Python node launcher (ament_cmake_python does not install setup.py entry_points)
-install(PROGRAMS
-  scripts/optical_flow_node
-  scripts/floor_mask_node
-  DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

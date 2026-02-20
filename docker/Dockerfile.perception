@@ -49,48 +49,6 @@ RUN --mount=type=cache,target=/tmp/cv_bridge_ws \
 # Check Python version for debugging
 RUN python3 --version
 
-# Install Python packages for DA3
-# Use --break-system-packages flag for Python 3.12+ externally-managed-environment protection
-# This is acceptable in Docker containers as they are isolated environments
-# Install PyTorch from regular PyPI (CPU version will be installed by default if no CUDA)
-# Using BuildKit cache mount for pip cache - persists between builds for faster rebuilds
-# Syntax: --mount=type=cache,target=/root/.cache/pip
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=300 \
-    torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining packages individually to identify failures
-# Increase timeout and add retry logic for network issues
-# Each RUN creates a separate layer that Docker can cache
-# Using BuildKit cache mount for pip cache persistence
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --retries=3 transformers || \
-    (sleep 5 && python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 transformers)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --retries=3 huggingface_hub || \
-    (sleep 5 && python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 huggingface_hub)
-
-# Install depth-anything-3 dependencies first
-# This layer will be cached unless dependencies change
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 \
-    einops pillow imageio "numpy<2" safetensors omegaconf requests
-
-# Install depth-anything-3 from GitHub (more reliable than PyPI)
-# Use --ignore-installed to handle system-managed package conflicts (typing-extensions, etc.)
-# Try main repo first, fallback to ByteDance repo, then PyPI
-# This is the slowest step - will only rebuild if depth-anything-3 changes
-# Using BuildKit cache mount for pip cache persistence
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --ignore-installed \
-    "git+https://github.com/Depth-Anything-3/Depth-Anything-3.git" || \
-    (echo "First repo failed, trying ByteDance repo..." && \
-     python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --ignore-installed \
-     "git+https://github.com/ByteDance-Seed/Depth-Anything-3.git") || \
-    (echo "GitHub install failed, trying PyPI..." && \
-     python3 -m pip install --break-system-packages --cache-dir=/root/.cache/pip --default-timeout=600 --ignore-installed \
-     depth-anything-3)
-
 # Add any apt deps the C++ package needs (e.g. OpenCV, cv_bridge are in desktop)
 # Workspace is mounted at /root/workspace at runtime
 WORKDIR /root/workspace/ros2_ws

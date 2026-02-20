@@ -21,6 +21,7 @@ case "$cmd" in
     echo "Removing any existing containers that might conflict..."
     docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
+    echo ""
     echo "Building Docker images (app, bridge, SDK, ...)..."
     # Try --remove-orphans, fall back if not supported
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
@@ -83,7 +84,7 @@ case "$cmd" in
     echo "  3. URL: ws://localhost:8765"
     echo "  4. Connect to view /cmd_vel, /camera/front/compressed, /robot/telemetry, and other ROS 2 topics."
     echo ""
-    echo "Depth (right panel): scout_perception runs the depth node and relay automatically. Run once: python3 scripts/download_models.py"
+    echo "Perception (optical flow, floor mask): scout_perception runs automatically. Run once: python3 scripts/download_models.py"
     echo ""
     if [[ "$RUN_TELEOP" == true ]]; then
       echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."
