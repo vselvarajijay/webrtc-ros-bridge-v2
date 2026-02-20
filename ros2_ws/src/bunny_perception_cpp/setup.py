@@ -20,6 +20,8 @@ setup(
     entry_points={
         'console_scripts': [
             'da3_node = bunny_perception_cpp.nodes.da3_node:main',
+            'optical_flow_node = bunny_perception_cpp.nodes.optical_flow_node:main',
+            'floor_mask_node = bunny_perception_cpp.nodes.floor_mask_node:main',
         ],
     },
 )

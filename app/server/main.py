@@ -21,8 +21,19 @@ _latest_depth_image: Optional[bytes] = None
 _latest_depth_image_timestamp: Optional[float] = None
 _depth_image_lock = threading.Lock()
 
+# Optical flow visualization image (JPEG)
+_latest_optical_flow_image: Optional[bytes] = None
+_latest_optical_flow_image_timestamp: Optional[float] = None
+_optical_flow_image_lock = threading.Lock()
+
+# Floor mask visualization image (JPEG)
+_latest_floor_mask_image: Optional[bytes] = None
+_latest_floor_mask_image_timestamp: Optional[float] = None
+_floor_mask_image_lock = threading.Lock()
+
 # ROS2 subscriber thread (optional, only if ROS2 is available)
 _depth_subscriber_thread: Optional[threading.Thread] = None
+_optical_flow_subscriber_thread: Optional[threading.Thread] = None
 
 
 def _ros2_depth_subscriber():
@@ -57,13 +68,49 @@ def _ros2_depth_subscriber():
     except Exception as e:
         logger.error(f"ROS2 subscriber error: {e}")
 
+
+def _ros2_optical_flow_subscriber():
+    """Background thread to subscribe to ROS2 optical flow image topic."""
+    try:
+        import rclpy
+        from rclpy.node import Node
+        from sensor_msgs.msg import CompressedImage
+
+        rclpy.init()
+        node = Node("optical_flow_image_server")
+
+        def flow_callback(msg: CompressedImage):
+            global _latest_optical_flow_image, _latest_optical_flow_image_timestamp
+            stamp = msg.header.stamp
+            frame_time = stamp.sec + stamp.nanosec * 1e-9
+            with _optical_flow_image_lock:
+                _latest_optical_flow_image = bytes(msg.data)
+                _latest_optical_flow_image_timestamp = frame_time
+
+        node.create_subscription(
+            CompressedImage,
+            "/optical_flow/image/compressed",
+            flow_callback,
+            10,
+        )
+
+        logger.info("ROS2 optical flow image subscriber started")
+        rclpy.spin(node)
+    except ImportError:
+        logger.warning("ROS2 not available, optical flow image endpoint will return placeholder")
+    except Exception as e:
+        logger.error(f"ROS2 optical flow subscriber error: {e}")
+
+
 @app.on_event("startup")
 async def startup():
     logger.info("App starting: WebSocket /ws/signaling and /ws/signaling/")
     # Start ROS2 subscriber in background thread
-    global _depth_subscriber_thread
+    global _depth_subscriber_thread, _optical_flow_subscriber_thread
     _depth_subscriber_thread = threading.Thread(target=_ros2_depth_subscriber, daemon=True)
     _depth_subscriber_thread.start()
+    _optical_flow_subscriber_thread = threading.Thread(target=_ros2_optical_flow_subscriber, daemon=True)
+    _optical_flow_subscriber_thread.start()
 
 
 @app.get("/")
@@ -236,4 +283,92 @@ def depth_image():
         content=body,
         media_type="image/jpeg",
         headers=headers
+    )
+
+
+@app.post("/api/optical_flow_image_ingest")
+async def optical_flow_image_ingest(request: Request):
+    """Accept JPEG optical flow viz from relay. Updates latest for GET /api/optical_flow_image."""
+    global _latest_optical_flow_image, _latest_optical_flow_image_timestamp
+    content_type = request.headers.get("content-type", "")
+    if content_type and "image/jpeg" not in content_type and "application/octet-stream" not in content_type:
+        return Response(status_code=415, content="Content-Type must be image/jpeg or application/octet-stream")
+    frame_time_header = request.headers.get("X-Depth-Frame-Time", "").strip()
+    try:
+        frame_time = float(frame_time_header) if frame_time_header else time.time()
+    except ValueError:
+        frame_time = time.time()
+    body = await request.body()
+    if len(body) > _DEPTH_INGEST_MAX_BYTES:
+        return Response(status_code=413, content="Body too large")
+    with _optical_flow_image_lock:
+        _latest_optical_flow_image = bytes(body)
+        _latest_optical_flow_image_timestamp = frame_time
+    return Response(status_code=204)
+
+
+@app.get("/api/optical_flow_image")
+def optical_flow_image():
+    """Serve the latest optical flow visualization as JPEG."""
+    global _latest_optical_flow_image, _latest_optical_flow_image_timestamp
+    with _optical_flow_image_lock:
+        if _latest_optical_flow_image is None:
+            return Response(
+                status_code=503,
+                content="Optical flow image not available. Ensure optical_flow_node is running.",
+                media_type="text/plain",
+            )
+        body = _latest_optical_flow_image
+        frame_time = _latest_optical_flow_image_timestamp
+    headers = {}
+    if frame_time is not None:
+        headers["X-Depth-Frame-Time"] = str(frame_time)
+    return Response(
+        content=body,
+        media_type="image/jpeg",
+        headers=headers,
+    )
+
+
+@app.post("/api/floor_mask_image_ingest")
+async def floor_mask_image_ingest(request: Request):
+    """Accept JPEG floor mask viz from relay. Updates latest for GET /api/floor_mask_image."""
+    global _latest_floor_mask_image, _latest_floor_mask_image_timestamp
+    content_type = request.headers.get("content-type", "")
+    if content_type and "image/jpeg" not in content_type and "application/octet-stream" not in content_type:
+        return Response(status_code=415, content="Content-Type must be image/jpeg or application/octet-stream")
+    frame_time_header = request.headers.get("X-Depth-Frame-Time", "").strip()
+    try:
+        frame_time = float(frame_time_header) if frame_time_header else time.time()
+    except ValueError:
+        frame_time = time.time()
+    body = await request.body()
+    if len(body) > _DEPTH_INGEST_MAX_BYTES:
+        return Response(status_code=413, content="Body too large")
+    with _floor_mask_image_lock:
+        _latest_floor_mask_image = bytes(body)
+        _latest_floor_mask_image_timestamp = frame_time
+    return Response(status_code=204)
+
+
+@app.get("/api/floor_mask_image")
+def floor_mask_image():
+    """Serve the latest floor mask visualization as JPEG."""
+    global _latest_floor_mask_image, _latest_floor_mask_image_timestamp
+    with _floor_mask_image_lock:
+        if _latest_floor_mask_image is None:
+            return Response(
+                status_code=503,
+                content="Floor mask image not available. Ensure floor_mask_node is running.",
+                media_type="text/plain",
+            )
+        body = _latest_floor_mask_image
+        frame_time = _latest_floor_mask_image_timestamp
+    headers = {}
+    if frame_time is not None:
+        headers["X-Depth-Frame-Time"] = str(frame_time)
+    return Response(
+        content=body,
+        media_type="image/jpeg",
+        headers=headers,
     )

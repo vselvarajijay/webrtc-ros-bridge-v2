@@ -24,7 +24,7 @@ from av.video.frame import PictureType
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Int32, String
+from std_msgs.msg import Float32MultiArray, Int32, String
 
 from bunny_teleop.constants import (
     AUTONOMY_COMMAND_TOPIC,
@@ -33,6 +33,7 @@ from bunny_teleop.constants import (
     CMD_VEL_TOPIC,
     LAMP_TOPIC,
     DEFAULT_IMAGE_FORMAT,
+    OPTICAL_FLOW_TOPIC,
     ROBOT_TELEMETRY_TOPIC,
     VIDEO_OUTPUT_HEIGHT,
     VIDEO_OUTPUT_WIDTH,
@@ -326,6 +327,7 @@ def run_ros_node(
     autonomy_command_queue: queue.Queue,
     image_format: str,
     stop_event: threading.Event,
+    last_flow_ref: list,
 ) -> None:
     """Run rclpy node. Drains control_queue of (twist, lamp) and autonomy_command_queue of command strings."""
     rclpy.init()
@@ -360,6 +362,17 @@ def run_ros_node(
         Twist,
         CMD_VEL_TOPIC,
         on_cmd_vel,
+        10,
+    )
+
+    def on_optical_flow(msg: Float32MultiArray) -> None:
+        if len(msg.data) >= 6:
+            last_flow_ref[0] = list(msg.data[:6])
+
+    node.create_subscription(
+        Float32MultiArray,
+        OPTICAL_FLOW_TOPIC,
+        on_optical_flow,
         10,
     )
 
@@ -530,6 +543,7 @@ async def _telemetry_sender_loop(
     data_channel_ref: list,
     stop_event: threading.Event,
     last_frame_pts_ref: Optional[list] = None,
+    last_flow_ref: Optional[list] = None,
 ) -> None:
     """Send telemetry to app server and browser. Send heartbeat when queue empty so UI stays alive."""
     last_heartbeat = [0.0]
@@ -584,6 +598,13 @@ async def _telemetry_sender_loop(
             if payload_obj_dc is None:
                 payload_obj_dc = payload_obj_ws
 
+            if last_flow_ref is not None and last_flow_ref[0] is not None:
+                payload_obj_ws = dict(payload_obj_ws) if isinstance(payload_obj_ws, dict) else payload_obj_ws
+                payload_obj_dc = dict(payload_obj_dc) if isinstance(payload_obj_dc, dict) else payload_obj_dc
+                flow = last_flow_ref[0]
+                payload_obj_ws["optical_flow"] = flow
+                payload_obj_dc["optical_flow"] = flow
+
             last_payload_ws[0] = payload_obj_ws if _is_full_telemetry(payload_obj_ws) else last_payload_ws[0]
             payload_ws = {"type": "telemetry", "data": payload_obj_ws}
             if last_frame_pts_ref is not None:
@@ -620,6 +641,7 @@ async def run_signaling_and_webrtc(
     telemetry_queue: queue.Queue,
     autonomy_command_queue: queue.Queue,
     stop_event: threading.Event,
+    last_flow_ref: Optional[list] = None,
 ) -> None:
     """Connect to signaling WebSocket, handle offer/answer/ICE, and run WebRTC peer."""
     if not HAS_WEBSOCKETS or not HAS_AIORTC:
@@ -764,7 +786,7 @@ async def run_signaling_and_webrtc(
 
                 telemetry_task = asyncio.create_task(
                     _telemetry_sender_loop(
-                        ws, telemetry_queue, data_channel_ref, stop_event, last_frame_pts_ref
+                        ws, telemetry_queue, data_channel_ref, stop_event, last_frame_pts_ref, last_flow_ref
                     )
                 )
                 try:
@@ -795,16 +817,17 @@ def main(args=None) -> None:
     telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
     autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()
+    last_flow_ref: list = [None]
 
     ros_thread = threading.Thread(
         target=run_ros_node,
-        args=(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, image_format, stop),
+        args=(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, image_format, stop, last_flow_ref),
         daemon=True,
     )
     ros_thread.start()
 
     try:
-        asyncio.run(run_signaling_and_webrtc(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, stop))
+        asyncio.run(run_signaling_and_webrtc(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, stop, last_flow_ref))
     except KeyboardInterrupt:
         pass
     finally:

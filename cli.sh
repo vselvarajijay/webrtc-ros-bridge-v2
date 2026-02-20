@@ -101,6 +101,7 @@ case "$cmd" in
     else
       echo "Drive from the web UI: http://localhost:8000/"
       echo "Tap on the front camera to orient the robot (rotation only; uses autonomy controller)."
+      echo "Use Start wandering / Stop wandering in the Drive section (speed uses the same slider as drive)."
       echo "To use keyboard teleop instead: ./cli.sh teleop   or   ./cli.sh start --teleop"
     fi
     ;;
@@ -188,6 +189,7 @@ case "$cmd" in
     echo ""
     echo "Drive from the web UI: http://localhost:8000/"
     echo "Tap on the front camera to orient the robot (rotation only; uses autonomy controller)."
+    echo "Use Start wandering / Stop wandering in the Drive section (speed uses the same slider as drive)."
     echo "To use keyboard teleop instead: ./cli.sh teleop   or   ./cli.sh start --teleop"
     ;;
   teleop)

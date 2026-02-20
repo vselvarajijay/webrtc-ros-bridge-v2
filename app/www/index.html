@@ -51,6 +51,7 @@
       border: 1px solid var(--border);
       position: relative;
       padding: 1.25rem;
+      overflow: hidden;
     }
     .panel::before, .panel::after {
       content: '';
@@ -77,6 +78,150 @@
       align-items: center;
       gap: 1rem;
       flex-wrap: wrap;
+    }
+    .header-battery {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      min-width: 100px;
+    }
+    .header-battery-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-family: var(--font-header);
+    }
+    .header-battery-value {
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--text);
+      min-width: 2.5rem;
+      text-align: right;
+    }
+    .header-battery-bar-wrap {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .header-battery-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.2s ease;
+    }
+    .header-battery-bar-fill.battery { background: var(--ok); }
+    .header-battery-bar-fill.battery.low { background: var(--warn); }
+    .header-battery-bar-fill.battery.critical { background: var(--estop); }
+    .header-battery-bar-fill.no-data { width: 0 !important; min-width: 0 !important; background: transparent !important; }
+    .header-battery-bar-wrap:has(.header-battery-bar-fill.no-data) { background: repeating-linear-gradient(90deg, var(--border) 0, var(--border) 3px, var(--surface) 3px, var(--surface) 6px); }
+    .header-metrics {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .header-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.15rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      min-width: 60px;
+      height: fit-content;
+    }
+    .header-metric .label {
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-family: var(--font-header);
+      line-height: 1;
+    }
+    .header-metric .value {
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .header-metric.compass-metric {
+      min-width: 80px;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .header-metric.compass-metric .label-value-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1rem;
+      flex: 1;
+      min-width: 0;
+    }
+    .header-metric.compass-metric .label {
+      font-size: 0.6rem;
+    }
+    .header-metric.compass-metric .value {
+      font-size: 0.75rem;
+      line-height: 1;
+    }
+    .header-metric .compass-wrap {
+      width: 24px;
+      height: 24px;
+      margin: 0;
+      flex-shrink: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+    .header-metric .compass-arrow {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 2px;
+      height: 9px;
+      margin-left: -1px;
+      margin-top: -9px;
+      background: var(--accent);
+      border-radius: 1px;
+      transform-origin: 50% 100%;
+      transition: transform 0.15s ease;
+    }
+    .header-metric .compass-arrow::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: -3px;
+      margin-left: -3px;
+      border: 3px solid transparent;
+      border-bottom-color: var(--accent);
+      border-top: none;
+    }
+    .header-metric .compass-wrap.no-data .compass-arrow { visibility: hidden; }
+    .header-metric .compass-wrap.no-data::after {
+      content: '?';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.7rem;
+      color: var(--muted);
+      pointer-events: none;
     }
     .status {
       width: 10px;
@@ -106,6 +251,8 @@
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .controls-row {
       display: flex;
@@ -119,7 +266,7 @@
     }
     .drive-telemetry-band {
       display: grid;
-      grid-template-columns: 1fr 2fr 2fr 2fr;
+      grid-template-columns: 1fr;
       align-items: stretch;
       gap: 16px;
       width: 100%;
@@ -138,9 +285,10 @@
     }
     .drive-band-drive .control-panel {
       flex: 1;
-      min-height: 0;
+      min-height: 280px;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     .drive-band-telemetry {
       display: flex;
@@ -151,10 +299,16 @@
     .drive-band-telemetry .key-telemetry {
       flex: 1;
       min-height: 0;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      gap: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .drive-band-telemetry .key-telemetry .metric-card {
+      flex: 0 0 auto;
+    }
+    .drive-band-telemetry .key-telemetry .compass-card {
+      flex: 1 1 auto;
+      min-height: 120px;
     }
     .drive-band-telemetry .key-telemetry .metric-card {
       min-height: 0;
@@ -171,18 +325,24 @@
     }
     .drive-band-telemetry .key-telemetry .compass-wrap {
       width: 100%;
-      max-width: 56px;
+      max-width: 42px;
       height: auto;
       aspect-ratio: 1;
       margin-left: auto;
       margin-right: auto;
     }
-    .drive-band-nav-health {
+    .drive-band-right {
       display: flex;
       flex-direction: column;
       min-height: 0;
       height: 100%;
-      border-left: 1px solid rgba(245, 166, 35, 0.2);
+      gap: 16px;
+    }
+    .drive-band-nav-health {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      flex: 0 0 auto;
     }
     .drive-band-nav-health .nav-health-panel {
       flex: 1;
@@ -195,11 +355,12 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
-      height: 100%;
+      flex: 1 1 auto;
     }
     .raw-sensors-panel {
       flex: 1;
       min-height: 0;
+      overflow-x: hidden;
       overflow-y: auto;
       padding: 0.75rem;
       display: flex;
@@ -224,6 +385,7 @@
     .raw-sensors-panel .metric-card {
       padding: 0.5rem 0.6rem;
       min-width: 0;
+      overflow: hidden;
     }
     .raw-sensors-panel .metric-card .label {
       font-size: 0.65rem;
@@ -232,18 +394,23 @@
       flex-shrink: 0;
     }
     .raw-sensors-panel .metric-card .value {
-      font-size: 0.8rem;
+      font-size: 1rem;
       font-variant-numeric: tabular-nums;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       min-width: 0;
+      font-weight: 600;
+    }
+    .raw-sensors-panel .imu-group .metric-card .value {
+      font-size: 1.1rem;
     }
     .raw-sensors-panel .imu-group {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 0.4rem;
       width: 100%;
+      min-width: 0;
     }
     .raw-sensors-panel .imu-group .metric-card {
       min-width: 0;
@@ -253,6 +420,10 @@
     }
     .raw-sensors-panel .imu-group .metric-card .value {
       text-align: right;
+      width: 2.5rem;
+      min-width: 2.5rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .raw-sensors-panel .rpm-bars {
       display: grid;
@@ -287,28 +458,45 @@
     .drive-controls-left {
       flex: 0 1 200px;
       min-width: 160px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
+    .drive-controls-left .speed-delta { margin-top: 0; margin-bottom: 0; }
+    .drive-controls-left .commands-status-wrap { margin-top: 0.25rem; }
     .drive-controls-right {
       flex: 0 0 auto;
     }
     .videos-container {
-      display: flex;
-      flex-direction: row;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
       gap: 1rem;
       align-items: stretch;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
     }
-    .videos-container .video-section { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .videos-container .video-section { 
+      min-width: 0; 
+      display: flex; 
+      flex-direction: column; 
+      min-height: 0;
+    }
     @media (max-width: 1200px) {
-      .videos-container { flex-direction: column; }
+      .videos-container { 
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 1fr);
+      }
     }
     .video-section { margin: 0; display: flex; flex-direction: column; min-width: 0; }
     .video-section .video-label { min-height: 2.5rem; }
     .depth-section .depth-hint { margin-bottom: 0.35rem; min-height: 1.2rem; }
     .videos-container .video-section .video-wrap {
-      flex: 0 0 auto;
+      flex: 1 1 auto;
       width: 100%;
-      aspect-ratio: 16/9;
       min-height: 200px;
+      min-width: 0;
     }
     .depth-section .video-wrap {
       background: var(--surface);
@@ -320,6 +508,45 @@
       display: block;
     }
     .depth-section #depthPlaceholder[hidden] {
+      display: none !important;
+    }
+    .optical-flow-section #opticalFlowImage {
+      display: none;
+    }
+    .optical-flow-section #opticalFlowImage.loaded {
+      display: block;
+    }
+    .optical-flow-section #opticalFlowImage.loaded ~ .optical-flow-placeholder {
+      display: none !important;
+    }
+    .optical-flow-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      padding: 2rem;
+    }
+    .optical-flow-placeholder-icon {
+      font-size: 2rem;
+      animation: spin 2s linear infinite;
+      opacity: 0.6;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .optical-flow-placeholder-text {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .optical-flow-placeholder-hint {
+      font-size: 0.75rem;
+      opacity: 0.7;
+    }
+    .optical-flow-section #opticalFlowPlaceholder[hidden] {
       display: none !important;
     }
     .depth-section .depth-hint {
@@ -424,15 +651,90 @@
       color: var(--muted);
     }
     .video-hint code { font-size: 0.85em; }
-    .commands-status { font-size: 0.75rem; font-family: var(--font-mono); color: var(--muted); margin-top: 0.25rem; }
-    .commands-status.ready { color: var(--ok); }
+    .commands-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      width: fit-content;
+    }
+    .commands-status.ready { color: var(--ok); border-color: rgba(57, 255, 20, 0.4); background: rgba(57, 255, 20, 0.08); }
     .status-badges {
       display: none;
     }
     .connection-debug {
-      display: flex;
-      flex-wrap: wrap;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
       gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .connection-debug:hover {
+      background: rgba(245, 166, 35, 0.05);
+      border-color: var(--border-strong);
+    }
+    .connection-debug-label {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 600;
+      font-family: var(--font-header);
+    }
+    .connection-debug-details {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 0.25rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.75rem;
+      min-width: 200px;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .connection-debug.expanded .connection-debug-details {
+      display: flex;
+    }
+    .connection-debug .connection-debug-details .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.25rem 0;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+    .connection-debug-status {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .statusText {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .statusText.connecting {
+      color: var(--warn);
+      animation: pulse-text 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-text {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
       align-items: center;
       font-size: 0.75rem;
       font-family: var(--font-mono);
@@ -452,19 +754,6 @@
     .connection-debug .row .warn { color: var(--warn); font-weight: 600; }
     .connection-debug .row.has-ok { border-color: rgba(57, 255, 20, 0.4); background: rgba(57, 255, 20, 0.08); }
     .connection-debug .row.has-err { border-color: rgba(248, 81, 73, 0.4); background: rgba(248, 81, 73, 0.08); }
-    .troubleshoot-hint {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-left: auto;
-      padding: 0.35rem 0.6rem;
-      background: rgba(0,0,0,0.2);
-      border-radius: 999px;
-      border: 1px solid var(--border);
-    }
-    .troubleshoot-hint summary { cursor: pointer; list-style: none; }
-    .troubleshoot-hint summary::-webkit-details-marker { display: none; }
-    .troubleshoot-hint[open] { border-radius: 6px; padding: 0.5rem 0.75rem; }
-    .troubleshoot-hint[open] summary { margin-bottom: 0.35rem; }
     .ice-warning-banner {
       font-size: 0.8rem;
       color: var(--warn);
@@ -621,6 +910,12 @@
       cursor: pointer;
       font-family: var(--font-header);
       user-select: none;
+    }
+    .panel .telemetry-section-header,
+    .telemetry-dashboard .telemetry-section-header {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
     }
     .telemetry-section-header::after { content: ' ▼'; font-size: 0.65rem; opacity: 0.8; }
     .telemetry-section.collapsed .telemetry-section-header::after { content: ' ▶'; }
@@ -830,10 +1125,10 @@
     }
     .control-grid {
       display: grid;
-      grid-template-columns: 56px 56px 56px;
-      grid-template-rows: 56px 56px 56px;
-      gap: 6px;
-      width: 174px;
+      grid-template-columns: 42px 42px 42px;
+      grid-template-rows: 42px 42px 42px;
+      gap: 4px;
+      width: 132px;
       margin: 0 auto;
     }
     .control-grid .cell { display: flex; align-items: center; justify-content: center; }
@@ -847,12 +1142,12 @@
     .control-grid .cell[data-pos="b"]  { grid-column: 2; grid-row: 3; }
     .control-grid .cell[data-pos="br"] { grid-column: 3; grid-row: 3; }
     .control-btn {
-      width: 56px;
-      height: 56px;
+      width: 42px;
+      height: 42px;
       border: 1px solid var(--border);
       background: rgba(0,0,0,0.25);
       color: var(--text);
-      font-size: 1.35rem;
+      font-size: 1.1rem;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -874,14 +1169,105 @@
       50% { opacity: 0.95; box-shadow: 0 0 0 8px rgba(245, 166, 35, 0); }
     }
     .control-btn .key-label {
-      font-size: 0.6rem;
+      font-size: 0.55rem;
       position: absolute;
-      bottom: 3px;
-      right: 4px;
+      bottom: 2px;
+      right: 3px;
       color: var(--muted);
       font-family: var(--font-mono);
     }
     .control-btn.pressed .key-label { color: var(--bg); }
+    .mode-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .mode-tab {
+      padding: 0.5rem 1rem;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: var(--font-header);
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-tab:hover {
+      color: var(--text);
+    }
+    .mode-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .mode-content {
+      display: none;
+    }
+    .mode-content.active {
+      display: block;
+    }
+    .wander-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .wander-section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-family: var(--font-header);
+    }
+    .wander-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .wander-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .wander-btn {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.875rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--fg);
+      cursor: pointer;
+    }
+    .wander-btn:hover { background: rgba(245,166,35,0.15); border-color: var(--border-strong); }
+    .wander-btn:active { transform: scale(0.98); }
+    .wander-hint {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-style: italic;
+      width: 100%;
+    }
+    .optical-flow-hint {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+      opacity: 0.85;
+    }
+    .raw-sensors-panel .optical-flow-card {
+      overflow: hidden;
+      min-width: 0;
+    }
+    .raw-sensors-panel .optical-flow-card .optical-flow-values {
+      font-size: 0.7rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
     .speed-slider-wrap {
       margin-bottom: 0.75rem;
     }
@@ -924,8 +1310,8 @@
     }
     .joystick-wrap {
       position: relative;
-      width: 56px;
-      height: 56px;
+      width: 42px;
+      height: 42px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -934,20 +1320,20 @@
     }
     .joystick-base {
       position: absolute;
-      width: 50px;
-      height: 50px;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
       background: rgba(0,0,0,0.25);
       border: 1px solid var(--border);
     }
     .joystick-thumb {
       position: absolute;
-      width: 22px;
-      height: 22px;
+      width: 16px;
+      height: 16px;
       left: 50%;
       top: 50%;
-      margin-left: -11px;
-      margin-top: -11px;
+      margin-left: -8px;
+      margin-top: -8px;
       border-radius: 50%;
       background: var(--accent);
       border: 1px solid var(--border);
@@ -1006,14 +1392,14 @@
     .key-telemetry .metric-card .signal-strength-icon { flex: 1 0 auto; margin-top: 0.25rem; }
     .key-telemetry .metric-card .bar-wrap { width: 100%; min-width: 0; }
     .key-telemetry .compass-wrap {
-      width: 56px;
-      height: 56px;
+      width: 42px;
+      height: 42px;
       margin-left: auto;
       margin-right: auto;
     }
     .key-telemetry .compass-arrow {
-      height: 28px;
-      margin-top: -28px;
+      height: 20px;
+      margin-top: -20px;
     }
     .signal-bars {
       display: flex;
@@ -1110,12 +1496,6 @@
       font-family: var(--font-header);
     }
     .telemetry-group-title:first-child { margin-top: 0; }
-    .position-card { min-width: 180px; }
-    .position-card .position-row { font-size: 0.85rem; margin-bottom: 0.2rem; display: flex; align-items: baseline; gap: 0.5rem; }
-    .position-card .position-row:last-child { margin-bottom: 0; }
-    .position-card .position-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; min-width: 3.5rem; font-family: var(--font-header); }
-    .position-card .position-updated .position-label { min-width: 4rem; }
-    .position-card .value { font-weight: 600; font-family: var(--font-mono); }
     .telemetry-section.raw-section .telemetry-section-header { border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 0.5rem; }
     .telemetry-section.raw-section:not(.collapsed) .telemetry-section-header { color: var(--accent); }
     .raw-sensors-grid {
@@ -1135,29 +1515,48 @@
 <body>
   <header>
     <span class="status" id="status" title="Connection"></span>
-    <span id="statusText">Disconnected</span>
+    <span class="statusText" id="statusText">Disconnected</span>
     <button type="button" class="estop-btn" id="estopBtn" title="Emergency stop (Spacebar)">E-STOP</button>
-    <div class="connection-debug" id="connectionDebug" aria-live="polite">
-      <div class="row" id="rowSignaling">Signaling <span id="dbgSignaling">—</span></div>
-      <div class="row" id="rowOffer">Offer <span id="dbgOffer">—</span></div>
-      <div class="row" id="rowAnswer">Answer <span id="dbgAnswer">—</span></div>
-      <div class="row" id="rowIce">ICE <span id="dbgIce">—</span></div>
-      <div class="row" id="rowConn">Connection <span id="dbgConn">—</span></div>
-      <div class="row" id="rowData">Data <span id="dbgData">—</span></div>
+    <div class="header-metrics">
+      <div class="header-metric">
+        <div class="label">Speed</div>
+        <div class="value" id="headerValSpeed">— m/s</div>
+      </div>
+      <div class="header-metric compass-metric">
+        <div class="label-value-wrap">
+          <div class="label">Heading</div>
+          <div class="value" id="headerValOrientation">—°</div>
+        </div>
+        <div class="compass-wrap no-data" id="headerCompassWrap"><div class="compass-arrow" id="headerCompassArrow"></div></div>
+      </div>
+    </div>
+    <div class="header-battery" id="headerBattery">
+      <span class="header-battery-label">Battery</span>
+      <span class="header-battery-value" id="headerBatteryValue">—</span>
+      <div class="header-battery-bar-wrap"><div class="header-battery-bar-fill battery no-data" id="headerBatteryBar" style="width:0%"></div></div>
+    </div>
+    <div class="connection-debug" id="connectionDebug" aria-live="polite" title="Click to expand WebRTC details">
+      <span class="connection-debug-label">WebRTC</span>
+      <span class="connection-debug-status" id="connectionDebugStatus">—</span>
+      <div class="connection-debug-details">
+        <div class="row" id="rowSignaling">Signaling <span id="dbgSignaling">—</span></div>
+        <div class="row" id="rowOffer">Offer <span id="dbgOffer">—</span></div>
+        <div class="row" id="rowAnswer">Answer <span id="dbgAnswer">—</span></div>
+        <div class="row" id="rowIce">ICE <span id="dbgIce">—</span></div>
+        <div class="row" id="rowConn">Connection <span id="dbgConn">—</span></div>
+        <div class="row" id="rowData">Data <span id="dbgData">—</span></div>
+      </div>
     </div>
     <div class="ice-warning-banner" id="iceWarningBanner" role="alert" aria-live="assertive" hidden>
       WebRTC not connected (ICE: <span id="iceWarningState">—</span>). Video, controls and data-channel telemetry need ICE. Use TURN (port 3478) or run browser and robot on the same network. Telemetry may still appear here via signaling.
     </div>
-    <details class="troubleshoot-hint">
-      <summary>No video / telemetry / control?</summary>
-      <p>Ensure <strong>scout_bridge</strong> is running (it runs bridge_node + webrtc_node). Check: <code>docker compose --profile webrtc ps</code>. If Signaling stays red, the app or WebSocket failed. If Signaling is green but Answer never appears, the robot (webrtc_node) did not connect to the same app at <code>ws://…/ws/signaling</code>. If ICE stays &quot;checking&quot; or goes &quot;failed&quot;, use TURN (port 3478) or run browser and services on the same machine. <strong>No telemetry?</strong> Open DevTools → Console; you should see <code>[telemetry] received via signaling</code> every few seconds. If not, check scout_bridge logs for &quot;First telemetry sent over signaling WebSocket&quot; and app logs for &quot;first telemetry relayed to browser&quot;; ensure bridge_node is publishing <code>/robot/telemetry</code> (SDK /data reachable).</p>
-    </details>
   </header>
   <main>
     <div class="top-row">
       <div class="videos-container">
         <section class="video-section">
-          <h2 class="video-label">Live view — Front camera (tap to orient: rotation only, no forward/back)</h2>
+          <h2 class="video-label">Live view</h2>
+          <p class="video-hint">Depth (updates when new frames are available)</p>
           <div class="video-wrap" id="videoWrap">
             <video id="remoteVideo" autoplay playsinline muted></video>
             <span class="placeholder" id="videoPlaceholder">Waiting for robot stream…</span>
@@ -1189,6 +1588,41 @@
             <span class="placeholder" id="depthPlaceholder">Waiting for depth… (slower than video)</span>
             <div class="video-overlay" id="depthOverlay" aria-hidden="true">No depth image — ensure <code>da3_node</code> is running and depth relay / app reachable</div>
             <span class="depth-latency-overlay" id="depthLatencyOverlay" aria-live="polite">— ms</span>
+            <div class="video-hud-overlay">
+              <button type="button" class="video-fullscreen-btn" id="depthFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+            </div>
+          </div>
+        </section>
+        <section class="video-section depth-section optical-flow-section">
+          <h2 class="video-label">Optical Flow</h2>
+          <p class="depth-hint">Vector arrows (direction and magnitude)</p>
+          <div class="video-wrap" id="opticalFlowWrap">
+            <img id="opticalFlowImage" alt="Optical flow" style="width: 100%; height: 100%; object-fit: contain;">
+            <span class="placeholder optical-flow-placeholder" id="opticalFlowPlaceholder">
+              <span class="optical-flow-placeholder-icon">⟲</span>
+              <span class="optical-flow-placeholder-text">Waiting for optical flow…</span>
+              <span class="optical-flow-placeholder-hint">No data — waiting for frames</span>
+            </span>
+            <div class="video-overlay" id="opticalFlowOverlay" aria-hidden="true">No optical flow — ensure <code>optical_flow_node</code> is running</div>
+            <div class="video-hud-overlay">
+              <button type="button" class="video-fullscreen-btn" id="opticalFlowFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+            </div>
+          </div>
+        </section>
+        <section class="video-section depth-section floor-mask-section">
+          <h2 class="video-label">Floor Mask</h2>
+          <p class="depth-hint">Floor detection overlay (green = floor)</p>
+          <div class="video-wrap" id="floorMaskWrap">
+            <img id="floorMaskImage" alt="Floor mask" style="width: 100%; height: 100%; object-fit: contain;">
+            <span class="placeholder floor-mask-placeholder" id="floorMaskPlaceholder">
+              <span class="floor-mask-placeholder-icon">⟲</span>
+              <span class="floor-mask-placeholder-text">Waiting for floor mask…</span>
+              <span class="floor-mask-placeholder-hint">No data — waiting for frames</span>
+            </span>
+            <div class="video-overlay" id="floorMaskOverlay" aria-hidden="true">No floor mask — ensure <code>floor_mask_node</code> is running</div>
+            <div class="video-hud-overlay">
+              <button type="button" class="video-fullscreen-btn" id="floorMaskFullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+            </div>
           </div>
         </section>
       </div>
@@ -1198,54 +1632,68 @@
         <div class="drive-band-drive">
         <section class="control-panel">
           <h2>Drive</h2>
-          <div class="drive-controls-inner">
-            <div class="drive-controls-left">
-              <div class="speed-slider-wrap">
-                <div class="speed-slider-label">Speed</div>
-                <div class="speed-slider-value" id="speedSliderValue">0.48 m/s</div>
-                <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Drive speed 1–5">
-              </div>
-              <div class="speed-delta" id="speedSelectedActual" aria-live="polite">→ <span class="actual" id="speedActualVal">—</span> m/s <span class="delta" id="speedDeltaVal">∆ —</span></div>
-              <div class="commands-status" id="commandsStatus" aria-live="polite">Commands: connecting…</div>
-            </div>
-            <div class="drive-controls-right">
-          <div class="control-grid">
-            <div class="cell" data-pos="fl"><button type="button" class="control-btn" data-linear="1" data-angular="1" title="Forward + left (W+A)" aria-label="Forward left">&#8598;<span class="key-label">W</span></button></div>
-            <div class="cell" data-pos="f"><button type="button" class="control-btn" data-linear="1" data-angular="0" title="Forward (W)" aria-label="Forward">&#9650;<span class="key-label">W</span></button></div>
-            <div class="cell" data-pos="fr"><button type="button" class="control-btn" data-linear="1" data-angular="-1" title="Forward + right (W+D)" aria-label="Forward right">&#8599;<span class="key-label">W</span></button></div>
-            <div class="cell" data-pos="l"><button type="button" class="control-btn" data-linear="0" data-angular="1" title="Left (A)" aria-label="Left">&#9664;<span class="key-label">A</span></button></div>
-            <div class="cell" data-pos="s">
-              <div class="joystick-wrap" id="joystickWrap" role="group" aria-label="Joystick" title="Drag to drive; release to stop">
-                <div class="joystick-base"></div>
-                <div class="joystick-thumb" id="joystickThumb"></div>
-              </div>
-            </div>
-            <div class="cell" data-pos="r"><button type="button" class="control-btn" data-linear="0" data-angular="-1" title="Right (D)" aria-label="Right">&#9654;<span class="key-label">D</span></button></div>
-            <div class="cell" data-pos="bl"><button type="button" class="control-btn" data-linear="-1" data-angular="1" title="Back + left (S+A)" aria-label="Back left">&#8601;<span class="key-label">S</span></button></div>
-            <div class="cell" data-pos="b"><button type="button" class="control-btn" data-linear="-1" data-angular="0" title="Back (S)" aria-label="Back">&#9660;<span class="key-label">S</span></button></div>
-            <div class="cell" data-pos="br"><button type="button" class="control-btn" data-linear="-1" data-angular="-1" title="Back + right (S+D)" aria-label="Back right">&#8600;<span class="key-label">S</span></button></div>
+          <div class="mode-tabs">
+            <button type="button" class="mode-tab active" data-mode="drive">Drive</button>
+            <button type="button" class="mode-tab" data-mode="autonomous">Autonomous Mode</button>
           </div>
+          <div class="mode-content active" id="driveMode">
+            <div class="drive-controls-inner">
+              <div class="drive-controls-left">
+                <div class="speed-slider-wrap">
+                  <div class="speed-slider-label">Speed</div>
+                  <div class="speed-slider-value" id="speedSliderValue">0.48 m/s</div>
+                  <input type="range" id="speedSlider" min="1" max="5" step="1" value="3" aria-label="Drive speed 1–5">
+                </div>
+                <div class="speed-delta" id="speedSelectedActual" aria-live="polite" title="Target speed → Actual speed m/s | Delta speed change">
+                  → <span class="actual" id="speedActualVal" title="Current actual speed">—</span> m/s 
+                  <span class="delta" id="speedDeltaVal" title="Speed change delta">∆ —</span>
+                </div>
+                <div class="commands-status-wrap"><span class="commands-status" id="commandsStatus" aria-live="polite">Commands: connecting…</span></div>
+              </div>
+              <div class="drive-controls-right">
+            <div class="control-grid">
+              <div class="cell" data-pos="fl"><button type="button" class="control-btn" data-linear="1" data-angular="1" title="Forward + left (W+A)" aria-label="Forward left">&#8598;<span class="key-label">W</span></button></div>
+              <div class="cell" data-pos="f"><button type="button" class="control-btn" data-linear="1" data-angular="0" title="Forward (W)" aria-label="Forward">&#9650;<span class="key-label">W</span></button></div>
+              <div class="cell" data-pos="fr"><button type="button" class="control-btn" data-linear="1" data-angular="-1" title="Forward + right (W+D)" aria-label="Forward right">&#8599;<span class="key-label">W</span></button></div>
+              <div class="cell" data-pos="l"><button type="button" class="control-btn" data-linear="0" data-angular="1" title="Left (A)" aria-label="Left">&#9664;<span class="key-label">A</span></button></div>
+              <div class="cell" data-pos="s">
+                <div class="joystick-wrap" id="joystickWrap" role="group" aria-label="Joystick" title="Drag to drive; release to stop">
+                  <div class="joystick-base"></div>
+                  <div class="joystick-thumb" id="joystickThumb"></div>
+                </div>
+              </div>
+              <div class="cell" data-pos="r"><button type="button" class="control-btn" data-linear="0" data-angular="-1" title="Right (D)" aria-label="Right">&#9654;<span class="key-label">D</span></button></div>
+              <div class="cell" data-pos="bl"><button type="button" class="control-btn" data-linear="-1" data-angular="1" title="Back + left (S+A)" aria-label="Back left">&#8601;<span class="key-label">S</span></button></div>
+              <div class="cell" data-pos="b"><button type="button" class="control-btn" data-linear="-1" data-angular="0" title="Back (S)" aria-label="Back">&#9660;<span class="key-label">S</span></button></div>
+              <div class="cell" data-pos="br"><button type="button" class="control-btn" data-linear="-1" data-angular="-1" title="Back + right (S+D)" aria-label="Back right">&#8600;<span class="key-label">S</span></button></div>
+            </div>
+              </div>
+            </div>
+          </div>
+          <div class="mode-content" id="autonomousMode">
+            <div class="wander-section">
+              <span class="wander-section-label">Wander</span>
+              <div class="wander-controls">
+                <button type="button" class="wander-btn" id="wanderStartBtn" title="Start optical flow wandering">Start wandering</button>
+                <button type="button" class="wander-btn" id="wanderStopBtn" title="Stop wandering">Stop wandering</button>
+                <span class="wander-hint" id="wanderHint" title="Run wander_node (and optical_flow_node) on the robot for the robot to move">Requires wander_node on robot</span>
+              </div>
             </div>
           </div>
         </section>
         </div>
-        <div class="drive-band-telemetry">
+        <div class="drive-band-telemetry" style="display: none;">
         <section class="key-telemetry">
-          <div class="metric-card">
-            <div class="label">Battery</div>
-            <div class="value" id="keyValBattery">—</div>
-            <div class="bar-wrap"><div class="bar-fill battery no-data" id="keyBarBattery" style="width:0%"></div></div>
-          </div>
-          <div class="metric-card">
+          <div class="metric-card" style="display: none;">
             <div class="label">Speed</div>
             <div class="value" id="keyValSpeed">— m/s</div>
           </div>
-          <div class="metric-card compass-card">
+          <div class="metric-card compass-card" style="display: none;">
             <div class="label">Heading</div>
             <div class="value" id="keyValOrientation">—°</div>
             <div class="compass-wrap no-data" id="keyCompassWrap"><div class="compass-arrow" id="keyCompassArrow"></div></div>
           </div>
-          <div class="metric-card">
+          <div class="metric-card" style="display: none;">
             <div class="label">Signal</div>
             <div class="value" id="keyValSignal">—</div>
             <div class="signal-strength-icon" id="keySignalStrength" aria-hidden="true">
@@ -1254,50 +1702,45 @@
           </div>
         </section>
         </div>
-        <div class="drive-band-nav-health">
-          <section class="panel nav-health-panel">
-            <div class="telemetry-section" id="sectionNav">
-              <div class="telemetry-section-header" data-section="sectionNav">NAVIGATION</div>
-              <div class="telemetry-section-body">
-                <div class="dashboard-row" id="dashboardRowNav">
-                  <div class="metric-card" id="cardGps">
-                    <div class="label">GPS signal</div>
-                    <div class="value" id="valGps">—</div>
-                    <div class="bar-wrap"><div class="bar-fill signal no-data" id="barGps" style="width:0%"></div></div>
-                  </div>
-                  <div class="metric-card position-card" id="cardPosition">
-                    <div class="label">Position</div>
-                    <div class="position-row"><span class="position-label">Lat</span> <span class="value" id="valLatitude">—</span></div>
-                    <div class="position-row"><span class="position-label">Lon</span> <span class="value" id="valLongitude">—</span></div>
-                    <div class="position-row position-updated"><span class="position-label">Updated</span> <span class="value" id="valLastUpdated">—</span></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="telemetry-section" id="sectionHealth">
-              <div class="telemetry-section-header" data-section="sectionHealth">SYSTEM HEALTH</div>
-              <div class="telemetry-section-body">
-                <div class="dashboard-row" id="dashboardRowHealth">
-                  <div class="metric-card" id="cardVibration">
-                    <div class="label">Vibration</div>
-                    <div class="value" id="valVibration">—</div>
-                    <div class="bar-wrap"><div class="bar-fill signal no-data" id="barVibration" style="width:0%"></div></div>
-                  </div>
-                  <div class="metric-card" id="cardLamp">
-                    <div class="label">Lamp</div>
-                    <div class="lamp-switch-wrap">
-                      <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
-                      <span class="value" id="lampLabel">Off</span>
+        <div class="drive-band-right" style="display: none;">
+          <div class="drive-band-nav-health">
+            <section class="panel nav-health-panel">
+              <div class="telemetry-section collapsed" id="sectionNav">
+                <div class="telemetry-section-header" data-section="sectionNav">NAVIGATION</div>
+                <div class="telemetry-section-body">
+                  <div class="dashboard-row" id="dashboardRowNav">
+                    <div class="metric-card" id="cardGps">
+                      <div class="label">GPS signal</div>
+                      <div class="value" id="valGps">—</div>
+                      <div class="bar-wrap"><div class="bar-fill signal no-data" id="barGps" style="width:0%"></div></div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
-        </div>
-        <div class="drive-band-raw">
+              <div class="telemetry-section collapsed" id="sectionHealth">
+                <div class="telemetry-section-header" data-section="sectionHealth">SYSTEM HEALTH</div>
+                <div class="telemetry-section-body">
+                  <div class="dashboard-row" id="dashboardRowHealth">
+                    <div class="metric-card" id="cardVibration">
+                      <div class="label">Vibration</div>
+                      <div class="value" id="valVibration">—</div>
+                      <div class="bar-wrap"><div class="bar-fill signal no-data" id="barVibration" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-card" id="cardLamp">
+                      <div class="label">Lamp</div>
+                      <div class="lamp-switch-wrap">
+                        <button type="button" class="lamp-switch off" id="lampSwitch" title="Toggle lamp" aria-pressed="false"></button>
+                        <span class="value" id="lampLabel">Off</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="drive-band-raw">
           <section class="panel raw-sensors-panel">
-            <div class="telemetry-section raw-section" id="sectionRaw">
+            <div class="telemetry-section raw-section collapsed" id="sectionRaw">
               <div class="telemetry-section-header" data-section="sectionRaw">RAW SENSORS</div>
               <div class="telemetry-section-body">
                 <div class="raw-sensors-grid raw-sensors-grid-inline">
@@ -1334,10 +1777,16 @@
                       <div class="metric-card"><div class="label">Z</div><div class="value" id="magZ">—</div></div>
                     </div>
                   </div>
+                  <div class="metric-card optical-flow-card">
+                    <div class="label">OPT FLOW</div>
+                    <div class="optical-flow-values" id="opticalFlowValues">—</div>
+                    <div class="optical-flow-hint">L vx,vy &nbsp; C vx,vy &nbsp; R vx,vy</div>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
+          </div>
         </div>
       </div>
     </div>
@@ -1498,11 +1947,11 @@
         };
 
         if (d.battery != null && isFinite(d.battery)) {
-          set('keyValBattery', Math.round(d.battery) + '%', true);
-          setBar('keyBarBattery', d.battery, 20, 10);
+          set('headerBatteryValue', Math.round(d.battery) + '%', true);
+          setBar('headerBatteryBar', d.battery, 20, 10);
         } else {
-          set('keyValBattery', '—');
-          setBar('keyBarBattery', 0);
+          set('headerBatteryValue', '—');
+          setBar('headerBatteryBar', 0);
         }
 
         if (d.signal_level != null && isFinite(d.signal_level)) {
@@ -1529,17 +1978,30 @@
         if (deg != null && isFinite(deg)) {
           deg = ((deg % 360) + 360) % 360;
           set('keyValOrientation', deg.toFixed(1) + '°');
+          set('headerValOrientation', deg.toFixed(1) + '°');
           var keyArrow = document.getElementById('keyCompassArrow');
+          var headerArrow = document.getElementById('headerCompassArrow');
+          var headerCompassWrap = document.getElementById('headerCompassWrap');
           if (keyArrow) keyArrow.style.transform = 'rotate(' + deg + 'deg)';
+          if (headerArrow) headerArrow.style.transform = 'rotate(' + deg + 'deg)';
           if (keyCompassWrap) keyCompassWrap.classList.remove('no-data');
+          if (headerCompassWrap) headerCompassWrap.classList.remove('no-data');
         } else {
           set('keyValOrientation', '—°');
+          set('headerValOrientation', '—°');
+          var headerCompassWrap = document.getElementById('headerCompassWrap');
           if (keyCompassWrap) keyCompassWrap.classList.add('no-data');
+          if (headerCompassWrap) headerCompassWrap.classList.add('no-data');
         }
 
         if (d.speed != null && isFinite(d.speed)) {
-          set('keyValSpeed', Number(d.speed).toFixed(4) + ' m/s', true);
-        } else { set('keyValSpeed', '— m/s'); }
+          var speedStr = Number(d.speed).toFixed(4) + ' m/s';
+          set('keyValSpeed', speedStr, true);
+          set('headerValSpeed', speedStr);
+        } else {
+          set('keyValSpeed', '— m/s');
+          set('headerValSpeed', '— m/s');
+        }
 
         updateSpeedSelectedActual(d.speed);
 
@@ -1557,21 +2019,6 @@
         if (document.getElementById('lampLabel')) {
           document.getElementById('lampLabel').textContent = lampOn ? 'On' : 'Off';
         }
-
-        var latEl = document.getElementById('valLatitude');
-        var lngEl = document.getElementById('valLongitude');
-        if (isValidGps(d.latitude, d.longitude)) {
-          set('valLatitude', Number(d.latitude).toFixed(5), true);
-          set('valLongitude', Number(d.longitude).toFixed(5), true);
-          if (latEl) latEl.classList.remove('gps-no-fix');
-          if (lngEl) lngEl.classList.remove('gps-no-fix');
-        } else {
-          if (latEl) { latEl.textContent = 'No Fix'; latEl.classList.add('gps-no-fix'); }
-          if (lngEl) { lngEl.textContent = 'No Fix'; lngEl.classList.add('gps-no-fix'); }
-        }
-        if (d.timestamp != null && isFinite(d.timestamp)) {
-          set('valLastUpdated', new Date(d.timestamp * 1000).toLocaleTimeString());
-        } else set('valLastUpdated', '—');
 
         var rpms = d.rpms;
         var lastRpm = Array.isArray(rpms) && rpms.length > 0 ? rpms[rpms.length - 1] : null;
@@ -1608,6 +2055,19 @@
           set('magY', Number(lastMag[1]).toFixed(0));
           set('magZ', Number(lastMag[2]).toFixed(0));
         } else { set('magX', '—'); set('magY', '—'); set('magZ', '—'); }
+
+        var flow = d.optical_flow;
+        var flowEl = document.getElementById('opticalFlowValues');
+        if (flowEl) {
+          if (Array.isArray(flow) && flow.length >= 6) {
+            var vxL = Number(flow[0]).toFixed(2); var vyL = Number(flow[1]).toFixed(2);
+            var vxC = Number(flow[2]).toFixed(2); var vyC = Number(flow[3]).toFixed(2);
+            var vxR = Number(flow[4]).toFixed(2); var vyR = Number(flow[5]).toFixed(2);
+            flowEl.textContent = 'L ' + vxL + ',' + vyL + '  C ' + vxC + ',' + vyC + '  R ' + vxR + ',' + vyR;
+          } else {
+            flowEl.textContent = '—';
+          }
+        }
 
       }
 
@@ -1658,6 +2118,24 @@
           if (ok === true) row.classList.add('has-ok');
           if (ok === false) row.classList.add('has-err');
         }
+        updateWebRTCStatus();
+      }
+      function updateWebRTCStatus() {
+        var statusEl = document.getElementById('connectionDebugStatus');
+        if (!statusEl) return;
+        var ice = document.getElementById('dbgIce');
+        var conn = document.getElementById('dbgConn');
+        var data = document.getElementById('dbgData');
+        if (ice && ice.textContent !== '—' && ice.classList.contains('ok')) {
+          statusEl.textContent = 'Connected';
+          statusEl.style.color = 'var(--ok)';
+        } else if (conn && conn.textContent !== '—' && conn.classList.contains('ok')) {
+          statusEl.textContent = 'Connecting…';
+          statusEl.style.color = 'var(--warn)';
+        } else {
+          statusEl.textContent = '—';
+          statusEl.style.color = 'var(--muted)';
+        }
       }
 
       function isRealTelemetry(data) {
@@ -1689,9 +2167,11 @@
           if (data.gyros != null && Array.isArray(data.gyros)) merged.gyros = data.gyros;
           if (data.mags != null && Array.isArray(data.mags)) merged.mags = data.mags;
           if (data.rpms != null && Array.isArray(data.rpms)) merged.rpms = data.rpms;
+          if (data.optical_flow != null && Array.isArray(data.optical_flow)) merged.optical_flow = data.optical_flow;
         } else {
           if (data.speed != null) merged.speed = data.speed;
           if (data.timestamp != null) merged.timestamp = data.timestamp;
+          if (data.optical_flow != null && Array.isArray(data.optical_flow)) merged.optical_flow = data.optical_flow;
         }
         lastTelemetry = merged;
         const d = merged;
@@ -2155,6 +2635,23 @@
         dataChannel.send(JSON.stringify({ command: commandString }));
       }
 
+      function sendWanderCommand(enable) {
+        if (!dataChannel) {
+          console.log('[wander] sendWanderCommand: no dataChannel');
+          showTapOrientToast('Wander: commands not connected');
+          return;
+        }
+        if (dataChannel.readyState !== 'open') {
+          console.log('[wander] sendWanderCommand: channel not open, state=', dataChannel.readyState);
+          showTapOrientToast('Wander: wait for connection, then try again');
+          return;
+        }
+        var cmd = enable ? ('wander ' + (LINEAR_VEL * getSpeedMultiplier()).toFixed(2)) : 'stop';
+        console.log('[wander] sending command:', cmd);
+        dataChannel.send(JSON.stringify({ command: cmd }));
+        showTapOrientToast(enable ? 'Start wandering sent' : 'Stop wandering sent');
+      }
+
       function videoTapToOrientation(e) {
         console.log('[tap-orient] TAP on front camera — event:', e.type, 'target:', e.target ? e.target.id || e.target.className : '?');
         if (e.target && (e.target.id === 'videoFullscreenBtn' || (e.target.closest && e.target.closest('button')))) {
@@ -2399,6 +2896,24 @@
       }
 
       document.getElementById('estopBtn').addEventListener('click', function () { doEstop(); });
+      document.getElementById('wanderStartBtn').addEventListener('click', function () { sendWanderCommand(true); });
+      document.getElementById('wanderStopBtn').addEventListener('click', function () { sendWanderCommand(false); });
+
+      // Mode tab switching
+      var modeTabs = document.querySelectorAll('.mode-tab');
+      var modeContents = document.querySelectorAll('.mode-content');
+      modeTabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          var mode = this.getAttribute('data-mode');
+          // Update tab states
+          modeTabs.forEach(function(t) { t.classList.remove('active'); });
+          this.classList.add('active');
+          // Update content visibility
+          modeContents.forEach(function(c) { c.classList.remove('active'); });
+          var targetContent = document.getElementById(mode === 'drive' ? 'driveMode' : 'autonomousMode');
+          if (targetContent) targetContent.classList.add('active');
+        });
+      });
 
       var keysPressed = {};
       var DRIVE_KEYS = {
@@ -2470,6 +2985,72 @@
               fullscreenBtn.textContent = '⛶ Fullscreen';
             }
           });
+        }
+        // Depth fullscreen button
+        var depthFullscreenBtn = document.getElementById('depthFullscreenBtn');
+        var depthWrap = document.getElementById('depthWrap');
+        if (depthFullscreenBtn && depthWrap) {
+          depthFullscreenBtn.addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+              depthWrap.requestFullscreen ? depthWrap.requestFullscreen() : depthWrap.webkitRequestFullscreen && depthWrap.webkitRequestFullscreen();
+              depthFullscreenBtn.textContent = '✕ Exit';
+            } else {
+              document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen && document.webkitExitFullscreen();
+              depthFullscreenBtn.textContent = '⛶ Fullscreen';
+            }
+          });
+        }
+        // Optical Flow fullscreen button
+        var opticalFlowFullscreenBtn = document.getElementById('opticalFlowFullscreenBtn');
+        var opticalFlowWrap = document.getElementById('opticalFlowWrap');
+        if (opticalFlowFullscreenBtn && opticalFlowWrap) {
+          opticalFlowFullscreenBtn.addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+              opticalFlowWrap.requestFullscreen ? opticalFlowWrap.requestFullscreen() : opticalFlowWrap.webkitRequestFullscreen && opticalFlowWrap.webkitRequestFullscreen();
+              opticalFlowFullscreenBtn.textContent = '✕ Exit';
+            } else {
+              document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen && document.webkitExitFullscreen();
+              opticalFlowFullscreenBtn.textContent = '⛶ Fullscreen';
+            }
+          });
+        }
+        // Floor mask fullscreen button
+        var floorMaskFullscreenBtn = document.getElementById('floorMaskFullscreenBtn');
+        var floorMaskWrap = document.getElementById('floorMaskWrap');
+        if (floorMaskFullscreenBtn && floorMaskWrap) {
+          floorMaskFullscreenBtn.addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+              floorMaskWrap.requestFullscreen ? floorMaskWrap.requestFullscreen() : floorMaskWrap.webkitRequestFullscreen && floorMaskWrap.webkitRequestFullscreen();
+              floorMaskFullscreenBtn.textContent = '✕ Exit';
+            } else {
+              document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen && document.webkitExitFullscreen();
+              floorMaskFullscreenBtn.textContent = '⛶ Fullscreen';
+            }
+          });
+        }
+        // WebRTC collapse/expand
+        var connectionDebug = document.getElementById('connectionDebug');
+        if (connectionDebug) {
+          connectionDebug.addEventListener('click', function () {
+            connectionDebug.classList.toggle('expanded');
+          });
+        }
+        // Update status text styling
+        var statusTextEl = document.getElementById('statusText');
+        if (statusTextEl) {
+          var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+              if (mutation.type === 'characterData' || mutation.type === 'childList') {
+                var text = statusTextEl.textContent.toLowerCase();
+                if (text.includes('connecting')) {
+                  statusTextEl.classList.add('connecting');
+                } else {
+                  statusTextEl.classList.remove('connecting');
+                }
+              }
+            });
+          });
+          observer.observe(statusTextEl, { characterData: true, childList: true, subtree: true });
         }
         if (videoWrap) {
           videoWrap.setAttribute('title', 'Tap on video to rotate toward that direction (rotation only; no forward/backward)');
@@ -2614,6 +3195,122 @@
       }
 
       updateDepthImage();
+    })();
+
+    // Optical flow image polling (backs off to 2s when 503 to avoid console spam)
+    (function initOpticalFlowImage() {
+      var flowImg = document.getElementById('opticalFlowImage');
+      var flowPlaceholder = document.getElementById('opticalFlowPlaceholder');
+      var flowOverlay = document.getElementById('opticalFlowOverlay');
+      if (!flowImg) return;
+
+      var flowImageUrl = '/api/optical_flow_image';
+      var lastFlowUpdate = 0;
+      var flowUpdateInterval = 100;
+      var flowBackoffInterval = 2000;
+
+      function updateOpticalFlowImage() {
+        var now = Date.now();
+        if (now - lastFlowUpdate < flowUpdateInterval) {
+          requestAnimationFrame(updateOpticalFlowImage);
+          return;
+        }
+        lastFlowUpdate = now;
+
+        fetch(flowImageUrl + '?t=' + now)
+          .then(function(response) {
+            if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/')) {
+              if (response.status === 503) flowUpdateInterval = flowBackoffInterval;
+              throw new Error('Not an image');
+            }
+            flowUpdateInterval = 100;
+            return response.blob();
+          })
+          .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            if (flowImg.src) {
+              URL.revokeObjectURL(flowImg.src);
+            }
+            flowImg.src = url;
+            flowImg.classList.add('loaded');
+            if (flowPlaceholder) flowPlaceholder.hidden = true;
+            if (flowOverlay) {
+              flowOverlay.classList.remove('visible');
+              flowOverlay.setAttribute('aria-hidden', 'true');
+            }
+          })
+          .catch(function() {
+            if (flowPlaceholder) flowPlaceholder.hidden = false;
+            if (flowOverlay) {
+              flowOverlay.classList.add('visible');
+              flowOverlay.setAttribute('aria-hidden', 'false');
+            }
+            flowImg.classList.remove('loaded');
+          })
+          .finally(function() {
+            requestAnimationFrame(updateOpticalFlowImage);
+          });
+      }
+
+      updateOpticalFlowImage();
+    })();
+
+    // Floor mask image polling (backs off to 2s when 503 to avoid console spam)
+    (function initFloorMaskImage() {
+      var maskImg = document.getElementById('floorMaskImage');
+      var maskPlaceholder = document.getElementById('floorMaskPlaceholder');
+      var maskOverlay = document.getElementById('floorMaskOverlay');
+      if (!maskImg) return;
+
+      var maskImageUrl = '/api/floor_mask_image';
+      var lastMaskUpdate = 0;
+      var maskUpdateInterval = 100;
+      var maskBackoffInterval = 2000;
+
+      function updateFloorMaskImage() {
+        var now = Date.now();
+        if (now - lastMaskUpdate < maskUpdateInterval) {
+          requestAnimationFrame(updateFloorMaskImage);
+          return;
+        }
+        lastMaskUpdate = now;
+
+        fetch(maskImageUrl + '?t=' + now)
+          .then(function(response) {
+            if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/')) {
+              if (response.status === 503) maskUpdateInterval = maskBackoffInterval;
+              throw new Error('Not an image');
+            }
+            maskUpdateInterval = 100;
+            return response.blob();
+          })
+          .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            if (maskImg.src) {
+              URL.revokeObjectURL(maskImg.src);
+            }
+            maskImg.src = url;
+            maskImg.classList.add('loaded');
+            if (maskPlaceholder) maskPlaceholder.hidden = true;
+            if (maskOverlay) {
+              maskOverlay.classList.remove('visible');
+              maskOverlay.setAttribute('aria-hidden', 'true');
+            }
+          })
+          .catch(function() {
+            if (maskPlaceholder) maskPlaceholder.hidden = false;
+            if (maskOverlay) {
+              maskOverlay.classList.add('visible');
+              maskOverlay.setAttribute('aria-hidden', 'false');
+            }
+            maskImg.classList.remove('loaded');
+          })
+          .finally(function() {
+            requestAnimationFrame(updateFloorMaskImage);
+          });
+      }
+
+      updateFloorMaskImage();
     })();
   </script>
 </body>

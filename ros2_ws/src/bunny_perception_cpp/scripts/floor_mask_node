@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Launcher for floor_mask_node (ament_cmake does not install setup.py entry_points)."""
+from bunny_perception_cpp.nodes.floor_mask_node import main
+
+if __name__ == "__main__":
+    main()

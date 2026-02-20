@@ -42,6 +42,13 @@ ament_python_install_package(${PROJECT_NAME}
   PACKAGE_DIR bunny_perception_cpp
 )
 
+# Python node launcher (ament_cmake_python does not install setup.py entry_points)
+install(PROGRAMS
+  scripts/optical_flow_node
+  scripts/floor_mask_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

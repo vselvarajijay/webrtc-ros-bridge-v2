@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             'controller_node = bunny_controller.nodes.controller_node:main',
             'manual_controller = bunny_controller.nodes.manual_controller:main',
+            'wander_node = bunny_controller.nodes.wander_node:main',
         ],
     },
 )
