@@ -12,8 +12,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/robot_sdk/earth_rovers_sdk/requirements.txt .
-COPY ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/robot_sdk/earth_rovers_sdk/ .
+COPY ros2_ws/src/connectx_robot_bridge/connectx_robot_bridge/robot_sdk/earth_rovers_sdk/requirements.txt .
+COPY ros2_ws/src/connectx_robot_bridge/connectx_robot_bridge/robot_sdk/earth_rovers_sdk/ .
 
 RUN pip install --no-cache-dir -r requirements.txt
 

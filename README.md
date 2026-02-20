@@ -1,6 +1,6 @@
-# Bunny
+# ConnectX
 
-**Write once, run on any robot.** Bunny lets you build ROS 2 control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC, and your autonomy stack stays hardware-agnostic.
+**Write once, run on any robot.** ConnectX lets you build ROS 2 control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC, and your autonomy stack stays hardware-agnostic.
 
 ---
 
@@ -31,7 +31,7 @@
 
 ```bash
 # In the dev shell, run teleop with arrow keys
-ros2 run bunny_robot_bridge teleop_node
+ros2 run connectx_teleop keyboard_node
 ```
 
 Use **Up** (forward), **Down** (back), **Left** / **Right** (turn). Ctrl+C to quit.
@@ -72,10 +72,10 @@ To add support for a new robot, you need to:
 Create a new robot class that inherits from `RobotBase` and implements all abstract methods:
 
 ```python
-# ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/robots/my_robot.py
+# ros2_ws/src/connectx_robot_bridge/connectx_robot_bridge/robots/my_robot.py
 
-from bunny_robot_bridge.core.robot_base import RobotBase
-from bunny_robot_bridge.core.models.telemetry import TelemetryFrame
+from connectx_robot_bridge.core.robot_base import RobotBase
+from connectx_robot_bridge.core.models.telemetry import TelemetryFrame
 
 class MyRobot(RobotBase):
     """Robot implementation for MyRobot SDK."""
@@ -127,9 +127,9 @@ class MyRobot(RobotBase):
 Add your robot to the factory:
 
 ```python
-# ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/core/robot_factory.py
+# ros2_ws/src/connectx_robot_bridge/connectx_robot_bridge/core/robot_factory.py
 
-from bunny_robot_bridge.robots.my_robot import MyRobot
+from connectx_robot_bridge.robots.my_robot import MyRobot
 
 def create_robot(robot_type: str) -> Optional[RobotBase]:
     if robot_type == "earth_rovers_sdk":
@@ -152,7 +152,7 @@ MY_ROBOT_API_KEY=your_api_key_here
 MY_ROBOT_HOST=192.168.1.100
 ```
 
-Bunny reads `ROBOT_TYPE` from `.env` and creates the corresponding robot instance. Any other environment variables your robot needs can be added to `.env` and accessed via `os.getenv()` in your robot class.
+ConnectX reads `ROBOT_TYPE` from `.env` and creates the corresponding robot instance. Any other environment variables your robot needs can be added to `.env` and accessed via `os.getenv()` in your robot class.
 
 **Example:** For the Earth Rovers robot, the `.env` file includes:
 - `ROBOT_TYPE=earth_rovers_sdk`
@@ -171,7 +171,7 @@ See `.env.example` for the full list of available configuration options.
 Robot SDK (native) ←→ WebRTC ←→ Bridge ←→ ROS 2 (your control logic)
 ```
 
-Bunny handles:
+ConnectX handles:
 - **Protocol translation** between robot SDK and ROS 2
 - **Message standardization** across different platforms
 - **Robot-specific configuration** management
@@ -179,7 +179,7 @@ Bunny handles:
 
 ### Current Status
 
-Bunny is in early development. Currently implemented:
+ConnectX is in early development. Currently implemented:
 
 - ✅ **Robot control** - Send movement commands via ROS 2 `/cmd_vel` topic
 - ✅ **Camera streaming** - Front camera published to `/camera/front/compressed`
@@ -201,7 +201,7 @@ Planned features (not yet implemented):
 
 The `EarthRoversRobot` class demonstrates a complete implementation:
 
-- **Location:** `ros2_ws/src/bunny_robot_bridge/bunny_robot_bridge/robots/earth_rovers_robot.py`
+- **Location:** `ros2_ws/src/connectx_robot_bridge/connectx_robot_bridge/robots/earth_rovers_robot.py`
 - **SDK:** Uses Earth Rovers SDK via RTM (Real-Time Messaging) client
 - **Configuration:** Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` with required credentials
 
@@ -214,8 +214,8 @@ See the implementation for reference when adding your own robot.
 ### Project Structure
 
 ```
-ros2_ws/src/bunny_robot_bridge/
-├── bunny_robot_bridge/
+ros2_ws/src/connectx_robot_bridge/
+├── connectx_robot_bridge/
 │   ├── core/
 │   │   ├── robot_base.py      # Abstract base class
 │   │   ├── robot_factory.py   # Robot creation

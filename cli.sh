@@ -88,7 +88,7 @@ case "$cmd" in
     echo ""
     if [[ "$RUN_TELEOP" == true ]]; then
       echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."
-      RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && (ros2 run bunny_controller manual_controller &) && sleep 0.5 && exec ros2 run bunny_teleop keyboard_node'"
+      RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && (ros2 run connectx_controller manual_controller &) && sleep 0.5 && exec ros2 run connectx_teleop keyboard_node'"
       if [[ "$USE_XTERM" == true ]]; then
         if command -v xterm &>/dev/null; then
           xterm -e "$RUN_CMD"
@@ -196,7 +196,7 @@ case "$cmd" in
   teleop)
     echo "Running manual_controller + keyboard_node in scout_bridge container..."
     docker compose --profile webrtc exec -it scout_bridge bash -c \
-      'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && (ros2 run bunny_controller manual_controller &) && sleep 0.5 && exec ros2 run bunny_teleop keyboard_node'
+      'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && (ros2 run connectx_controller manual_controller &) && sleep 0.5 && exec ros2 run connectx_teleop keyboard_node'
     ;;
   test)
     echo "Running all tests in ROS 2 workspace..."

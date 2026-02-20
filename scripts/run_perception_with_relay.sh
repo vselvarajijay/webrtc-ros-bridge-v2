@@ -28,9 +28,9 @@ FM_RELAY_PID=$!
 trap 'kill $OF_RELAY_PID $FM_RELAY_PID 2>/dev/null' EXIT
 
 # Run perception nodes in background so both stay up
-ros2 run bunny_perception_cpp optical_flow_node &
+ros2 run connectx_perception_cpp optical_flow_node &
 OF_PID=$!
-ros2 run bunny_perception_cpp floor_mask_node &
+ros2 run connectx_perception_cpp floor_mask_node &
 FM_PID=$!
 trap 'kill $OF_RELAY_PID $FM_RELAY_PID $OF_PID $FM_PID 2>/dev/null' EXIT
 
