@@ -6,14 +6,6 @@
 
 ## Quick Start
 
-### Prerequisites
-
-- **Docker** and **Docker Compose**
-- **macOS only**: [XQuartz](https://www.xquartz.org/) for GUI support (RViz, etc.)
-  - Open XQuartz → **Preferences → Security**
-  - Enable **"Allow connections from network clients"**
-  - Restart XQuartz after changing this setting
-
 ### Build and Run
 
 ```bash
@@ -27,14 +19,6 @@
 ./cli.sh stop
 ```
 
-### Test Robot Control
-
-```bash
-# In the dev shell, run teleop with arrow keys
-ros2 run connectx_teleop keyboard_node
-```
-
-Use **Up** (forward), **Down** (back), **Left** / **Right** (turn). Ctrl+C to quit.
 
 ### WebRTC Live View
 
@@ -57,6 +41,46 @@ The right-side panels show **optical flow** (vector arrows) and **floor mask** (
 3. **Test:** `./scripts/test_perception.sh` — checks container status, app reachability, ROS topic rates, and perception APIs.
 
 On Docker Desktop for Mac, relays use `APP_URL=http://host.docker.internal:8000` to reach the app. On Linux you can set `APP_URL=http://127.0.0.1:8000` in `.env` if needed. If APIs return 503, check `docker compose --profile webrtc logs scout_perception` and ensure `/camera/front/compressed` is publishing (bridge + robot/SDK).
+
+---
+
+## ROS 2 Architecture
+
+The ROS 2 workspace is organized into five packages. The boot package launches perception and control; the others provide robot I/O, teleop, perception, and control logic.
+
+<!-- View on GitHub or any Mermaid-capable Markdown viewer to see the diagram rendered. -->
+
+```mermaid
+graph LR
+  subgraph boot["Boot"]
+    connectx_boot
+  end
+  subgraph robot_io["Robot I/O"]
+    connectx_robot_bridge
+  end
+  subgraph human["Human input"]
+    connectx_teleop
+  end
+  subgraph perception["Perception"]
+    connectx_perception_cpp
+  end
+  subgraph control["Control"]
+    connectx_controller
+  end
+  connectx_boot --> connectx_controller
+  connectx_boot --> connectx_perception_cpp
+  connectx_boot --> connectx_robot_bridge
+```
+
+### Package roles
+
+| Package | Role |
+|--------|------|
+| **connectx_boot** | Launch only. Starts the default stack: `floor_mask_node`, `optical_flow_node`, and `wander_node`. Depends on controller, perception, and bridge for topic compatibility. |
+| **connectx_robot_bridge** | ROS 2 ↔ robot SDK. Subscribes to `/cmd_vel` and `/robot/lamp`; publishes `/camera/front/compressed` and `/robot/telemetry`. Converts Twist to robot velocity, forwards lamp state, and pulls camera and telemetry from the robot. |
+| **connectx_teleop** | Human input. **keyboard_node** publishes target velocity to `/teleop/velocity_target`. **webrtc_node** streams camera over WebRTC, receives drive/lamp/autonomy from the app, and publishes to `/cmd_vel`, `/robot/lamp`, and `/autonomy/command`. |
+| **connectx_perception_cpp** | Vision (C++). **floor_mask_node** turns `/camera/front/compressed` into a floor mask on `/perception/floor_mask`. **optical_flow_node** uses camera (and optional mask) and publishes `/optical_flow`. |
+| **connectx_controller** | Velocity and autonomy. **controller_node** runs high-level commands from `/autonomy/command` using `/robot/telemetry`, publishes `/cmd_vel`. **manual_controller** ramps and limits `/teleop/velocity_target` into `/cmd_vel`. **wander_node** does optical-flow-based wandering from `/optical_flow` and `/autonomy/command`, publishes `/cmd_vel`. |
 
 ---
 
@@ -163,95 +187,3 @@ ConnectX reads `ROBOT_TYPE` from `.env` and creates the corresponding robot inst
 
 See `.env.example` for the full list of available configuration options.
 
----
-
-## Architecture
-
-```
-Robot SDK (native) ←→ WebRTC ←→ Bridge ←→ ROS 2 (your control logic)
-```
-
-ConnectX handles:
-- **Protocol translation** between robot SDK and ROS 2
-- **Message standardization** across different platforms
-- **Robot-specific configuration** management
-- **Real-time WebRTC communication**
-
-### Current Status
-
-ConnectX is in early development. Currently implemented:
-
-- ✅ **Robot control** - Send movement commands via ROS 2 `/cmd_vel` topic
-- ✅ **Camera streaming** - Front camera published to `/camera/front/compressed`
-- ✅ **Telemetry** - Robot sensor data published to `/robot/telemetry`
-- ✅ **WebRTC live view** - Stream camera to browser with real-time control
-
-### Future Modules
-
-Planned features (not yet implemented):
-
-- 🔲 **Localization** - Robot position tracking and mapping
-- 🔲 **Perception** - Object detection, obstacle avoidance
-- 🔲 **Navigation** - Path planning and autonomous navigation
-- 🔲 **Multi-robot support** - Coordinate multiple robots
-
----
-
-## Example: Earth Rovers Robot
-
-The `EarthRoversRobot` class demonstrates a complete implementation:
-
-- **Location:** `ros2_ws/src/connectx_robot_bridge/connectx_robot_bridge/robots/earth_rovers_robot.py`
-- **SDK:** Uses Earth Rovers SDK via RTM (Real-Time Messaging) client
-- **Configuration:** Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` with required credentials
-
-See the implementation for reference when adding your own robot.
-
----
-
-## Development
-
-### Project Structure
-
-```
-ros2_ws/src/connectx_robot_bridge/
-├── connectx_robot_bridge/
-│   ├── core/
-│   │   ├── robot_base.py      # Abstract base class
-│   │   ├── robot_factory.py   # Robot creation
-│   │   └── config_manager.py  # Configuration handling
-│   ├── robots/
-│   │   └── earth_rovers_robot.py  # Example implementation
-│   └── nodes/
-│       └── bridge_node.py     # Main ROS 2 node
-```
-
-### Building
-
-```bash
-./cli.sh build
-```
-
-### Running
-
-```bash
-./cli.sh start
-```
-
-This starts:
-- **scout_bridge** - Main bridge node (robot control and camera)
-- **scout_shell** - Development shell with ROS 2 environment
-
----
-
-## Troubleshooting
-
-**Robot commands don't work:**
-- Check `.env` file has correct `ROBOT_TYPE` and required credentials
-- Verify robot SDK is running and accessible
-- Check bridge logs: `docker compose logs -f scout_bridge`
-
-**Camera not showing:**
-- Ensure robot SDK provides camera endpoint
-- Check camera is enabled in robot configuration
-- Verify `/camera/front/compressed` topic is publishing: `ros2 topic echo /camera/front/compressed`
