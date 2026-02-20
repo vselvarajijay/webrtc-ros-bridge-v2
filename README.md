@@ -28,31 +28,31 @@ Once configured, you can access the WebRTC live view interface in your browser a
 - **Robot controls** - Drive the robot with keyboard or on-screen controls
 - **Telemetry dashboard** - Monitor battery, speed, heading, and signal strength
 - **Connection status** - WebRTC signaling and data channel status
-- **Perception panels** - Optical flow and floor mask (when scout_perception and relays are running)
+- **Perception panels** - Optical flow and floor mask (when the stack is running; scout_bridge runs perception nodes and relays)
 
 ![WebRTC Live View Interface](docs/assets/screenshot.png)
 
 ### Perception in the UI
 
-The right-side panels show **optical flow** (vector arrows) and **floor mask** (floor detection overlay) from the perception stack. Relays subscribe to ROS2 topics and POST frames to the app so the UI can display them.
+The right-side panels show **optical flow** (vector arrows) and **floor mask** (floor detection overlay) from the perception stack. Relays subscribe to ROS 2 topics and POST frames to the app so the UI can display them.
 
 1. **Run once:** `python3 scripts/download_models.py` (downloads Mask2Former for floor mask).
-2. **Start:** `./cli.sh start` — scout_perception runs optical_flow_node, floor_mask_node, and their relays automatically.
+2. **Start:** `./cli.sh start` — the **scout_bridge** container runs the full stack, including optical_flow_node, floor_mask_node, and their relays, so perception panels work automatically. The scout_perception container also starts and can run perception + relays in a separate (host-network) context if needed.
 3. **Test:** `./scripts/test_perception.sh` — checks container status, app reachability, ROS topic rates, and perception APIs.
 
-On Docker Desktop for Mac, relays use `APP_URL=http://host.docker.internal:8000` to reach the app. On Linux you can set `APP_URL=http://127.0.0.1:8000` in `.env` if needed. If APIs return 503, check `docker compose --profile webrtc logs scout_perception` and ensure `/camera/front/compressed` is publishing (bridge + robot/SDK).
+On Docker Desktop for Mac, relays use `APP_URL=http://host.docker.internal:8000` to reach the app. On Linux you can set `APP_URL=http://127.0.0.1:8000` in `.env` if needed. If APIs return 503, check `docker compose --profile webrtc logs scout_bridge` and ensure `/camera/front/compressed` is publishing (bridge_node + robot/SDK).
 
 ---
 
 ## ROS 2 Architecture
 
-The ROS 2 workspace is organized into five packages. The boot package launches perception and control; the others provide robot I/O, teleop, perception, and control logic.
+The ROS 2 workspace is organized into five packages. The current Docker/CLI setup does not use the boot package; it starts nodes directly from the **scout_bridge** container (see `docker-compose.yml`). The diagram below shows package groupings and how the optional boot launch package would depend on the others.
 
 <!-- View on GitHub or any Mermaid-capable Markdown viewer to see the diagram rendered. -->
 
 ```mermaid
 graph LR
-  subgraph boot["Boot"]
+  subgraph boot["Boot (optional launch)"]
     connectx_boot
   end
   subgraph robot_io["Robot I/O"]
@@ -74,13 +74,13 @@ graph LR
 
 ### Package roles
 
-| Package | Role |
-|--------|------|
-| **connectx_boot** | Launch only. Starts the default stack: `floor_mask_node`, `optical_flow_node`, and `wander_node`. Depends on controller, perception, and bridge for topic compatibility. |
-| **connectx_robot_bridge** | ROS 2 ↔ robot SDK. Subscribes to `/cmd_vel` and `/robot/lamp`; publishes `/camera/front/compressed` and `/robot/telemetry`. Converts Twist to robot velocity, forwards lamp state, and pulls camera and telemetry from the robot. |
-| **connectx_teleop** | Human input. **keyboard_node** publishes target velocity to `/teleop/velocity_target`. **webrtc_node** streams camera over WebRTC, receives drive/lamp/autonomy from the app, and publishes to `/cmd_vel`, `/robot/lamp`, and `/autonomy/command`. |
-| **connectx_perception_cpp** | Vision (C++). **floor_mask_node** turns `/camera/front/compressed` into a floor mask on `/perception/floor_mask`. **optical_flow_node** uses camera (and optional mask) and publishes `/optical_flow`. |
-| **connectx_controller** | Velocity and autonomy. **controller_node** runs high-level commands from `/autonomy/command` using `/robot/telemetry`, publishes `/cmd_vel`. **manual_controller** ramps and limits `/teleop/velocity_target` into `/cmd_vel`. **wander_node** does optical-flow-based wandering from `/optical_flow` and `/autonomy/command`, publishes `/cmd_vel`. |
+| Package | Responsibility |
+|--------|-----------------|
+| **connectx_boot** | Optional. Launch file to start perception and wander nodes (current setup starts nodes directly in scout_bridge). |
+| **connectx_robot_bridge** | Talks to the robot: sends velocity and lamp commands, gets camera and telemetry. |
+| **connectx_teleop** | Human input: keyboard and WebRTC (browser) drive the robot and send autonomy commands. |
+| **connectx_perception_cpp** | Vision: floor detection and optical flow from the camera feed. |
+| **connectx_controller** | Turns high-level commands and teleop input into velocity: autonomy controller, manual (keyboard) controller, and flow-based wandering. |
 
 ---
 
