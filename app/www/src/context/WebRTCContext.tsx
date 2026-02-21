@@ -33,6 +33,8 @@ export interface LastControlSent {
   at: number;
 }
 
+const SYSTEM_LOG_MAX_LINES = 200;
+
 interface WebRTCContextValue {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   pipelineState: PipelineState;
@@ -41,6 +43,9 @@ interface WebRTCContextValue {
   commandsReady: boolean;
   /** Last control message actually sent over the WebRTC data channel (throttled updates for display). */
   lastControlSent: LastControlSent | null;
+  /** Lines for System Logs & Telemetry panel (control, wander, telemetry). */
+  systemLogLines: string[];
+  appendSystemLog: (line: string) => void;
   lampOn: boolean;
   setLampOn: (on: boolean) => void;
   driveMode: DriveMode;
@@ -72,6 +77,24 @@ function useSignalingForControl(): boolean {
   return new URLSearchParams(window.location.search).get('control_via_signaling') === '1';
 }
 
+/** Merge new telemetry into previous; do not overwrite with null/undefined (avoids heartbeat/partial flicker). */
+function mergeTelemetry(
+  prev: TelemetryData | null,
+  next: Record<string, unknown>
+): TelemetryData {
+  if (!prev || typeof prev !== 'object') {
+    return next as TelemetryData;
+  }
+  const out = { ...prev };
+  for (const key of Object.keys(next)) {
+    const v = next[key];
+    if (v !== null && v !== undefined) {
+      (out as Record<string, unknown>)[key] = v;
+    }
+  }
+  return out as TelemetryData;
+}
+
 export function WebRTCProvider({ children }: { children: ReactNode }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [pipelineState, setPipelineState] = useState<PipelineState>({
@@ -92,8 +115,15 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
   const iceServersRef = useRef<RTCIceServer[]>([{ urls: 'stun:stun.l.google.com:19302' }]);
   const lastControlRef = useRef<{ linearX: number; angularZ: number }>({ linearX: 0, angularZ: 0 });
   const lastControlSentDisplayRef = useRef(0);
+  const lastControlLogTimeRef = useRef(0);
   const LAST_SENT_DISPLAY_MS = 400;
+  const CONTROL_LOG_THROTTLE_MS = 500;
   const controlViaSignaling = useSignalingForControl();
+
+  const [systemLogLines, setSystemLogLines] = useState<string[]>([]);
+  const appendSystemLog = useCallback((line: string) => {
+    setSystemLogLines((prev) => [...prev.slice(-(SYSTEM_LOG_MAX_LINES - 1)), line]);
+  }, []);
 
   const setDebug = useCallback((key: keyof ConnectionDebug, value: string, _ok?: boolean) => {
     setConnectionDebug((prev) => ({ ...prev, [key]: value }));
@@ -153,7 +183,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
       if (typ === 'telemetry') {
         setPipelineState((p) => ({ ...p, robot: true }));
         const data = msg.data && typeof msg.data === 'object' ? msg.data : {};
-        setTelemetry(data as TelemetryData);
+        setTelemetry((prev) => mergeTelemetry(prev, data as Record<string, unknown>));
         return;
       }
 
@@ -276,7 +306,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
       try {
         const msg = JSON.parse(event.data as string);
         if (msg.type === 'telemetry' && msg.data && typeof msg.data === 'object') {
-          setTelemetry(msg.data as TelemetryData);
+          setTelemetry((prev) => mergeTelemetry(prev, msg.data as Record<string, unknown>));
         }
       } catch {}
     };
@@ -327,6 +357,16 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
           setLastControlSent({ linearX, angularZ, at: now });
         }
       };
+      const maybeLogControl = () => {
+        if (now - lastControlLogTimeRef.current >= CONTROL_LOG_THROTTLE_MS) {
+          lastControlLogTimeRef.current = now;
+          const ts = new Date().toTimeString().slice(0, 8);
+          setSystemLogLines((prev) => [
+            ...prev.slice(-(SYSTEM_LOG_MAX_LINES - 1)),
+            `[${ts}] Control: linear=${linearX.toFixed(2)} angular=${angularZ.toFixed(2)}`,
+          ]);
+        }
+      };
 
       if (controlViaSignaling) {
         // Path: browser → API (WebSocket) → bridge (visible in Network tab)
@@ -340,6 +380,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
             })
           );
           updateSentDisplay();
+          maybeLogControl();
         } catch (_) {}
         return;
       }
@@ -358,18 +399,24 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
           })
         );
         updateSentDisplay();
+        maybeLogControl();
       } catch (_) {}
     },
     [lampOn, controlViaSignaling]
   );
 
-  const sendWander = useCallback((enable: boolean) => {
-    const dc = dataChannelRef.current;
-    if (!dc || dc.readyState !== 'open') return;
-    try {
-      dc.send(JSON.stringify({ command: enable ? 'wander_start' : 'wander_stop' }));
-    } catch (_) {}
-  }, []);
+  const sendWander = useCallback(
+    (enable: boolean) => {
+      const dc = dataChannelRef.current;
+      if (!dc || dc.readyState !== 'open') return;
+      try {
+        dc.send(JSON.stringify({ command: enable ? 'wander_start' : 'wander_stop' }));
+        const ts = new Date().toTimeString().slice(0, 8);
+        appendSystemLog(`[${ts}] Autonomous: wander ${enable ? 'started' : 'stopped'}`);
+      } catch (_) {}
+    },
+    [appendSystemLog]
+  );
 
   const eStop = useCallback(() => {
     sendControl(0, 0);
@@ -390,6 +437,8 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     telemetry,
     commandsReady,
     lastControlSent,
+    systemLogLines,
+    appendSystemLog,
     lampOn,
     setLampOn,
     driveMode,

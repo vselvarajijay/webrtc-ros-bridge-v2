@@ -28,11 +28,6 @@ export function VideoStream() {
     telemetry?.orientation != null
       ? (Number(telemetry.orientation) / 255) * 360
       : null;
-  const signal =
-    telemetry?.signal_level != null && Number.isFinite(telemetry.signal_level)
-      ? Number(telemetry.signal_level)
-      : null;
-
   return (
     <Card
       withBorder
@@ -62,16 +57,13 @@ export function VideoStream() {
         />
 
         <Box style={{ ...hudStyle, top: 8, left: 8 }}>
-          Speed: {speed != null ? speed.toFixed(2) : '—'} m/s
+          Battery: {battery != null ? `${Math.round(battery)}%` : '—'}
         </Box>
         <Box style={{ ...hudStyle, top: 8, right: 8 }}>
           Heading: {heading != null ? heading.toFixed(1) : '—'}°
         </Box>
-        <Box style={{ ...hudStyle, top: 32, left: 8 }}>
-          Battery: {battery != null ? `${Math.round(battery)}%` : '—'}
-        </Box>
         <Box style={{ ...hudStyle, bottom: 8, right: 8 }}>
-          Signal: {signal != null ? signal.toFixed(1) : '—'}
+          Speed: {speed != null ? speed.toFixed(2) : '—'} m/s
         </Box>
         <Box style={{ ...hudStyle, bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
           <Box

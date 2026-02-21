@@ -14,6 +14,8 @@ It:
 
 ConnectX is for development and research. Use in a safe environment; it is not intended for safety-critical or unsupervised operation.
 
+![ConnectX UI — live view, controls, telemetry, and perception panels](assets/connectx-screenshot.png)
+
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=vselvarajijay/connectX&machine=basicLinux32gb&location=EastUs)
 
 ---

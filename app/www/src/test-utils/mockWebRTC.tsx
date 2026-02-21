@@ -49,6 +49,8 @@ export function MockWebRTCProvider({
     telemetry,
     commandsReady,
     lastControlSent: null,
+    systemLogLines: [],
+    appendSystemLog: () => {},
     lampOn: false,
     setLampOn: () => {},
     driveMode,

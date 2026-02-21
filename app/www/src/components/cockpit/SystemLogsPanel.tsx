@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Box, Text } from '@mantine/core';
 import { useWebRTC } from '@/context/WebRTCContext';
 
 const LOG_THROTTLE_MS = 1000;
-const MAX_LINES = 200;
 
 function formatTime() {
   const d = new Date();
@@ -11,8 +10,7 @@ function formatTime() {
 }
 
 export function SystemLogsPanel() {
-  const { telemetry } = useWebRTC();
-  const [lines, setLines] = useState<string[]>([]);
+  const { telemetry, systemLogLines, appendSystemLog } = useWebRTC();
   const lastLogRef = useRef(0);
   const scrollRef = useRef<HTMLPreElement>(null);
 
@@ -30,19 +28,15 @@ export function SystemLogsPanel() {
       telemetry.orientation != null
         ? ((Number(telemetry.orientation) / 255) * 360).toFixed(0)
         : '—';
-    const signal =
-      telemetry.signal_level != null && Number.isFinite(telemetry.signal_level)
-        ? Number(telemetry.signal_level).toFixed(1)
-        : '—';
 
-    const line = `[${formatTime()}] SPE KPH ${speed} m/s, Heading: ${heading}°, Signal: ${signal}`;
-    setLines((prev) => [...prev.slice(-(MAX_LINES - 1)), line]);
-  }, [telemetry]);
+    const line = `[${formatTime()}] SPE KPH ${speed} m/s, Heading: ${heading}°`;
+    appendSystemLog(line);
+  }, [telemetry, appendSystemLog]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
+  }, [systemLogLines]);
 
   return (
     <Box
@@ -74,10 +68,10 @@ export function SystemLogsPanel() {
           padding: 'var(--mantine-spacing-xs)',
         }}
       >
-        {lines.length === 0 ? (
+        {systemLogLines.length === 0 ? (
           <span style={{ color: 'var(--mantine-color-dark-3)' }}>Waiting for telemetry…</span>
         ) : (
-          lines.map((line, i) => (
+          systemLogLines.map((line, i) => (
             <span key={`${i}-${line}`} style={{ display: 'block' }}>
               {line}
             </span>

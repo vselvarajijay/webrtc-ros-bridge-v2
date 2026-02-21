@@ -13,9 +13,6 @@ export function TelemetryDashboard() {
   const heading = telemetry?.orientation != null
     ? ((Number(telemetry.orientation) / 255) * 360).toFixed(1)
     : '—';
-  const signal = telemetry?.signal_level != null && Number.isFinite(telemetry.signal_level)
-    ? Number(telemetry.signal_level).toFixed(1)
-    : '—';
 
   return (
     <Group
@@ -29,10 +26,6 @@ export function TelemetryDashboard() {
       <Group gap="xs" wrap="nowrap">
         <Text size="xs" c="dimmed">Heading</Text>
         <Text size="sm" fw={600}>{heading}°</Text>
-      </Group>
-      <Group gap="xs" wrap="nowrap">
-        <Text size="xs" c="dimmed">Signal</Text>
-        <Text size="sm" fw={600}>{signal}</Text>
       </Group>
       {!telemetry && (
         <Text size="xs" c="dimmed">
