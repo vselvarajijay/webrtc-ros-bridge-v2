@@ -29,8 +29,8 @@ export function AppHeader({
   asideBreakpoint = 'md',
 }: AppHeaderProps) {
   return (
-    <Group justify="space-between" h="100%" px="md" wrap="nowrap">
-      <Group wrap="nowrap" gap="sm">
+    <Group justify="space-between" h="100%" px="md" wrap="nowrap" style={{ width: '100%' }}>
+      <Group wrap="nowrap" gap="sm" style={{ flex: 1, minWidth: 0 }}>
         {onBurgerClick && (
           <Burger
             opened={burgerOpened}

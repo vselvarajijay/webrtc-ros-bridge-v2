@@ -189,10 +189,10 @@ export function DriveControls() {
       </div>
 
       <Stack gap="sm" mt="md">
-        <Button size="sm" onClick={() => sendWander(true)} disabled={!commandsReady}>
+        <Button size="sm" color="green" onClick={() => sendWander(true)} disabled={!commandsReady}>
           Start wandering
         </Button>
-        <Button size="sm" variant="light" onClick={() => sendWander(false)} disabled={!commandsReady}>
+        <Button size="sm" variant="light" color="red" onClick={() => sendWander(false)} disabled={!commandsReady}>
           Stop wandering
         </Button>
         <Text size="xs" c="dimmed">Requires wander_node on robot</Text>

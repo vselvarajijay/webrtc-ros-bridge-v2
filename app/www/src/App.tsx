@@ -1,17 +1,33 @@
-import { MantineProvider, Title } from '@mantine/core';
+import { createTheme, MantineProvider } from '@mantine/core';
 import { AppLayout } from '@/components/layout';
-import { DriveControls } from '@/components/telemetry';
+import { CockpitHeader } from '@/components/cockpit';
 import { WebRTCProvider } from '@/context/WebRTCContext';
-import { TelemetryPage, TelemetryPageHeader } from '@/pages/TelemetryPage';
+import { TelemetryPage } from '@/pages/TelemetryPage';
+
+const cockpitTheme = createTheme({
+  primaryColor: 'dark',
+  colors: {
+    dark: [
+      '#f1f3f5',
+      '#e9ecef',
+      '#dee2e6',
+      '#ced4da',
+      '#adb5bd',
+      '#868e96',
+      '#495057',
+      '#373a40',
+      '#25262b',
+      '#1a1b1e',
+    ],
+  },
+});
 
 function App() {
   return (
-    <MantineProvider>
+    <MantineProvider theme={cockpitTheme} defaultColorScheme="dark">
       <WebRTCProvider>
         <AppLayout
-          headerLeft={<Title order={4}>ConnectX</Title>}
-          headerRight={<TelemetryPageHeader />}
-          aside={<DriveControls />}
+          headerLeft={<CockpitHeader />}
           padding="md"
         >
           <TelemetryPage />

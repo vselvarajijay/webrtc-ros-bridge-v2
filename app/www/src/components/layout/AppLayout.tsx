@@ -64,7 +64,9 @@ export function AppLayout({
         />
       </AppShell.Header>
       {navbar && <AppShell.Navbar p="md">{navbar}</AppShell.Navbar>}
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+        <Box style={{ flex: 1, minHeight: 0 }}>{children}</Box>
+      </AppShell.Main>
       {aside && (
         <AppShell.Aside p="md" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
           <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
