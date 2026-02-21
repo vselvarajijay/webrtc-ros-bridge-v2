@@ -36,21 +36,29 @@ DEFAULT_PUBLISH_HZ = 25.0
 
 def parse_speed_from_telemetry(json_str: str) -> float:
     """Parse speed (m/s) from /robot/telemetry JSON. Returns 0.0 if invalid."""
+    speed, _ = parse_speed_and_angular_from_telemetry(json_str)
+    return speed
+
+
+def parse_speed_and_angular_from_telemetry(json_str: str) -> tuple[float, float]:
+    """Parse speed (m/s) and angular_z (rad/s) from /robot/telemetry JSON.
+    Returns (0.0, 0.0) if invalid."""
     if not json_str or not json_str.strip():
-        return 0.0
+        return (0.0, 0.0)
     try:
         data = json.loads(json_str)
     except (json.JSONDecodeError, TypeError):
-        return 0.0
+        return (0.0, 0.0)
     if not isinstance(data, dict):
-        return 0.0
+        return (0.0, 0.0)
     speed = data.get("speed")
-    if speed is None:
-        return 0.0
+    angular_z = data.get("angular_z", 0.0)
     try:
-        return float(speed)
+        s = float(speed) if speed is not None else 0.0
+        a = float(angular_z) if angular_z is not None else 0.0
+        return (s, a)
     except (TypeError, ValueError):
-        return 0.0
+        return (0.0, 0.0)
 
 
 class WorldModelNode(Node):
@@ -60,9 +68,12 @@ class WorldModelNode(Node):
         self._last_flow: list[float] | None = None
         self._last_flow_stamp_ns: int | None = None
         self._last_velocity_m_s: float = 0.0
+        self._last_angular_z_rad_s: float = 0.0
         self._last_telemetry_stamp_ns: int | None = None
 
         self.declare_parameter("risk_forward_threshold", DEFAULT_RISK_FORWARD_THRESHOLD)
+        self.declare_parameter("min_linear_velocity_for_risk", 0.05)
+        self.declare_parameter("max_angular_velocity_for_risk", 0.5)
         self.declare_parameter("velocity_epsilon", DEFAULT_VELOCITY_EPSILON)
         self.declare_parameter("straight_dead_zone", DEFAULT_STRAIGHT_DEAD_ZONE)
         self.declare_parameter("publish_hz", DEFAULT_PUBLISH_HZ)
@@ -94,9 +105,10 @@ class WorldModelNode(Node):
             self._last_flow_stamp_ns = self.get_clock().now().nanoseconds
 
     def _on_telemetry(self, msg: String) -> None:
-        v = parse_speed_from_telemetry(msg.data or "")
+        speed, angular_z = parse_speed_and_angular_from_telemetry(msg.data or "")
         with self._lock:
-            self._last_velocity_m_s = v
+            self._last_velocity_m_s = speed
+            self._last_angular_z_rad_s = angular_z
             self._last_telemetry_stamp_ns = self.get_clock().now().nanoseconds
 
     def _get_mags(self) -> tuple[float, float, float] | None:
@@ -118,6 +130,7 @@ class WorldModelNode(Node):
         mags = self._get_mags()
         with self._lock:
             velocity = self._last_velocity_m_s
+            angular_z = self._last_angular_z_rad_s
         if mags is None:
             out = NavigationState()
             out.header.stamp = self.get_clock().now().to_msg()
@@ -133,11 +146,21 @@ class WorldModelNode(Node):
         threshold = self.get_parameter("risk_forward_threshold").value
         eps = self.get_parameter("velocity_epsilon").value
         dead_zone = self.get_parameter("straight_dead_zone").value
+        min_lin = self.get_parameter("min_linear_velocity_for_risk").value
+        max_ang = self.get_parameter("max_angular_velocity_for_risk").value
 
-        vel_eff = velocity + eps
-        risk_forward = mag_center / vel_eff if vel_eff > 0 else (mag_center / eps if eps > 0 else 0.0)
-        forward_safe = risk_forward < threshold
-        urgency_score = min(1.0, risk_forward / threshold) if threshold > 0 else 0.0
+        # Only compute forward risk during meaningful translation, not during rotation
+        if abs(velocity) < min_lin:
+            forward_safe = True
+            urgency_score = 0.0
+        elif abs(angular_z) > max_ang:
+            forward_safe = True
+            urgency_score = 0.0
+        else:
+            vel_eff = abs(velocity) + eps
+            risk_forward = mag_center / vel_eff if vel_eff > 0 else (mag_center / eps if eps > 0 else 0.0)
+            forward_safe = risk_forward < threshold
+            urgency_score = min(1.0, risk_forward / threshold) if threshold > 0 else 0.0
 
         asymmetry = mag_right - mag_left
         if abs(asymmetry) < dead_zone:
