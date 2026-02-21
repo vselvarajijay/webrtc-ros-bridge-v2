@@ -1,0 +1,16 @@
+# ConnectX wander planner parameters.
+# Converts navigation state into velocity commands.
+wander_planner:
+  ros__parameters:
+    forward_speed: 0.25
+    base_turn_speed: 0.6
+    low_confidence_angular: 0.3
+    wander_bias_step: 0.02
+    wander_bias_limit: 0.2
+    tick_hz: 25.0
+    confidence_threshold: 0.5
+    hysteresis_urgency_clear: 0.9
+    turn_timeout_frames: 75
+    creep_speed: 0.05
+    escape_pulse_frames: 8
+    debug_log_interval: 50

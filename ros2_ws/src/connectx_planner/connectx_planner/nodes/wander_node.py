@@ -35,6 +35,65 @@ DEFAULT_CREEP_SPEED = 0.05
 DEFAULT_ESCAPE_PULSE_FRAMES = 8
 
 
+def compute_wander_twist(
+    state: NavigationState,
+    was_forward_safe: bool,
+    turning_frames: int,
+    escape_pulse_remaining: int,
+    wander_bias: float,
+    forward_speed: float,
+    base_turn_speed: float,
+    low_confidence_angular: float,
+    confidence_threshold: float,
+    hysteresis_urgency_clear: float,
+    turn_timeout_frames: int,
+    creep_speed: float,
+    escape_pulse_frames: int,
+    wander_bias_limit: float,
+) -> tuple[float, float, bool, int, int]:
+    """Compute twist (linear_x, angular_z) and next internal state from current state.
+    Returns (linear_x, angular_z, next_was_forward_safe, next_turning_frames, next_escape_pulse_remaining).
+    Pure function for testing and use by WanderPlanner._tick (wander_bias is updated by caller with random)."""
+    if state.confidence < confidence_threshold:
+        return (
+            0.0,
+            low_confidence_angular,
+            was_forward_safe,
+            0,
+            0,
+        )
+
+    if escape_pulse_remaining > 0:
+        next_remaining = escape_pulse_remaining - 1
+        next_turning = 0 if next_remaining == 0 else turning_frames
+        return (creep_speed, 0.0, was_forward_safe, next_turning, next_remaining)
+
+    next_was = was_forward_safe
+    next_turning = turning_frames
+    if state.forward_safe:
+        next_was = True
+        next_turning = 0
+    elif state.urgency_score > hysteresis_urgency_clear:
+        next_was = False
+
+    forward_allowed = next_was
+
+    if forward_allowed:
+        clamped_bias = max(
+            -wander_bias_limit,
+            min(wander_bias_limit, wander_bias),
+        )
+        return (forward_speed, clamped_bias, next_was, 0, 0)
+
+    next_turning = turning_frames + 1
+    if next_turning >= turn_timeout_frames:
+        return (creep_speed, 0.0, next_was, next_turning, escape_pulse_frames)
+    turn_dir = float(state.safest_turn)
+    urgency = max(0.0, min(1.0, state.urgency_score))
+    angular = turn_dir * (base_turn_speed * (0.5 + urgency))
+    return (creep_speed, angular, next_was, next_turning, 0)
+
+
 class WanderPlanner(Node):
     def __init__(self):
         super().__init__("wander_planner")
@@ -154,37 +213,31 @@ class WanderPlanner(Node):
             return
 
         state = self._last_state
-        cmd = Twist()
+        linear_x, angular_z, next_was, next_turning, next_escape = compute_wander_twist(
+            state,
+            self._was_forward_safe,
+            self._turning_frames,
+            self._escape_pulse_remaining,
+            self._wander_bias,
+            self._forward_speed,
+            self._base_turn_speed,
+            self._low_conf_angular,
+            self._confidence_threshold,
+            self._hysteresis_urgency_clear,
+            self._turn_timeout_frames,
+            self._creep_speed,
+            self._escape_pulse_frames,
+            self._wander_bias_limit,
+        )
+        self._was_forward_safe = next_was
+        self._turning_frames = next_turning
+        self._escape_pulse_remaining = next_escape
 
-        if state.confidence < self._confidence_threshold:
-            cmd.linear.x = 0.0
-            cmd.angular.z = self._low_conf_angular
-            self._turning_frames = 0
-            self._escape_pulse_remaining = 0
-            self._cmd_target_pub.publish(cmd)
-            self._cmd_vel_pub.publish(cmd)
-            return
-
-        if self._escape_pulse_remaining > 0:
-            cmd.linear.x = self._creep_speed
-            cmd.angular.z = 0.0
-            self._escape_pulse_remaining -= 1
-            if self._escape_pulse_remaining == 0:
-                self._turning_frames = 0
-            self._cmd_target_pub.publish(cmd)
-            self._cmd_vel_pub.publish(cmd)
-            return
-
-        if state.forward_safe:
-            self._was_forward_safe = True
-            self._turning_frames = 0
-        elif state.urgency_score > self._hysteresis_urgency_clear:
-            self._was_forward_safe = False
-
-        forward_allowed = self._was_forward_safe
-
-        if forward_allowed:
-            cmd.linear.x = self._forward_speed
+        if (
+            state.confidence >= self._confidence_threshold
+            and next_escape == 0
+            and next_was
+        ):
             self._wander_bias += random.uniform(
                 -self._wander_bias_step, self._wander_bias_step
             )
@@ -192,20 +245,10 @@ class WanderPlanner(Node):
                 -self._wander_bias_limit,
                 min(self._wander_bias_limit, self._wander_bias),
             )
-            cmd.angular.z = self._wander_bias
-        else:
-            self._turning_frames += 1
-            if self._turning_frames >= self._turn_timeout_frames:
-                self._escape_pulse_remaining = self._escape_pulse_frames
-                cmd.linear.x = self._creep_speed
-                cmd.angular.z = 0.0
-            else:
-                cmd.linear.x = self._creep_speed
-                turn_dir = float(state.safest_turn)
-                urgency = max(0.0, min(1.0, state.urgency_score))
-                cmd.angular.z = turn_dir * (
-                    self._base_turn_speed * (0.5 + urgency)
-                )
+
+        cmd = Twist()
+        cmd.linear.x = linear_x
+        cmd.angular.z = angular_z
 
         if self._debug_log_interval > 0:
             self._debug_tick += 1
@@ -217,7 +260,7 @@ class WanderPlanner(Node):
                     else "escape"
                     if self._escape_pulse_remaining > 0
                     else "forward"
-                    if forward_allowed
+                    if next_was
                     else "turn"
                 )
                 self.get_logger().info(

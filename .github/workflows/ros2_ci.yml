@@ -1,0 +1,59 @@
+# CI for ROS2 workspace: build and test on push/PR when ros2_ws changes.
+name: ROS2 CI
+
+on:
+  push:
+    paths:
+      - 'ros2_ws/**'
+  pull_request:
+    paths:
+      - 'ros2_ws/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container:
+      image: osrf/ros:kilted-desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build and test deps
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            python3-pytest
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Cache colcon
+        uses: actions/cache@v4
+        with:
+          path: |
+            ros2_ws/build
+            ros2_ws/install
+            ros2_ws/log
+          key: ros2-${{ runner.os }}-kilted-${{ hashFiles('ros2_ws/src/**') }}
+          restore-keys: |
+            ros2-${{ runner.os }}-kilted-
+
+      - name: Build
+        run: |
+          source /opt/ros/kilted/setup.bash
+          cd ros2_ws
+          colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+      - name: Test
+        run: |
+          source /opt/ros/kilted/setup.bash
+          cd ros2_ws
+          source install/setup.bash
+          colcon test --event-handlers console_direct+
+
+      - name: Test results
+        if: always()
+        run: |
+          source /opt/ros/kilted/setup.bash
+          cd ros2_ws
+          source install/setup.bash
+          colcon test-result --verbose --all

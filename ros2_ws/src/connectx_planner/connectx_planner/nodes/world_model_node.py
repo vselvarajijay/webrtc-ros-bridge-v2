@@ -61,6 +61,47 @@ def parse_speed_and_angular_from_telemetry(json_str: str) -> tuple[float, float]
         return (0.0, 0.0)
 
 
+def compute_risk_and_turn(
+    mag_left: float,
+    mag_center: float,
+    mag_right: float,
+    velocity: float,
+    angular_z: float,
+    threshold: float,
+    velocity_epsilon: float,
+    straight_dead_zone: float,
+    min_linear_velocity_for_risk: float,
+    max_angular_velocity_for_risk: float,
+) -> tuple[bool, int, float]:
+    """Compute forward_safe, safest_turn (-1/0/1), and urgency_score from flow mags and velocity.
+    Pure function for testing and use by WorldModelNode."""
+    if abs(velocity) < min_linear_velocity_for_risk:
+        forward_safe = True
+        urgency_score = 0.0
+    elif abs(angular_z) > max_angular_velocity_for_risk:
+        forward_safe = True
+        urgency_score = 0.0
+    else:
+        vel_eff = abs(velocity) + velocity_epsilon
+        risk_forward = (
+            mag_center / vel_eff
+            if vel_eff > 0
+            else (mag_center / velocity_epsilon if velocity_epsilon > 0 else 0.0)
+        )
+        forward_safe = risk_forward < threshold
+        urgency_score = min(1.0, risk_forward / threshold) if threshold > 0 else 0.0
+
+    asymmetry = mag_right - mag_left
+    if abs(asymmetry) < straight_dead_zone:
+        safest_turn = 0
+    elif mag_left < mag_right:
+        safest_turn = -1
+    else:
+        safest_turn = 1
+
+    return (forward_safe, safest_turn, urgency_score)
+
+
 class WorldModelNode(Node):
     def __init__(self):
         super().__init__("world_model_node")
@@ -149,26 +190,18 @@ class WorldModelNode(Node):
         min_lin = self.get_parameter("min_linear_velocity_for_risk").value
         max_ang = self.get_parameter("max_angular_velocity_for_risk").value
 
-        # Only compute forward risk during meaningful translation, not during rotation
-        if abs(velocity) < min_lin:
-            forward_safe = True
-            urgency_score = 0.0
-        elif abs(angular_z) > max_ang:
-            forward_safe = True
-            urgency_score = 0.0
-        else:
-            vel_eff = abs(velocity) + eps
-            risk_forward = mag_center / vel_eff if vel_eff > 0 else (mag_center / eps if eps > 0 else 0.0)
-            forward_safe = risk_forward < threshold
-            urgency_score = min(1.0, risk_forward / threshold) if threshold > 0 else 0.0
-
-        asymmetry = mag_right - mag_left
-        if abs(asymmetry) < dead_zone:
-            safest_turn = 0
-        elif mag_left < mag_right:
-            safest_turn = -1
-        else:
-            safest_turn = 1
+        forward_safe, safest_turn, urgency_score = compute_risk_and_turn(
+            mag_left,
+            mag_center,
+            mag_right,
+            velocity,
+            angular_z,
+            threshold,
+            eps,
+            dead_zone,
+            min_lin,
+            max_ang,
+        )
 
         confidence = 1.0
         with self._lock:

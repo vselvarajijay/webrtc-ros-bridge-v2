@@ -9,6 +9,7 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header, Int32, String
 
+from connectx_robot_bridge.core.cmd_vel_mapping import twist_to_sdk_normalized
 from connectx_robot_bridge.core.config_manager import ConfigManager
 from connectx_robot_bridge.core.constants import (
     CAMERA_FRAME_ID,
@@ -22,8 +23,6 @@ from connectx_robot_bridge.core.constants import (
     DEFAULT_MAX_ANGULAR_SPEED,
     DEFAULT_MAX_LINEAR_SPEED,
     DEFAULT_TELEMETRY_PUBLISH_RATE,
-    MAX_VELOCITY,
-    MIN_VELOCITY,
     ROBOT_TELEMETRY_TOPIC,
     SDK_FRONT_ENDPOINT,
 )
@@ -55,19 +54,10 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) 
             robot.set_lamp(last_lamp_ref[0])
         
         # Convert ROS Twist to Frodobots SDK format
-        # ROS linear.x: forward/backward (m/s), angular.z: rotation (rad/s)
-        # Frodobots: linear: -1.0 to 1.0, angular: -1.0 to 1.0
         linear_x = msg.linear.x
         angular_z = msg.angular.z
-        
-        # Normalize to [-1.0, 1.0] range using max speeds
-        linear_normalized = (
-            max(MIN_VELOCITY, min(MAX_VELOCITY, linear_x / max_linear))
-            if max_linear > 0 else 0.0
-        )
-        angular_normalized = (
-            max(MIN_VELOCITY, min(MAX_VELOCITY, angular_z / max_angular))
-            if max_angular > 0 else 0.0
+        linear_normalized, angular_normalized = twist_to_sdk_normalized(
+            linear_x, angular_z, max_linear, max_angular
         )
         
         # Send continuous velocity command for smooth control (includes lamp via set_lamp above)

@@ -74,3 +74,6 @@ MY_ROBOT_API_KEY=your_api_key_here
 ```
 
 Copy `.env.example` to `.env` to see all available options.
+
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=vselvarajijay/connectX&machine=basicLinux32gb&location=EastUs)

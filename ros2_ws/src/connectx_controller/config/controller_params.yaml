@@ -1,0 +1,19 @@
+# ConnectX controller node parameters.
+# Tuning is file-based and reproducible when launched via connectx.launch.py.
+controller_node:
+  ros__parameters:
+    max_linear_speed: 0.5
+    max_angular_speed: 0.8
+    control_hz: 30
+    distance_tolerance_m: 0.02
+    angle_tolerance_deg: 2.0
+    step_timeout_s: 15.0
+    linear_p_gain: 0.8
+    angular_p_gain: 0.02
+    angular_i_gain: 0.001
+    angular_d_gain: 0.005
+    angular_integral_max: 15.0
+    default_linear_accel: 0.2
+    default_linear_decel: 0.2
+    default_angular_accel: 0.5
+    default_angular_decel: 0.5

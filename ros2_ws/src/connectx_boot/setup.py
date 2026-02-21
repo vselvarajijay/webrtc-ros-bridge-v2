@@ -17,10 +17,10 @@ setup(
     package_data={'': ['py.typed']},
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='root',
-    maintainer_email='root@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer='ConnectX',
+    maintainer_email='connectx@example.com',
+    description='ConnectX unified launch: perception, planner, and optional controller/bridge.',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',

@@ -1,0 +1,13 @@
+# ConnectX world model node parameters.
+# Interprets optical flow + velocity into navigation state.
+world_model_node:
+  ros__parameters:
+    risk_forward_threshold: 30.0
+    min_linear_velocity_for_risk: 0.05
+    max_angular_velocity_for_risk: 0.5
+    velocity_epsilon: 0.05
+    straight_dead_zone: 2.0
+    publish_hz: 25.0
+    optical_flow_topic: "/optical_flow"
+    robot_telemetry_topic: "/robot/telemetry"
+    navigation_state_topic: "/navigation_state"

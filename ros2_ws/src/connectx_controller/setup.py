@@ -1,3 +1,4 @@
+import os
 from setuptools import find_packages, setup
 
 package_name = 'connectx_controller'
@@ -10,13 +11,14 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'config'), ['config/controller_params.yaml']),
     ],
     package_data={'': ['py.typed']},
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='root',
-    maintainer_email='root@todo.todo',
-    description='TODO: Package description',
+    maintainer='ConnectX',
+    maintainer_email='connectx@example.com',
+    description='ConnectX controller: autonomy command execution and velocity control.',
     license='Apache-2.0',
     extras_require={
         'test': [

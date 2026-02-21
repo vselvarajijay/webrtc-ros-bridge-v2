@@ -30,10 +30,10 @@ setup(
         'PyYAML',
     ],
     zip_safe=True,
-    maintainer='root',
-    maintainer_email='root@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer='ConnectX',
+    maintainer_email='connectx@example.com',
+    description='ROS2 bridge for ConnectX robot: cmd_vel to robot control, camera feed, telemetry. Teleop/WebRTC nodes live in connectx_teleop.',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
