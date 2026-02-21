@@ -31,6 +31,7 @@ setup(
             'pytest',
         ],
     },
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'webrtc_node = connectx_teleop.nodes.webrtc_node:main',

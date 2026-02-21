@@ -28,6 +28,7 @@ setup(
             'pytest',
         ],
     },
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'wander_node = connectx_planner.nodes.wander_node:main',

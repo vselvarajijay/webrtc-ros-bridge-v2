@@ -100,8 +100,8 @@ cv::Mat FloorMaskNode::compute_floor_mask(const cv::Mat & img)
   int seed_width_start = static_cast<int>(w * (0.5 - seed_center_width_frac_ / 2.0));
   int seed_width_end = static_cast<int>(w * (0.5 + seed_center_width_frac_ / 2.0));
 
-  cv::Rect seed_rect(seed_width_start, seed_bottom_start, 
-                     seed_width_end - seed_width_start, h - seed_bottom_start);
+  cv::Rect seed_rect(seed_width_start, seed_bottom_start,
+    seed_width_end - seed_width_start, h - seed_bottom_start);
   if (seed_rect.width <= 0 || seed_rect.height <= 0) {
     seed_rect = cv::Rect(0, seed_bottom_start, w, h - seed_bottom_start);
   }
@@ -161,13 +161,13 @@ cv::Mat FloorMaskNode::compute_floor_mask(const cv::Mat & img)
   // Morphological operations
   if (enable_morphology_) {
     if (erode_kernel_ > 0) {
-      cv::Mat kernel_erode = cv::getStructuringElement(cv::MORPH_RECT, 
-                                                        cv::Size(erode_kernel_, erode_kernel_));
+      cv::Mat kernel_erode = cv::getStructuringElement(cv::MORPH_RECT,
+        cv::Size(erode_kernel_, erode_kernel_));
       cv::erode(mask, mask, kernel_erode);
     }
     if (dilate_kernel_ > 0) {
       cv::Mat kernel_dilate = cv::getStructuringElement(cv::MORPH_RECT,
-                                                         cv::Size(dilate_kernel_, dilate_kernel_));
+        cv::Size(dilate_kernel_, dilate_kernel_));
       cv::dilate(mask, mask, kernel_dilate);
     }
   }

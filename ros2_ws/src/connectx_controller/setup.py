@@ -25,6 +25,7 @@ setup(
             'pytest',
         ],
     },
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'controller_node = connectx_controller.nodes.controller_node:main',

@@ -51,7 +51,7 @@ jobs:
           source /opt/ros/humble/setup.bash
           cd ros2_ws
           source install/setup.bash
-          colcon test --event-handlers console_direct+
+          colcon test --event-handlers console_direct+ --python-testing pytest
         shell: bash
 
       - name: Test results

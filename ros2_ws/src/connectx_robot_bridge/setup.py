@@ -39,6 +39,7 @@ setup(
             'pytest',
         ],
     },
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'bridge_node = connectx_robot_bridge.nodes.bridge_node:main',

@@ -163,13 +163,13 @@ cv::Mat OpticalFlowNode::get_floor_mask(const std::pair<int, int> & flow_shape)
   // Normalize to 0-1 range and apply floor weight
   cv::Mat mask_normalized;
   mask.convertTo(mask_normalized, CV_64F, 1.0 / 255.0);
-  
+
   // Compute: final_weight = 1.0 - mask_normalized * (1.0 - floor_mask_weight_)
   cv::Mat scaled_mask;
   cv::multiply(mask_normalized, cv::Scalar(1.0 - floor_mask_weight_), scaled_mask, 1.0, CV_64F);
   cv::Mat final_weight;
   cv::subtract(cv::Scalar(1.0), scaled_mask, final_weight, cv::noArray(), CV_64F);
-  
+
   return final_weight;
 }
 
@@ -177,7 +177,7 @@ OpticalFlowNode::MeanFlowResult OpticalFlowNode::mean_flow(
   const cv::Mat & region, const cv::Mat & region_mask)
 {
   MeanFlowResult result{0.0f, 0.0f, 0.0f};
-  
+
   if (region.empty() || region.channels() != 2) {
     return result;
   }
@@ -186,7 +186,7 @@ OpticalFlowNode::MeanFlowResult OpticalFlowNode::mean_flow(
   cv::split(region, channels);
   cv::Mat vx_region = channels[0];
   cv::Mat vy_region = channels[1];
-  
+
   cv::Mat mag_region;
   cv::magnitude(vx_region, vy_region, mag_region);
 
@@ -199,19 +199,19 @@ OpticalFlowNode::MeanFlowResult OpticalFlowNode::mean_flow(
       cv::split(region_mask, mask_channels);
       weights = mask_channels[0];
     }
-    
+
     // Convert weights and flow regions to same type for multiplication
     cv::Mat vx_float, vy_float, mag_float, weights_float;
     vx_region.convertTo(vx_float, CV_64F);
     vy_region.convertTo(vy_float, CV_64F);
     mag_region.convertTo(mag_float, CV_64F);
     weights.convertTo(weights_float, CV_64F);
-    
+
     cv::Mat vx_weighted, vy_weighted, mag_weighted;
     cv::multiply(vx_float, weights_float, vx_weighted, 1.0, CV_64F);
     cv::multiply(vy_float, weights_float, vy_weighted, 1.0, CV_64F);
     cv::multiply(mag_float, weights_float, mag_weighted, 1.0, CV_64F);
-    
+
     double total_weight = cv::sum(weights_float)[0] + 1e-6;
     result.vx = static_cast<float>(cv::sum(vx_weighted)[0] / total_weight);
     result.vy = static_cast<float>(cv::sum(vy_weighted)[0] / total_weight);
@@ -249,7 +249,7 @@ cv::Mat OpticalFlowNode::flow_to_arrows_image(const cv::Mat & flow, int viz_w, i
       float vx_val = vx.at<float>(y, x);
       float vy_val = vy.at<float>(y, x);
       float mag = std::sqrt(vx_val * vx_val + vy_val * vy_val);
-      
+
       if (mag < 0.1f) {
         continue;
       }
@@ -258,7 +258,7 @@ cv::Mat OpticalFlowNode::flow_to_arrows_image(const cv::Mat & flow, int viz_w, i
       int y2 = static_cast<int>(std::round(y + vy_val * ARROW_SCALE));
       cv::Point pt1(x, y);
       cv::Point pt2(x2, y2);
-      
+
       cv::arrowedLine(out, pt1, pt2, ARROW_COLOR, ARROW_THICKNESS, 8, 0, ARROW_TIP_LENGTH);
     }
   }
@@ -353,7 +353,7 @@ void OpticalFlowNode::image_callback(const sensor_msgs::msg::CompressedImage::Sh
       cv::Mat mask_small;
       cv::compare(abs_channel, cv::Scalar(static_cast<float>(noise_floor_)), mask_small, cv::CMP_LT);
       channel.setTo(0.0f, mask_small);
-      
+
       // Cap magnitude: clip to [-flow_max_, flow_max_]
       cv::threshold(channel, channel, static_cast<float>(flow_max_), static_cast<float>(flow_max_), cv::THRESH_TRUNC);
       cv::Mat neg_mask;
@@ -395,14 +395,16 @@ void OpticalFlowNode::image_callback(const sensor_msgs::msg::CompressedImage::Sh
     cv::compare(brightness, cv::Scalar(230.0), glare_mask, cv::CMP_GT);
     cv::Mat glare_suppression;
     glare_mask.convertTo(glare_suppression, CV_64F, -0.8, 1.0);
-    
+
     if (mask_weights.channels() == 1) {
       cv::Mat mask_3ch;
       cv::merge(std::vector<cv::Mat>{mask_weights, mask_weights, mask_weights}, mask_3ch);
       mask_weights = mask_3ch;
     }
     cv::Mat glare_expanded;
-    cv::merge(std::vector<cv::Mat>{glare_suppression, glare_suppression, glare_suppression}, glare_expanded);
+    cv::merge(
+      std::vector<cv::Mat>{glare_suppression, glare_suppression, glare_suppression},
+      glare_expanded);
     // Ensure both are same type before multiply
     cv::Mat mask_weights_result;
     cv::multiply(mask_weights, glare_expanded, mask_weights_result, 1.0, CV_64F);
@@ -421,12 +423,14 @@ void OpticalFlowNode::image_callback(const sensor_msgs::msg::CompressedImage::Sh
       // Top band regions
       cv::Rect left_top_rect(0, middle_start_px, third, top_band_end_px - middle_start_px);
       cv::Rect center_top_rect(third, middle_start_px, third, top_band_end_px - middle_start_px);
-      cv::Rect right_top_rect(2 * third, middle_start_px, w - 2 * third, top_band_end_px - middle_start_px);
+      cv::Rect right_top_rect(2 * third, middle_start_px, w - 2 * third,
+        top_band_end_px - middle_start_px);
 
       // Mid band regions
       cv::Rect left_mid_rect(0, top_band_end_px, third, middle_end_px - top_band_end_px);
       cv::Rect center_mid_rect(third, top_band_end_px, third, middle_end_px - top_band_end_px);
-      cv::Rect right_mid_rect(2 * third, top_band_end_px, w - 2 * third, middle_end_px - top_band_end_px);
+      cv::Rect right_mid_rect(2 * third, top_band_end_px, w - 2 * third,
+        middle_end_px - top_band_end_px);
 
       cv::Mat left_top = flow(left_top_rect);
       cv::Mat center_top = flow(center_top_rect);
@@ -464,7 +468,8 @@ void OpticalFlowNode::image_callback(const sensor_msgs::msg::CompressedImage::Sh
     } else {
       cv::Rect left_rect(0, middle_start_px, third, middle_end_px - middle_start_px);
       cv::Rect center_rect(third, middle_start_px, third, middle_end_px - middle_start_px);
-      cv::Rect right_rect(2 * third, middle_start_px, w - 2 * third, middle_end_px - middle_start_px);
+      cv::Rect right_rect(2 * third, middle_start_px, w - 2 * third,
+        middle_end_px - middle_start_px);
 
       cv::Mat left = flow(left_rect);
       cv::Mat center = flow(center_rect);
