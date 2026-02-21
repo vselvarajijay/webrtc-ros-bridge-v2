@@ -1,0 +1,21 @@
+# LangGraph chat agent with Studio support
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Pin versions to match agents/uv.lock so create_react_agent(state_modifier=...) works
+RUN pip install --no-cache-dir \
+    "langgraph==1.0.9" \
+    "langchain-core>=1.2" \
+    "langchain-openai" \
+    "mcp>=1.26" \
+    "httpx" \
+    "langgraph-cli[inmem]"
+
+COPY agents/ .
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8123
+
+CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8123", "--no-browser"]

@@ -19,7 +19,7 @@ APP_PID_FILE="${SCRIPT_DIR}/.cli-app-server.pid"
 case "$cmd" in
   build)
     echo "Removing any existing containers that might conflict..."
-    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn 2>/dev/null || true
+    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     echo ""
     if [[ -f app/www/package.json ]]; then
@@ -71,13 +71,13 @@ case "$cmd" in
       rm -f "$APP_PID_FILE"
     fi
 
-    echo "Starting app (signaling + www), scout_turn, scout_sdk, scout_bridge, scout_perception..."
+    echo "Starting app (signaling + www), scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     else
-      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || \
-      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception
+      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     fi
     # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
     echo "Waiting for services to be ready..."
@@ -85,6 +85,10 @@ case "$cmd" in
     echo ""
     echo "App (signaling + www): http://localhost:8000/"
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
+    echo "ConnectX MCP server: http://localhost:8002/mcp"
+    echo "LangGraph Studio API: http://localhost:8123"
+    echo "  → Open LangGraph Studio (click to chat with the robot agent):"
+    echo "  https://smith.langchain.com/studio/?baseUrl=http://localhost:8123"
     echo ""
     echo "Foxglove Studio (ROS 2 visualization):"
     echo "  1. Open Foxglove Studio: https://app.foxglove.dev/  (or install the desktop app)"
@@ -115,8 +119,8 @@ case "$cmd" in
     fi
     ;;
   stop)
-    echo "Stopping app, scout_turn, scout_sdk, scout_bridge, scout_perception..."
-    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception
+    echo "Stopping app, scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
+    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
       if [[ -n "$pid" ]]; then
@@ -148,7 +152,7 @@ case "$cmd" in
     ;;
   rebuild)
     echo "=== Rebuild: Stopping services ==="
-    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || true
+    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || true
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
       if [[ -n "$pid" ]]; then
@@ -167,7 +171,7 @@ case "$cmd" in
     fi
     echo ""
     echo "=== Rebuild: Building Docker images and ROS 2 workspace ==="
-    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn 2>/dev/null || true
+    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     docker compose --profile webrtc run --rm scout_bridge bash -c \
@@ -185,11 +189,11 @@ case "$cmd" in
       fi
     fi
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     else
-      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception 2>/dev/null || \
-      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception
+      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     fi
     echo "Waiting for services to be ready..."
     sleep 5
@@ -198,6 +202,10 @@ case "$cmd" in
     echo ""
     echo "App (signaling + www): http://localhost:8000/"
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
+    echo "ConnectX MCP server: http://localhost:8002/mcp"
+    echo "LangGraph Studio API: http://localhost:8123"
+    echo "  → Open LangGraph Studio (click to chat with the robot agent):"
+    echo "  https://smith.langchain.com/studio/?baseUrl=http://localhost:8123"
     echo ""
     echo "Foxglove Studio (ROS 2 visualization):"
     echo "  1. Open Foxglove Studio: https://app.foxglove.dev/  (or install the desktop app)"
@@ -235,16 +243,22 @@ case "$cmd" in
       docker compose logs -f scout_perception
     elif [[ "$target" == "turn" ]]; then
       docker compose --profile webrtc logs -f scout_turn
+    elif [[ "$target" == "mcp" ]]; then
+      docker compose --profile webrtc logs -f connectx_mcp
+    elif [[ "$target" == "langgraph" ]]; then
+      docker compose --profile webrtc logs -f connectx_langgraph
     elif [[ "$target" == "all" ]]; then
-      docker compose --profile webrtc logs -f app scout_turn scout_sdk scout_bridge scout_perception
+      docker compose --profile webrtc logs -f app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     else
-      echo "Usage: $0 logs {webrtc|app|turn|sdk|bridge|perception|all}"
+      echo "Usage: $0 logs {webrtc|app|turn|sdk|bridge|perception|mcp|langgraph|all}"
       echo "  webrtc     Follow scout_bridge logs (WebRTC node runs there)"
       echo "  app        Follow app server (signaling + www) logs"
       echo "  turn       Follow scout_turn (TURN server) logs"
       echo "  sdk        Follow Earth Rovers SDK logs (front camera)"
       echo "  bridge     Follow scout_bridge logs"
       echo "  perception Follow scout_perception logs"
+      echo "  mcp        Follow connectx_mcp (MCP server) logs"
+      echo "  langgraph  Follow connectx_langgraph (LangGraph Studio) logs"
       echo "  all        Follow all container logs"
       exit 1
     fi
@@ -254,16 +268,17 @@ case "$cmd" in
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
-    echo "  start       Start App (signaling + www), TURN, Earth Rovers SDK, scout_bridge, scout_perception"
+    echo "  start       Start App (signaling + www), TURN, Earth Rovers SDK, scout_bridge, scout_perception,"
+    echo "               connectx_mcp (MCP server), connectx_langgraph (LangGraph Studio chat agent)"
     echo "               By default only containers start; drive from http://localhost:8000/ (no conflict with web UI)"
     echo "               Options: --teleop  Also run CLI keyboard teleop (don't use with web UI at same time)"
     echo "                        --xterm   Run teleop in a separate xterm window (implies --teleop)"
-    echo "  stop        Stop app, scout_turn, scout_sdk, scout_bridge, scout_perception, and any process on port 8000/8001"
+    echo "  stop        Stop all services including connectx_mcp and connectx_langgraph"
     echo "  rebuild     Stop services, rebuild Docker images and ROS 2 workspace, then start services"
     echo "  teleop      Run manual_controller + keyboard_node in scout_bridge (arrow key control)"
     echo "  test        Run all ROS 2 workspace tests (colcon test in scout_bridge container)"
     echo "  logs        Follow container logs. Run in another terminal while start is running."
-    echo "               $0 logs [webrtc|app|turn|sdk|bridge|perception|all]  (default: webrtc)"
+    echo "               $0 logs [webrtc|app|turn|sdk|bridge|perception|mcp|langgraph|all]  (default: webrtc)"
     echo "  clean       Remove orphaned containers (ros2-ws, ros2-kilted, etc.)"
     exit 1
     ;;

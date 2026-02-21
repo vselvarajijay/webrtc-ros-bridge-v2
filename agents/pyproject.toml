@@ -6,5 +6,8 @@ requires-python = ">=3.10"
 dependencies = [
     "langgraph",
     "langchain-core",
+    "langchain-openai",
     "mcp",
+    "httpx",
+    "langgraph-cli[inmem]",
 ]
