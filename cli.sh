@@ -22,6 +22,14 @@ case "$cmd" in
     docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     echo ""
+    if [[ -f app/www/package.json ]]; then
+      if command -v pnpm &>/dev/null; then
+        echo "Building React app (app/www) so the app image serves the latest UI..."
+        (cd app/www && pnpm build) || { echo "Warning: pnpm build failed; :8000 may serve an old or broken UI."; }
+      else
+        echo "Skipping React app build (pnpm not found). Run: cd app/www && pnpm build  then rebuild for latest UI."
+      fi
+    fi
     echo "Building Docker images (app, bridge, SDK, ...)..."
     # Try --remove-orphans, fall back if not supported
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
@@ -147,6 +155,15 @@ case "$cmd" in
         kill "$pid" 2>/dev/null || true
       fi
       rm -f "$APP_PID_FILE"
+    fi
+    echo ""
+    if [[ -f app/www/package.json ]]; then
+      if command -v pnpm &>/dev/null; then
+        echo "=== Rebuild: Building React app (app/www) ==="
+        (cd app/www && pnpm build) || { echo "Warning: pnpm build failed; :8000 may serve an old or broken UI."; }
+      else
+        echo "Skipping React app build (pnpm not found). Run: cd app/www && pnpm build  then rebuild for latest UI."
+      fi
     fi
     echo ""
     echo "=== Rebuild: Building Docker images and ROS 2 workspace ==="

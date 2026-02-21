@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from .ice_servers import get_ice_servers
 from .signaling import get_last_telemetry, handle_signaling_websocket
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 WWW_DIR = Path(__file__).resolve().parent.parent / "www"
+# Prefer built frontend (dist) when it has index.html; otherwise serve raw www
+_DIST_INDEX = WWW_DIR / "dist" / "index.html"
+STATIC_DIR = WWW_DIR / "dist" if _DIST_INDEX.is_file() else WWW_DIR
 
 # Optical flow visualization image (JPEG)
 _latest_optical_flow_image: Optional[bytes] = None
@@ -78,11 +82,17 @@ async def startup():
 
 @app.get("/")
 def read_root():
-    """Serve the browser client (WebRTC + telemetry)."""
-    index = WWW_DIR / "index.html"
-    if index.is_file():
-        return FileResponse(index)
-    return {"hello": "world"}
+    """Serve the React app (built from Vite). Prefer dist/index.html, fallback to www/index.html."""
+    # Prefer built React app so localhost:8000 shows the Vite app after `pnpm build`
+    for path in (_DIST_INDEX, WWW_DIR / "index.html"):
+        if path.is_file():
+            return FileResponse(path)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "React app not built. Run: pnpm build (in app/www), then restart the server.",
+        },
+    )
 
 
 @app.get("/favicon.ico")
@@ -352,3 +362,8 @@ def api_calibration_status():
 async def api_calibration_run():
     """Run calibration and save to robot/."""
     return _calibration_proxy("POST", "/calibration/run")
+
+
+# Serve static assets (JS, CSS, etc.) so that index.html can load /src/main.tsx or built /assets/*
+# Mount last so API and WebSocket routes take precedence.
+app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=False), name="www")

@@ -1,3 +1,14 @@
+# ConnectX Web UI
+
+React + TypeScript + Vite app with Mantine and Tailwind. The telemetry UI (video, optical flow, floor mask, drive controls) is refactored into React components.
+
+## Running the React app
+
+- **Development:** `pnpm dev` — runs the React app with HMR at the URL Vite prints (e.g. http://localhost:5173).
+- **At http://localhost:8000 (backend server):** Run `pnpm build` in `app/www`, then start the app server. The server serves the built React app from `dist/` at `/`; if `dist/index.html` is missing it returns a 503 with instructions to run `pnpm build`.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

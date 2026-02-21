@@ -317,3 +317,6 @@ models/DA3Metric-Large/
 
 
 robot/
+
+
+.pnpm-store
