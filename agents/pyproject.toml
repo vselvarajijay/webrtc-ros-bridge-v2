@@ -1,0 +1,10 @@
+[project]
+name = "connectx-agents"
+version = "0.1.0"
+description = "LangGraph agents that use the ConnectX MCP server for robot state and control"
+requires-python = ">=3.10"
+dependencies = [
+    "langgraph",
+    "langchain-core",
+    "mcp",
+]
