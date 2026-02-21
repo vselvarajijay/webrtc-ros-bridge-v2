@@ -419,6 +419,13 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
   );
 
   const eStop = useCallback(() => {
+    // Send autonomy stop so that if wander is active, it turns off and webrtc can publish (0,0)
+    const dc = dataChannelRef.current;
+    if (dc && dc.readyState === 'open') {
+      try {
+        dc.send(JSON.stringify({ command: 'wander_stop' }));
+      } catch (_) {}
+    }
     sendControl(0, 0);
   }, [sendControl]);
 

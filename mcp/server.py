@@ -104,4 +104,18 @@ async def send_velocity(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    import contextlib
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        async with mcp.session_manager.run():
+            yield
+
+    app = Starlette(
+        routes=[Mount("/mcp", mcp.streamable_http_app())],
+        lifespan=lifespan,
+    )
+    uvicorn.run(app, host="0.0.0.0", port=MCP_PORT)

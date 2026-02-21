@@ -8,7 +8,6 @@ RUN pip install --no-cache-dir \
     "langgraph==1.0.9" \
     "langchain-core>=1.2" \
     "langchain-openai" \
-    "mcp>=1.26" \
     "httpx" \
     "langgraph-cli[inmem]"
 

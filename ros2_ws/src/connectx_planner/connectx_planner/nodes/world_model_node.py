@@ -2,8 +2,9 @@
 """
 World model node: interprets optical flow + velocity into navigation state.
 
-Subscribes to /optical_flow (Float32MultiArray) and /robot/telemetry (JSON).
+Subscribes to /optical_flow (Float32MultiArray), /robot/telemetry (JSON), and /cmd_vel_target (for velocity fallback).
 Publishes /navigation_state (NavigationState: forward_safe, safest_turn, urgency_score, confidence).
+When telemetry speed is 0 or missing, uses commanded linear from cmd_vel_target so risk is still computed.
 
 Does not compute flow or send motor commands; perception and behavior stay in other nodes.
 """
@@ -13,11 +14,14 @@ import threading
 
 import rclpy
 from rclpy.node import Node
+from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
 from connectx_msgs.msg import NavigationState
 
 from connectx_planner.constants import (
+    CMD_VEL_TOPIC,
+    CMD_VEL_TARGET_TOPIC,
     OPTICAL_FLOW_TOPIC,
     ROBOT_TELEMETRY_TOPIC,
     NAVIGATION_STATE_TOPIC,
@@ -32,6 +36,8 @@ DEFAULT_RISK_FORWARD_THRESHOLD = 30.0
 DEFAULT_VELOCITY_EPSILON = 0.05
 DEFAULT_STRAIGHT_DEAD_ZONE = 2.0
 DEFAULT_PUBLISH_HZ = 25.0
+# When telemetry speed is 0, use this (m/s) for risk so obstacle mode can still trigger
+DEFAULT_FALLBACK_VELOCITY_FOR_RISK = 0.2
 
 
 def parse_speed_from_telemetry(json_str: str) -> float:
@@ -91,13 +97,14 @@ def compute_risk_and_turn(
         forward_safe = risk_forward < threshold
         urgency_score = min(1.0, risk_forward / threshold) if threshold > 0 else 0.0
 
+    # Turn towards furthest: side with lower flow magnitude = more open space.
     asymmetry = mag_right - mag_left
     if abs(asymmetry) < straight_dead_zone:
         safest_turn = 0
     elif mag_left < mag_right:
-        safest_turn = -1
+        safest_turn = -1  # left clearer → turn left
     else:
-        safest_turn = 1
+        safest_turn = 1   # right clearer → turn right
 
     return (forward_safe, safest_turn, urgency_score)
 
@@ -111,6 +118,7 @@ class WorldModelNode(Node):
         self._last_velocity_m_s: float = 0.0
         self._last_angular_z_rad_s: float = 0.0
         self._last_telemetry_stamp_ns: int | None = None
+        self._last_cmd_linear: float = 0.0
 
         self.declare_parameter("risk_forward_threshold", DEFAULT_RISK_FORWARD_THRESHOLD)
         self.declare_parameter("min_linear_velocity_for_risk", 0.05)
@@ -121,6 +129,9 @@ class WorldModelNode(Node):
         self.declare_parameter("optical_flow_topic", OPTICAL_FLOW_TOPIC)
         self.declare_parameter("robot_telemetry_topic", ROBOT_TELEMETRY_TOPIC)
         self.declare_parameter("navigation_state_topic", NAVIGATION_STATE_TOPIC)
+        self.declare_parameter(
+            "fallback_velocity_for_risk", DEFAULT_FALLBACK_VELOCITY_FOR_RISK
+        )
 
         opt_topic = self.get_parameter("optical_flow_topic").value
         tele_topic = self.get_parameter("robot_telemetry_topic").value
@@ -129,14 +140,20 @@ class WorldModelNode(Node):
         self._nav_pub = self.create_publisher(NavigationState, nav_topic, 10)
         self.create_subscription(Float32MultiArray, opt_topic, self._on_optical_flow, 10)
         self.create_subscription(String, tele_topic, self._on_telemetry, 10)
+        self.create_subscription(Twist, CMD_VEL_TARGET_TOPIC, self._on_cmd_linear, 10)
+        self.create_subscription(Twist, CMD_VEL_TOPIC, self._on_cmd_linear, 10)
 
         rate = self.get_parameter("publish_hz").value
         self._timer = self.create_timer(1.0 / rate, self._publish_state)
 
         self.get_logger().info(
-            "world_model_node: sub %s, %s; pub %s; %.1f Hz"
+            "world_model_node: sub %s, %s, cmd_vel; pub %s; %.1f Hz"
             % (opt_topic, tele_topic, nav_topic, rate)
         )
+
+    def _on_cmd_linear(self, msg: Twist) -> None:
+        with self._lock:
+            self._last_cmd_linear = float(msg.linear.x)
 
     def _on_optical_flow(self, msg: Float32MultiArray) -> None:
         if len(msg.data) < 9:
@@ -170,8 +187,18 @@ class WorldModelNode(Node):
     def _publish_state(self) -> None:
         mags = self._get_mags()
         with self._lock:
-            velocity = self._last_velocity_m_s
+            telemetry_velocity = self._last_velocity_m_s
             angular_z = self._last_angular_z_rad_s
+            cmd_linear = self._last_cmd_linear
+        min_lin = self.get_parameter("min_linear_velocity_for_risk").value
+        fallback = self.get_parameter("fallback_velocity_for_risk").value
+        # Use telemetry speed when valid; else commanded linear; else nominal fallback so risk is still computed
+        if abs(telemetry_velocity) >= min_lin:
+            velocity = telemetry_velocity
+        elif abs(cmd_linear) >= min_lin:
+            velocity = cmd_linear
+        else:
+            velocity = fallback
         if mags is None:
             out = NavigationState()
             out.header.stamp = self.get_clock().now().to_msg()

@@ -3,11 +3,10 @@
 Wander planner: converts navigation state into velocity commands.
 
 Subscribes to /navigation_state and /autonomy/command.
-Publishes to /cmd_vel when wander is enabled (UI "Start wandering"), and to /cmd_vel_target.
-When "Stop wandering" is clicked, publishes zero to /cmd_vel so the robot stops.
+When wander is enabled (e.g. UI "Start wandering"), continuously publishes to /cmd_vel
+and /cmd_vel_target so the robot keeps moving. Runs until it receives another command
+(e.g. "stop" or manual drive); only then does it publish zero and yield /cmd_vel.
 """
-
-import random
 
 import rclpy
 from rclpy.node import Node
@@ -33,6 +32,10 @@ DEFAULT_HYSTERESIS_URGENCY_CLEAR = 0.9
 DEFAULT_TURN_TIMEOUT_FRAMES = 75  # ~3 s at 25 Hz
 DEFAULT_CREEP_SPEED = 0.05
 DEFAULT_ESCAPE_PULSE_FRAMES = 8
+DEFAULT_LOW_CONFIDENCE_GRACE_TICKS = 15  # ~0.6 s at 25 Hz; hold last cmd during brief flow dropouts
+DEFAULT_OUTPUT_SMOOTHING_ALPHA = 0.7  # 0=no smoothing, higher=smoother (EMA of published cmd)
+DEFAULT_FORWARD_STEER_TOWARD_FURTHEST = 0.4  # rad/s; steer toward clearest side (safest_turn) while going forward
+DEFAULT_TURN_LINEAR_FRACTION = 0.6  # fraction of forward_speed to keep while turning (avoid stop-and-turn)
 
 
 def compute_wander_twist(
@@ -50,13 +53,17 @@ def compute_wander_twist(
     creep_speed: float,
     escape_pulse_frames: int,
     wander_bias_limit: float,
+    forward_steer_toward_furthest: float,
+    turn_linear_fraction: float,
 ) -> tuple[float, float, bool, int, int]:
     """Compute twist (linear_x, angular_z) and next internal state from current state.
     Returns (linear_x, angular_z, next_was_forward_safe, next_turning_frames, next_escape_pulse_remaining).
     Pure function for testing and use by WanderPlanner._tick (wander_bias is updated by caller with random)."""
     if state.confidence < confidence_threshold:
+        # Never stop: keep moving at turn_linear while turning in place (low conf).
+        min_linear = forward_speed * turn_linear_fraction
         return (
-            0.0,
+            min_linear,
             low_confidence_angular,
             was_forward_safe,
             0,
@@ -66,32 +73,41 @@ def compute_wander_twist(
     if escape_pulse_remaining > 0:
         next_remaining = escape_pulse_remaining - 1
         next_turning = 0 if next_remaining == 0 else turning_frames
-        return (creep_speed, 0.0, was_forward_safe, next_turning, next_remaining)
+        turn_linear = forward_speed * turn_linear_fraction
+        return (turn_linear, 0.0, was_forward_safe, next_turning, next_remaining)
 
+    # Hysteresis only for clearing: enter turn as soon as path is unsafe (forward_safe=False).
+    # Return to forward only when path is clear AND urgency is below threshold (avoids
+    # oscillating on a single noisy safe frame, e.g. on carpet).
     next_was = was_forward_safe
     next_turning = turning_frames
-    if state.forward_safe:
+    if state.forward_safe and state.urgency_score < hysteresis_urgency_clear:
         next_was = True
         next_turning = 0
-    elif state.urgency_score > hysteresis_urgency_clear:
-        next_was = False
+    elif not state.forward_safe:
+        next_was = False  # enter turn immediately when path is unsafe
 
     forward_allowed = next_was
 
     if forward_allowed:
-        clamped_bias = max(
-            -wander_bias_limit,
-            min(wander_bias_limit, wander_bias),
+        # Go toward longest distance (furthest): steer only by safest_turn (direction of lowest flow = most open). No random wander.
+        angular_z = float(state.safest_turn) * forward_steer_toward_furthest
+        angular_z = max(
+            -forward_steer_toward_furthest,
+            min(forward_steer_toward_furthest, angular_z),
         )
-        return (forward_speed, clamped_bias, next_was, 0, 0)
+        return (forward_speed, angular_z, next_was, 0, 0)
 
     next_turning = turning_frames + 1
-    if next_turning >= turn_timeout_frames:
-        return (creep_speed, 0.0, next_was, next_turning, escape_pulse_frames)
+    # Keep moving while turning: use a fraction of forward_speed, never stop-and-turn.
+    turn_linear = forward_speed * turn_linear_fraction
     turn_dir = float(state.safest_turn)
     urgency = max(0.0, min(1.0, state.urgency_score))
-    angular = turn_dir * (base_turn_speed * (0.5 + urgency))
-    return (creep_speed, angular, next_was, next_turning, 0)
+    # Turn very strong when obstacles nearby: turn_mult 1.0 to 3.0 (urgency scales aggressively).
+    turn_mult = 1.0 + 2.0 * urgency
+    angular = turn_dir * (base_turn_speed * turn_mult)
+    # No escape pulse: keep turning (no pause). If we hit timeout, same command.
+    return (turn_linear, angular, next_was, next_turning, 0)
 
 
 class WanderPlanner(Node):
@@ -107,6 +123,9 @@ class WanderPlanner(Node):
         self._wander_enabled = False
         self._stop_sent_count = 0  # publish zero this many ticks after "stop" then leave /cmd_vel to others
         self._no_state_warn_count = 0
+        self._low_conf_ticks = 0  # consecutive ticks with confidence < threshold
+        self._last_linear = 0.0
+        self._last_angular = 0.0
 
         self.declare_parameter("forward_speed", DEFAULT_FORWARD_SPEED)
         self.declare_parameter("base_turn_speed", DEFAULT_BASE_TURN_SPEED)
@@ -121,6 +140,18 @@ class WanderPlanner(Node):
         self.declare_parameter("turn_timeout_frames", DEFAULT_TURN_TIMEOUT_FRAMES)
         self.declare_parameter("creep_speed", DEFAULT_CREEP_SPEED)
         self.declare_parameter("escape_pulse_frames", DEFAULT_ESCAPE_PULSE_FRAMES)
+        self.declare_parameter(
+            "low_confidence_grace_ticks", DEFAULT_LOW_CONFIDENCE_GRACE_TICKS
+        )
+        self.declare_parameter(
+            "output_smoothing_alpha", DEFAULT_OUTPUT_SMOOTHING_ALPHA
+        )
+        self.declare_parameter(
+            "forward_steer_toward_furthest", DEFAULT_FORWARD_STEER_TOWARD_FURTHEST
+        )
+        self.declare_parameter(
+            "turn_linear_fraction", DEFAULT_TURN_LINEAR_FRACTION
+        )
         self.declare_parameter("debug_log_interval", 50)  # log every N ticks (~2 s at 25 Hz)
 
         self._forward_speed = self.get_parameter("forward_speed").value
@@ -135,6 +166,18 @@ class WanderPlanner(Node):
         self._turn_timeout_frames = self.get_parameter("turn_timeout_frames").value
         self._creep_speed = self.get_parameter("creep_speed").value
         self._escape_pulse_frames = self.get_parameter("escape_pulse_frames").value
+        self._low_conf_grace_ticks = self.get_parameter(
+            "low_confidence_grace_ticks"
+        ).value
+        self._output_smoothing_alpha = self.get_parameter(
+            "output_smoothing_alpha"
+        ).value
+        self._forward_steer_toward_furthest = self.get_parameter(
+            "forward_steer_toward_furthest"
+        ).value
+        self._turn_linear_fraction = self.get_parameter(
+            "turn_linear_fraction"
+        ).value
         self._debug_log_interval = self.get_parameter("debug_log_interval").value
 
         self.create_subscription(
@@ -200,19 +243,62 @@ class WanderPlanner(Node):
                 self._stop_sent_count -= 1
             return
 
+        # No navigation state yet or temporarily missing: keep moving with last command
+        # (or default forward) so wander never stops until we get an explicit "stop" command.
         if self._last_state is None:
             self._no_state_warn_count += 1
             if self._no_state_warn_count == 1 or self._no_state_warn_count % 50 == 0:
                 self.get_logger().warn(
                     "Wander enabled but no /navigation_state yet; is world_model_node running?"
                 )
-            zero = Twist()
-            zero.linear.x = 0.0
-            zero.angular.z = 0.0
-            self._cmd_vel_pub.publish(zero)
+            cmd_linear = (
+                self._last_linear
+                if abs(self._last_linear) > 1e-6 or abs(self._last_angular) > 1e-6
+                else self._forward_speed
+            )
+            cmd_linear = max(self._forward_speed * 0.3, cmd_linear)
+            cmd_angular = self._last_angular if abs(self._last_angular) > 1e-6 else 0.0
+            self._last_linear = cmd_linear
+            self._last_angular = cmd_angular
+            cmd = Twist()
+            cmd.linear.x = cmd_linear
+            cmd.angular.z = cmd_angular
+            self._cmd_target_pub.publish(cmd)
+            self._cmd_vel_pub.publish(cmd)
             return
 
         state = self._last_state
+
+        # When confidence is low (e.g. optical flow dropout), hold last command for a
+        # grace period; after that keep moving at last or reduced speed so wander never stops.
+        if state.confidence < self._confidence_threshold:
+            self._low_conf_ticks += 1
+            if (
+                self._low_conf_ticks <= self._low_conf_grace_ticks
+                and (abs(self._last_linear) > 1e-6 or abs(self._last_angular) > 1e-6)
+            ):
+                cmd_linear = max(self._forward_speed * 0.3, self._last_linear)
+                cmd_angular = self._last_angular
+            else:
+                # Beyond grace: keep moving (never full stop). Use last linear or turn_linear.
+                cmd_linear = (
+                    max(self._forward_speed * 0.3, self._last_linear)
+                    if self._last_linear > 1e-6
+                    else self._forward_speed * self._turn_linear_fraction
+                )
+                cmd_angular = self._low_conf_angular
+            cmd_linear = max(self._forward_speed * 0.3, cmd_linear)
+            self._last_linear = cmd_linear
+            self._last_angular = cmd_angular
+            cmd = Twist()
+            cmd.linear.x = cmd_linear
+            cmd.angular.z = cmd_angular
+            self._cmd_target_pub.publish(cmd)
+            self._cmd_vel_pub.publish(cmd)
+            return
+
+        self._low_conf_ticks = 0
+
         linear_x, angular_z, next_was, next_turning, next_escape = compute_wander_twist(
             state,
             self._was_forward_safe,
@@ -228,27 +314,28 @@ class WanderPlanner(Node):
             self._creep_speed,
             self._escape_pulse_frames,
             self._wander_bias_limit,
+            self._forward_steer_toward_furthest,
+            self._turn_linear_fraction,
         )
         self._was_forward_safe = next_was
         self._turning_frames = next_turning
         self._escape_pulse_remaining = next_escape
 
-        if (
-            state.confidence >= self._confidence_threshold
-            and next_escape == 0
-            and next_was
-        ):
-            self._wander_bias += random.uniform(
-                -self._wander_bias_step, self._wander_bias_step
-            )
-            self._wander_bias = max(
-                -self._wander_bias_limit,
-                min(self._wander_bias_limit, self._wander_bias),
-            )
+        # No random wander bias: we steer only toward furthest (safest_turn from world model).
+
+        # Smooth published velocity so motion is less jerky
+        alpha = self._output_smoothing_alpha
+        cmd_linear = alpha * self._last_linear + (1.0 - alpha) * linear_x
+        cmd_angular = alpha * self._last_angular + (1.0 - alpha) * angular_z
+        # Never stop moving forward: enforce minimum linear when wander is on.
+        min_linear = self._forward_speed * 0.3
+        cmd_linear = max(min_linear, cmd_linear)
+        self._last_linear = cmd_linear
+        self._last_angular = cmd_angular
 
         cmd = Twist()
-        cmd.linear.x = linear_x
-        cmd.angular.z = angular_z
+        cmd.linear.x = cmd_linear
+        cmd.angular.z = cmd_angular
 
         if self._debug_log_interval > 0:
             self._debug_tick += 1

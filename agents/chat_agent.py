@@ -1,10 +1,10 @@
-"""ConnectX chat agent: a LangGraph ReAct agent that uses the ConnectX MCP server
-to query robot state and send velocity commands.
+"""ConnectX chat agent: a LangGraph ReAct agent that queries robot state and
+sends velocity commands via the ConnectX app HTTP API.
 
 Exported: graph  (consumed by LangGraph Studio via langgraph.json)
 
 Environment variables:
-  MCP_SERVER_URL  – URL of the ConnectX MCP server (default: http://connectx_mcp:8002/mcp)
+  APP_URL         – ConnectX app base URL (default: http://app:8000 in Docker)
   OPENAI_API_KEY  – OpenAI API key for the LLM
   LLM_MODEL       – OpenAI model name (default: gpt-4o-mini)
 """
@@ -12,36 +12,30 @@ Environment variables:
 import inspect
 import os
 
-import mcp.types as mcp_types
+import httpx
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
 
-MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://connectx_mcp:8002/mcp")
+APP_URL = os.environ.get("APP_URL", "http://app:8000").rstrip("/")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
-
-
-async def _call_mcp(tool_name: str, arguments: dict) -> str:
-    """Open a single-use MCP session, call tool_name, and return the text result."""
-    async with streamable_http_client(MCP_SERVER_URL) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool(tool_name, arguments=arguments)
-            parts = [
-                c.text
-                for c in result.content
-                if isinstance(c, mcp_types.TextContent)
-            ]
-            return "\n".join(parts) if parts else str(result)
 
 
 @tool
 async def get_robot_state() -> str:
     """Get the latest ConnectX robot telemetry: battery, speed, GPS, orientation, IMU."""
-    return await _call_mcp("get_robot_state", {})
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(f"{APP_URL}/data")
+            r.raise_for_status()
+            return r.text
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 503:
+            return "Robot not connected. Ensure the ConnectX bridge is running and the robot has connected via signaling."
+        return f"HTTP error {e.response.status_code}: {e.response.text}"
+    except httpx.RequestError as e:
+        return f"Could not reach ConnectX app at {APP_URL}: {e}"
 
 
 @tool
@@ -52,7 +46,19 @@ async def send_velocity(linear_x: float = 0.0, angular_z: float = 0.0) -> str:
         linear_x: Forward (+) or backward (-) speed in m/s. Range: -1.0 to 1.0.
         angular_z: Turn left (+) or right (-) in rad/s. Range: -1.0 to 1.0.
     """
-    return await _call_mcp("send_velocity", {"linear_x": linear_x, "angular_z": angular_z})
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post(
+                f"{APP_URL}/api/control",
+                json={"linear_x": linear_x, "angular_z": angular_z},
+            )
+            if r.status_code == 200:
+                return f"Sent velocity linear_x={linear_x} angular_z={angular_z}"
+            if r.status_code == 503:
+                return "Robot not connected. Connect the robot via ConnectX signaling first."
+            return f"HTTP error {r.status_code}: {r.text}"
+    except httpx.RequestError as e:
+        return f"Could not reach ConnectX app at {APP_URL}: {e}"
 
 
 _llm = ChatOpenAI(model=LLM_MODEL)

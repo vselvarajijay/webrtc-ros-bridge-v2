@@ -1,16 +1,25 @@
 # ConnectX wander planner parameters.
 # Converts navigation state into velocity commands.
+# base_turn_speed: rad/s when avoiding; turn direction = towards furthest (lowest flow) from world model.
+# forward_steer_toward_furthest: rad/s to steer toward clearest side (safest_turn) while going forward.
+# turn_linear_fraction: fraction of forward_speed to keep while turning (avoid stop-and-turn); turn faster when urgency high.
 wander_planner:
   ros__parameters:
     forward_speed: 0.25
-    base_turn_speed: 0.6
+    base_turn_speed: 4.5
+    forward_steer_toward_furthest: 0.4
+    turn_linear_fraction: 0.6
     low_confidence_angular: 0.3
     wander_bias_step: 0.02
     wander_bias_limit: 0.2
     tick_hz: 25.0
     confidence_threshold: 0.5
-    hysteresis_urgency_clear: 0.9
+    hysteresis_urgency_clear: 0.55
     turn_timeout_frames: 75
-    creep_speed: 0.05
+    creep_speed: 0.12
     escape_pulse_frames: 8
+    # Hold last cmd for this many ticks when confidence drops; then keep moving at reduced speed
+    low_confidence_grace_ticks: 40
+    # Output smoothing: 0=none, higher=smoother motion (EMA alpha)
+    output_smoothing_alpha: 0.6
     debug_log_interval: 50

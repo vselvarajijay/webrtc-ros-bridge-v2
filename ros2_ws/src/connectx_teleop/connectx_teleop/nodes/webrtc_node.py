@@ -328,8 +328,10 @@ def run_ros_node(
     image_format: str,
     stop_event: threading.Event,
     last_flow_ref: list,
+    wander_mode_ref: list,
 ) -> None:
-    """Run rclpy node. Drains control_queue of (twist, lamp) and autonomy_command_queue of command strings."""
+    """Run rclpy node. Drains control_queue of (twist, lamp) and autonomy_command_queue of command strings.
+    When wander_mode_ref[0] is True (wander active), do not publish to /cmd_vel so wander_planner is the sole source."""
     rclpy.init()
     node = Node("webrtc_node")
     cmd_pub = node.create_publisher(Twist, CMD_VEL_TOPIC, 10)
@@ -484,37 +486,55 @@ def run_ros_node(
         if now - last_drain >= dt:
             last_drain = now
             published_this_cycle = False
-            try:
-                # Drain control queue: each item is (twist, lamp) so state is passed together
-                while True:
-                    item = control_queue.get_nowait()
-                    try:
-                        twist, lamp = item
-                        last_twist_ref[0] = twist
-                        last_lamp_published[0] = int(lamp) if lamp else 0
-                        lamp_pub.publish(Int32(data=last_lamp_published[0]))
-                        cmd_pub.publish(twist)
-                        published_this_cycle = True
-                    except (TypeError, ValueError) as e:
-                        LOG.warning("Control queue item invalid (twist, lamp): %s", e)
-            except queue.Empty:
-                pass
-            except Exception as e:
-                LOG.warning("Control drain error (continuing): %s", e)
-            # Repeat last twist at drain rate when queue empty so robot gets steady 50 Hz stream
-            if not published_this_cycle and last_twist_ref[0] is not None:
-                lamp_pub.publish(Int32(data=last_lamp_published[0]))
-                cmd_pub.publish(last_twist_ref[0])
+            # Drain autonomy command first so we know current mode before publishing cmd_vel
             try:
                 while True:
                     cmd = autonomy_command_queue.get_nowait()
                     if cmd and isinstance(cmd, str) and cmd.strip():
+                        raw = cmd.strip().lower()
                         autonomy_pub.publish(String(data=cmd.strip()))
                         LOG.info("Published autonomy command: %r", cmd.strip())
+                        is_wander = raw == "wander" or raw.startswith("wander ")
+                        wander_mode_ref[0] = is_wander
+                        if is_wander:
+                            # Clear last twist so when we exit wander the first webrtc publish is zero
+                            zero_twist = Twist()
+                            zero_twist.linear.x = 0.0
+                            zero_twist.angular.z = 0.0
+                            last_twist_ref[0] = zero_twist
             except queue.Empty:
                 pass
             except Exception as e:
                 LOG.warning("Autonomy command drain error (continuing): %s", e)
+            # When wander is active, do not publish to /cmd_vel; wander_planner is the sole source.
+            if wander_mode_ref[0]:
+                try:
+                    while True:
+                        control_queue.get_nowait()
+                except queue.Empty:
+                    pass
+            else:
+                try:
+                    # Drain control queue: each item is (twist, lamp) so state is passed together
+                    while True:
+                        item = control_queue.get_nowait()
+                        try:
+                            twist, lamp = item
+                            last_twist_ref[0] = twist
+                            last_lamp_published[0] = int(lamp) if lamp else 0
+                            lamp_pub.publish(Int32(data=last_lamp_published[0]))
+                            cmd_pub.publish(twist)
+                            published_this_cycle = True
+                        except (TypeError, ValueError) as e:
+                            LOG.warning("Control queue item invalid (twist, lamp): %s", e)
+                except queue.Empty:
+                    pass
+                except Exception as e:
+                    LOG.warning("Control drain error (continuing): %s", e)
+                # Repeat last twist at drain rate when queue empty so robot gets steady 50 Hz stream
+                if not published_this_cycle and last_twist_ref[0] is not None:
+                    lamp_pub.publish(Int32(data=last_lamp_published[0]))
+                    cmd_pub.publish(last_twist_ref[0])
 
     try:
         node.destroy_node()
@@ -742,8 +762,14 @@ async def run_signaling_and_webrtc(
                                             data = json.loads(message)
                                             cmd_str = data.get("command")
                                             if isinstance(cmd_str, str) and cmd_str.strip():
+                                                raw = cmd_str.strip().lower()
+                                                # Map UI commands to ROS autonomy topic format (wander_node expects "wander" / "stop")
+                                                if raw == "wander_start":
+                                                    cmd_str = "wander"
+                                                elif raw == "wander_stop":
+                                                    cmd_str = "stop"
                                                 try:
-                                                    autonomy_command_queue.put_nowait(cmd_str.strip())
+                                                    autonomy_command_queue.put_nowait(cmd_str)
                                                 except queue.Full:
                                                     pass
                                                 return
@@ -835,10 +861,11 @@ def main(args=None) -> None:
     autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()
     last_flow_ref: list = [None]
+    wander_mode_ref: list = [False]
 
     ros_thread = threading.Thread(
         target=run_ros_node,
-        args=(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, image_format, stop, last_flow_ref),
+        args=(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, image_format, stop, last_flow_ref, wander_mode_ref),
         daemon=True,
     )
     ros_thread.start()
