@@ -2,7 +2,13 @@ import { Box, Card, Text } from '@mantine/core';
 import { useWebRTC } from '@/context/WebRTCContext';
 
 export function LiveViewWithHUD() {
-  const { videoRef, pipelineState, telemetry } = useWebRTC();
+  const { videoRef, pipelineState, telemetry, connectionDebug } = useWebRTC();
+
+  const isConnected = connectionDebug.conn === 'connected';
+  const battery =
+    telemetry?.battery != null && Number.isFinite(telemetry.battery)
+      ? Math.round(Number(telemetry.battery))
+      : null;
 
   const speed =
     telemetry?.speed != null && Number.isFinite(telemetry.speed)
@@ -72,8 +78,21 @@ export function LiveViewWithHUD() {
         <Box style={{ ...hudStyle, top: 8, right: 8 }}>
           Heading: {heading}°
         </Box>
+        <Box style={{ ...hudStyle, top: 32, left: 8 }}>
+          Battery: {battery != null ? `${battery}%` : '—'}
+        </Box>
         <Box style={{ ...hudStyle, bottom: 8, right: 8 }}>
           Signal: {signal}
+        </Box>
+        <Box style={{ ...hudStyle, bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Box
+            className="size-2 rounded-full shrink-0"
+            style={{
+              backgroundColor: isConnected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-5)',
+            }}
+            aria-hidden
+          />
+          {isConnected ? 'connected' : connectionDebug.conn}
         </Box>
       </Box>
     </Card>

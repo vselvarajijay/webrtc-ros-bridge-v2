@@ -11,7 +11,6 @@ export function LiveVideoView() {
       <Box
         className="relative rounded overflow-hidden min-h-[200px] flex items-center justify-center"
         style={{ backgroundColor: 'var(--mantine-color-dark-9)', aspectRatio: '4/3' }}
-        style={{ aspectRatio: '4/3' }}
       >
         <video
           ref={videoRef}

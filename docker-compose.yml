@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
+      args:
+        CACHEBUST: ${CACHEBUST:-0}
     image: webrtc-ros-bridge-v2-app
     container_name: scout_app
     ports:

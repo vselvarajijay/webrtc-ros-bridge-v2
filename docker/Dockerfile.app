@@ -7,7 +7,11 @@ WORKDIR /app
 COPY app/server/pyproject.toml .
 RUN pip install --no-cache-dir fastapi>=0.129.0 "uvicorn[standard]>=0.41.0"
 
-# Copy app code
+# Cache-bust so rebuilds get a fresh COPY of app/ (set from cli.sh rebuild)
+ARG CACHEBUST=0
+RUN echo "App build at: ${CACHEBUST}"
+
+# Copy app code (server + built www/dist from host pnpm build)
 COPY app/ /app/app/
 
 ENV PYTHONPATH=/app

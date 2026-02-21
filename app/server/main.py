@@ -11,8 +11,32 @@ from typing import Optional
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-
 from .ice_servers import get_ice_servers
+
+# Script extensions that must be served as application/javascript for module scripts
+_JS_MIME_EXTENSIONS = frozenset({".js", ".mjs", ".ts", ".tsx", ".jsx"})
+
+
+class StaticFilesWithJsMime(StaticFiles):
+    """Serve static files with correct MIME type for JS/TS module scripts (avoids text/plain)."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        from starlette.responses import FileResponse as StarletteFileResponse
+
+        suffix = Path(full_path).suffix.lower()
+        media_type = "application/javascript" if suffix in _JS_MIME_EXTENSIONS else None
+        response = StarletteFileResponse(
+            full_path, status_code=status_code, stat_result=stat_result, media_type=media_type
+        )
+        from starlette.datastructures import Headers
+        from starlette.staticfiles import NotModifiedResponse
+
+        request_headers = Headers(scope=scope)
+        if self.is_not_modified(response.headers, request_headers):
+            return NotModifiedResponse(response.headers)
+        return response
+
+
 from .signaling import get_last_telemetry, handle_signaling_websocket, send_control_to_robot
 
 logging.basicConfig(level=logging.INFO)
@@ -388,4 +412,5 @@ async def api_calibration_run():
 
 # Serve static assets (JS, CSS, etc.) so that index.html can load /src/main.tsx or built /assets/*
 # Mount last so API and WebSocket routes take precedence.
-app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=False), name="www")
+# Use StaticFilesWithJsMime so .js/.ts/.tsx are served as application/javascript (avoids MIME type error).
+app.mount("/", StaticFilesWithJsMime(directory=str(STATIC_DIR), html=False), name="www")

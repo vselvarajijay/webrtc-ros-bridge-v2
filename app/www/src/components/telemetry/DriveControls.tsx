@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Button, Slider, Stack, Text } from '@mantine/core';
+import { Box, Button, SegmentedControl, Slider, Stack, Text } from '@mantine/core';
 import { useWebRTC } from '@/context/WebRTCContext';
 
 const LINEAR_VEL = 0.8;
@@ -19,7 +19,7 @@ const GRID_BUTTONS: { linear: number; angular: number; label: string }[] = [
 ];
 
 export function DriveControls() {
-  const { sendControl, sendWander, commandsReady, driveMode } = useWebRTC();
+  const { sendControl, sendWander, commandsReady, driveMode, setDriveMode, eStop } = useWebRTC();
   const [speedLevel, setSpeedLevel] = useState(3);
   const [direction, setDirection] = useState<{ linear: number; angular: number }>({ linear: 0, angular: 0 });
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
@@ -129,9 +129,26 @@ export function DriveControls() {
 
   return (
     <Stack gap="md" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-      <Text size="xs" c="dimmed">
-        Commands: {commandsReady ? 'connected' : 'connecting…'}
-      </Text>
+      <SegmentedControl
+        value={driveMode}
+        onChange={(v) => setDriveMode(v as 'teleop' | 'autonomous')}
+        data={[
+          { label: 'Teleop', value: 'teleop' },
+          { label: 'Autonomous', value: 'autonomous' },
+        ]}
+        size="sm"
+        fullWidth
+      />
+      <Button
+        color="red"
+        variant="filled"
+        size="md"
+        onClick={eStop}
+        aria-label="Emergency stop"
+        style={{ width: '100%' }}
+      >
+        E-STOP
+      </Button>
 
       {/* Speed always visible */}
       <Stack gap="xs">

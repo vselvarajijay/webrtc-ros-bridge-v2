@@ -23,11 +23,17 @@ case "$cmd" in
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     echo ""
     if [[ -f app/www/package.json ]]; then
+      echo "Cleaning React build output for a full rebuild..."
+      rm -rf app/www/dist
+      rm -rf app/www/node_modules/.vite
       if command -v pnpm &>/dev/null; then
         echo "Building React app (app/www) so the app image serves the latest UI..."
-        (cd app/www && pnpm build) || { echo "Warning: pnpm build failed; :8000 may serve an old or broken UI."; }
+        (cd app/www && pnpm install && pnpm build) || { echo "Warning: pnpm build failed; :8000 may serve an old or broken UI."; }
+      elif command -v npm &>/dev/null; then
+        echo "Building React app (app/www) with npm..."
+        (cd app/www && npm ci && npm run build) || { echo "Warning: npm run build failed; :8000 may serve an old or broken UI."; }
       else
-        echo "Skipping React app build (pnpm not found). Run: cd app/www && pnpm build  then rebuild for latest UI."
+        echo "Skipping React app build (pnpm/npm not found). Run: cd app/www && pnpm build  then rebuild for latest UI."
       fi
     fi
     echo "Building Docker images (app, bridge, SDK, ...)..."
@@ -162,22 +168,29 @@ case "$cmd" in
     fi
     echo ""
     if [[ -f app/www/package.json ]]; then
+      echo "=== Rebuild: Cleaning React build for full Vite rebuild ==="
+      rm -rf app/www/dist
+      rm -rf app/www/node_modules/.vite
       if command -v pnpm &>/dev/null; then
         echo "=== Rebuild: Building React app (app/www) ==="
-        (cd app/www && pnpm build) || { echo "Warning: pnpm build failed; :8000 may serve an old or broken UI."; }
+        (cd app/www && pnpm install && pnpm build) || { echo "Warning: pnpm build failed; :8000 may serve an old or broken UI."; }
+      elif command -v npm &>/dev/null; then
+        echo "=== Rebuild: Building React app (app/www) with npm ==="
+        (cd app/www && npm ci && npm run build) || { echo "Warning: npm run build failed; :8000 may serve an old or broken UI."; }
       else
-        echo "Skipping React app build (pnpm not found). Run: cd app/www && pnpm build  then rebuild for latest UI."
+        echo "Skipping React app build (pnpm/npm not found). Run: cd app/www && pnpm build  then rebuild for latest UI."
       fi
     fi
     echo ""
     echo "=== Rebuild: Building Docker images and ROS 2 workspace ==="
     docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
+    export CACHEBUST="${CACHEBUST:-$(date +%s)}"
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     docker compose --profile webrtc run --rm scout_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
     echo ""
-    echo "=== Rebuild: Starting services ==="
+    echo "=== Rebuild: Starting services (force-recreate so app serves latest www) ==="
     if [[ "$(uname)" == Darwin ]]; then
       if command -v xhost &>/dev/null; then
         xhost + 127.0.0.1 2>/dev/null || true
@@ -189,11 +202,11 @@ case "$cmd" in
       fi
     fi
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     else
-      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      docker compose --profile webrtc up -d --force-recreate app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     fi
     echo "Waiting for services to be ready..."
     sleep 5
