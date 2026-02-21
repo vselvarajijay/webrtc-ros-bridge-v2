@@ -4,6 +4,8 @@
 
 ConnectX lets you build control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC and your autonomy stack stays hardware-agnostic.
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=vselvarajijay/connectX&machine=basicLinux32gb&location=EastUs)
+
 ---
 
 ## Quick Start
@@ -74,6 +76,3 @@ MY_ROBOT_API_KEY=your_api_key_here
 ```
 
 Copy `.env.example` to `.env` to see all available options.
-
-
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=vselvarajijay/connectX&machine=basicLinux32gb&location=EastUs)
