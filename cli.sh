@@ -15,6 +15,39 @@ export COMPOSE_DISPLAY="${DISPLAY:-host.docker.internal:0}"
 
 # App server (signaling) PID file for start/stop
 APP_PID_FILE="${SCRIPT_DIR}/.cli-app-server.pid"
+# Storybook dev server PID file for start/stop
+STORYBOOK_PID_FILE="${SCRIPT_DIR}/.cli-storybook.pid"
+
+# Start Storybook dev server in background (port 6006). No-op if already running or no pnpm.
+start_storybook() {
+  if command -v pnpm &>/dev/null && [[ -f app/www/package.json ]] && grep -q '"storybook"' app/www/package.json 2>/dev/null; then
+    if lsof -i :6006 -t &>/dev/null; then
+      echo "Storybook already running on port 6006."
+    else
+      (cd app/www && nohup pnpm run storybook > "${SCRIPT_DIR}/.storybook.log" 2>&1 &)
+      echo $! > "$STORYBOOK_PID_FILE"
+      echo "Started Storybook (port 6006). Log: .storybook.log"
+    fi
+  fi
+}
+
+# Stop Storybook dev server if we started it (PID file) or anything on 6006.
+stop_storybook() {
+  if [[ -f "$STORYBOOK_PID_FILE" ]]; then
+    pid=$(cat "$STORYBOOK_PID_FILE" 2>/dev/null)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      echo "Stopped Storybook (PID $pid)."
+    fi
+    rm -f "$STORYBOOK_PID_FILE"
+  fi
+  pids=$(lsof -i :6006 -t 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    for pid in $pids; do
+      kill "$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
+    done
+  fi
+}
 
 case "$cmd" in
   build)
@@ -88,6 +121,7 @@ case "$cmd" in
     # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
     echo "Waiting for services to be ready..."
     sleep 5
+    start_storybook
     echo ""
     echo "App (signaling + www): http://localhost:8000/"
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
@@ -95,6 +129,8 @@ case "$cmd" in
     echo "LangGraph Studio API: http://localhost:8123"
     echo "  → Open LangGraph Studio (click to chat with the robot agent):"
     echo "  https://smith.langchain.com/studio/?baseUrl=http://localhost:8123"
+    echo "Storybook (React component dev): http://localhost:6006/"
+    echo "  → If Storybook did not start, run: cd app/www && pnpm run storybook"
     echo ""
     echo "Foxglove Studio (ROS 2 visualization):"
     echo "  1. Open Foxglove Studio: https://app.foxglove.dev/  (or install the desktop app)"
@@ -127,6 +163,7 @@ case "$cmd" in
   stop)
     echo "Stopping app, scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
     docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+    stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
       if [[ -n "$pid" ]]; then
@@ -159,6 +196,7 @@ case "$cmd" in
   rebuild)
     echo "=== Rebuild: Stopping services ==="
     docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || true
+    stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
       if [[ -n "$pid" ]]; then
@@ -210,6 +248,7 @@ case "$cmd" in
     fi
     echo "Waiting for services to be ready..."
     sleep 5
+    start_storybook
     echo ""
     echo "Rebuild complete! Services are running."
     echo ""
@@ -219,6 +258,8 @@ case "$cmd" in
     echo "LangGraph Studio API: http://localhost:8123"
     echo "  → Open LangGraph Studio (click to chat with the robot agent):"
     echo "  https://smith.langchain.com/studio/?baseUrl=http://localhost:8123"
+    echo "Storybook (React component dev): http://localhost:6006/"
+    echo "  → If Storybook did not start, run: cd app/www && pnpm run storybook"
     echo ""
     echo "Foxglove Studio (ROS 2 visualization):"
     echo "  1. Open Foxglove Studio: https://app.foxglove.dev/  (or install the desktop app)"
