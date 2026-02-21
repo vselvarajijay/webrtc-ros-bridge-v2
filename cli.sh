@@ -27,7 +27,7 @@ case "$cmd" in
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     echo "Building ROS 2 workspace in container..."
     docker compose --profile webrtc run --rm scout_bridge bash -c \
-      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
+      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
     echo "Build complete. Run ./cli.sh start to start services and open a shell."
     ;;
   start)
@@ -154,7 +154,7 @@ case "$cmd" in
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     docker compose --profile webrtc run --rm scout_bridge bash -c \
-      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
+      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
     echo ""
     echo "=== Rebuild: Starting services ==="
     if [[ "$(uname)" == Darwin ]]; then

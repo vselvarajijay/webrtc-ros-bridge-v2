@@ -239,6 +239,19 @@
       50% { opacity: 0.9; box-shadow: 0 0 0 6px rgba(57, 255, 20, 0); }
     }
     .status.error { background: var(--estop); }
+    .header-nav-btn {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      font-family: var(--font-header);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .header-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
     main {
       flex: 1;
       display: flex;
@@ -1240,6 +1253,58 @@
       overflow: hidden;
       min-width: 0;
     }
+    .calibration-panel { padding: 0.5rem 0; }
+    .calibration-panel label { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; }
+    .calibration-panel input[type="number"] { width: 4rem; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+    .calibration-panel .calibration-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
+    .calibration-panel .calibration-btn { padding: 0.35rem 0.6rem; font-size: 0.85rem; cursor: pointer; }
+    .calibration-panel .calibration-status { font-size: 0.9rem; margin: 0.5rem 0; }
+    .calibration-panel .calibration-message { font-size: 0.85rem; color: var(--accent); min-height: 1.2em; }
+    body.calibration-active main { display: none; }
+    body.calibration-active .calibration-view { display: block; }
+    .calibration-view {
+      display: none;
+      padding: 2rem;
+      max-width: 32rem;
+      margin: 0 auto;
+    }
+    .calibration-view h1 { font-family: var(--font-header); font-size: 1.5rem; margin-bottom: 1rem; }
+    .calibration-view .calibration-instruction { margin-bottom: 1.5rem; font-size: 1rem; color: var(--muted); }
+    .calibration-view .calibration-actions { display: flex; flex-direction: column; gap: 1rem; }
+    .calibration-view .calibration-actions label { display: block; margin-bottom: 0.25rem; }
+    .calibration-view .calibration-actions input[type="number"] { width: 4rem; padding: 0.35rem; }
+    .calibration-view .calibration-actions .btn-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+    .calibration-view .calibration-actions button { padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; }
+    .calibration-view .back-btn { margin-bottom: 1.5rem; }
+    .calibration-view .calibration-camera-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      aspect-ratio: 4/3;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+    .calibration-view .calibration-camera-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .calibration-view .calibration-camera-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 1rem;
+    }
+    .calibration-view .calibration-camera-wrap video[data-active="true"] ~ .calibration-camera-placeholder { display: none; }
     .raw-sensors-panel .optical-flow-card .optical-flow-values {
       font-size: 0.7rem;
       overflow: hidden;
@@ -1496,6 +1561,7 @@
     <span class="status" id="status" title="Connection"></span>
     <span class="statusText" id="statusText">Disconnected</span>
     <button type="button" class="estop-btn" id="estopBtn" title="Emergency stop (Spacebar)">E-STOP</button>
+    <button type="button" class="header-nav-btn" id="headerCalibrationBtn" title="Open camera calibration">Calibration</button>
     <div class="header-metrics">
       <div class="header-metric">
         <div class="label">Speed</div>
@@ -1530,6 +1596,31 @@
       WebRTC not connected (ICE: <span id="iceWarningState">—</span>). Video, controls and data-channel telemetry need ICE. Use TURN (port 3478) or run browser and robot on the same network. Telemetry may still appear here via signaling.
     </div>
   </header>
+  <div id="calibrationView" class="calibration-view">
+    <button type="button" class="header-nav-btn back-btn" id="calibrationBackBtn" title="Back to main view">Back</button>
+    <h1>Camera calibration</h1>
+    <div class="calibration-camera-wrap">
+      <video id="calibrationVideo" autoplay playsinline muted aria-label="Live camera for calibration"></video>
+      <span class="calibration-camera-placeholder" id="calibrationCameraPlaceholder">Waiting for camera… Connect to robot for live view.</span>
+    </div>
+    <p class="calibration-instruction" id="calibrationInstruction">Take <strong id="calibrationPhotoCount">20</strong> photos of a checkerboard (different angles and positions). Then run calibration and download the file.</p>
+    <div class="calibration-actions">
+      <label for="calibrationTargetCount">Number of photos (20–50)</label>
+      <input type="number" id="calibrationTargetCount" min="20" max="50" value="20" aria-label="Number of photos">
+      <div class="btn-row">
+        <button type="button" class="calibration-btn" id="calibrationStartBtn">Start calibration</button>
+        <button type="button" class="calibration-btn" id="calibrationCaptureBtn">Capture photo</button>
+      </div>
+      <div class="calibration-status" id="calibrationStatus" aria-live="polite">0 / 20 photos</div>
+      <div class="btn-row">
+        <button type="button" class="calibration-btn" id="calibrationRunBtn" disabled>Run calibration</button>
+      </div>
+      <div class="calibration-message" id="calibrationMessage" aria-live="polite"></div>
+      <div class="btn-row" id="calibrationDownloadRow" style="display: none;">
+        <button type="button" class="calibration-btn" id="calibrationDownloadBtn">Download calibration file</button>
+      </div>
+    </div>
+  </div>
   <main>
     <div class="top-row">
       <div class="videos-container">
@@ -2931,6 +3022,121 @@
             if (section) section.classList.toggle('collapsed');
           });
         });
+      })();
+      (function initCalibrationPanel() {
+        var targetInput = document.getElementById('calibrationTargetCount');
+        var photoCountEl = document.getElementById('calibrationPhotoCount');
+        var startBtn = document.getElementById('calibrationStartBtn');
+        var captureBtn = document.getElementById('calibrationCaptureBtn');
+        var runBtn = document.getElementById('calibrationRunBtn');
+        var statusEl = document.getElementById('calibrationStatus');
+        var messageEl = document.getElementById('calibrationMessage');
+        var downloadRow = document.getElementById('calibrationDownloadRow');
+        var downloadBtn = document.getElementById('calibrationDownloadBtn');
+        var headerCalibrationBtn = document.getElementById('headerCalibrationBtn');
+        var backBtn = document.getElementById('calibrationBackBtn');
+        var lastCalibrationYaml = null;
+        var calibrationVideo = document.getElementById('calibrationVideo');
+        var calibrationPlaceholder = document.getElementById('calibrationCameraPlaceholder');
+        function syncCalibrationCamera() {
+          var mainVideo = document.getElementById('remoteVideo');
+          if (!calibrationVideo) return;
+          if (mainVideo && mainVideo.srcObject) {
+            calibrationVideo.srcObject = mainVideo.srcObject;
+            calibrationVideo.setAttribute('data-active', 'true');
+            calibrationVideo.play().catch(function () {});
+          } else {
+            calibrationVideo.srcObject = null;
+            calibrationVideo.removeAttribute('data-active');
+          }
+        }
+        if (headerCalibrationBtn) {
+          headerCalibrationBtn.addEventListener('click', function () {
+            document.body.classList.add('calibration-active');
+            syncCalibrationCamera();
+            refreshCalibrationStatus();
+          });
+        }
+        if (backBtn) {
+          backBtn.addEventListener('click', function () {
+            document.body.classList.remove('calibration-active');
+          });
+        }
+        function getTargetCount() {
+          var n = parseInt(targetInput ? targetInput.value : 20, 10);
+          return isFinite(n) && n >= 20 && n <= 50 ? n : 20;
+        }
+        function updatePhotoCountLabel() {
+          if (photoCountEl) photoCountEl.textContent = String(getTargetCount());
+        }
+        if (targetInput) targetInput.addEventListener('change', updatePhotoCountLabel);
+        if (targetInput) targetInput.addEventListener('input', updatePhotoCountLabel);
+        updatePhotoCountLabel();
+        function refreshCalibrationStatus() {
+          fetch('/api/calibration/status').then(function (r) { return r.json(); }).then(function (data) {
+            var captured = data.captured || 0;
+            var target = data.target_count || 20;
+            if (statusEl) statusEl.textContent = captured + ' / ' + target + ' photos';
+            if (runBtn) runBtn.disabled = !(captured >= target);
+          }).catch(function () {
+            if (statusEl) statusEl.textContent = '— / — photos';
+            if (runBtn) runBtn.disabled = true;
+          });
+        }
+        if (startBtn) {
+          startBtn.addEventListener('click', function () {
+            var target = getTargetCount();
+            if (messageEl) messageEl.textContent = '';
+            if (downloadRow) downloadRow.style.display = 'none';
+            lastCalibrationYaml = null;
+            fetch('/api/calibration/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_count: target }) })
+              .then(function (r) { return r.json(); })
+              .then(function () { refreshCalibrationStatus(); })
+              .catch(function (e) { if (messageEl) messageEl.textContent = 'Error: ' + (e && e.message ? e.message : 'Failed'); });
+          });
+        }
+        if (captureBtn) {
+          captureBtn.addEventListener('click', function () {
+            if (messageEl) messageEl.textContent = '';
+            fetch('/api/calibration/capture', { method: 'POST' })
+              .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+              .then(function (res) {
+                if (messageEl) messageEl.textContent = (res.data && res.data.message) ? res.data.message : (res.ok ? '' : 'Capture failed');
+                refreshCalibrationStatus();
+              })
+              .catch(function (e) { if (messageEl) messageEl.textContent = 'Error: ' + (e && e.message ? e.message : 'Failed'); });
+          });
+        }
+        if (runBtn) {
+          runBtn.addEventListener('click', function () {
+            if (messageEl) messageEl.textContent = '';
+            fetch('/api/calibration/run', { method: 'POST' })
+              .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+              .then(function (res) {
+                var msg = (res.data && (res.data.message || res.data.detail)) ? String(res.data.message || res.data.detail) : (res.ok ? 'Calibration complete.' : 'Run failed');
+                if (messageEl) messageEl.textContent = msg;
+                if (res.ok && res.data && res.data.calibration_yaml) {
+                  lastCalibrationYaml = res.data.calibration_yaml;
+                  if (downloadRow) downloadRow.style.display = 'flex';
+                }
+                refreshCalibrationStatus();
+              })
+              .catch(function (e) { if (messageEl) messageEl.textContent = 'Error: ' + (e && e.message ? e.message : 'Failed'); });
+          });
+        }
+        if (downloadBtn) {
+          downloadBtn.addEventListener('click', function () {
+            if (!lastCalibrationYaml) return;
+            var blob = new Blob([lastCalibrationYaml], { type: 'application/x-yaml' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'camera_calibration.yaml';
+            a.click();
+            URL.revokeObjectURL(url);
+          });
+        }
+        refreshCalibrationStatus();
       })();
       (function initVideoHud() {
         function updateVideoTimestamp() {

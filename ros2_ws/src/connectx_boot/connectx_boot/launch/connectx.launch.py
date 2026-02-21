@@ -19,7 +19,12 @@ def generate_launch_description():
             name='optical_flow_node',
         ),
         Node(
-            package='connectx_controller',
+            package='connectx_planner',
+            executable='world_model_node',
+            name='world_model_node',
+        ),
+        Node(
+            package='connectx_planner',
             executable='wander_node',
             name='wander_node',
         ),

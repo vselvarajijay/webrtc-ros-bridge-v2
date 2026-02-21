@@ -25,6 +25,9 @@ setup(
         'pyppeteer',
         'python-dotenv',
         'aiohttp',
+        'opencv-python',
+        'numpy',
+        'PyYAML',
     ],
     zip_safe=True,
     maintainer='root',
@@ -39,6 +42,7 @@ setup(
     entry_points={
         'console_scripts': [
             'bridge_node = connectx_robot_bridge.nodes.bridge_node:main',
+            'calibration_node = connectx_robot_bridge.nodes.calibration_node:main',
         ],
     },
 )

@@ -208,7 +208,9 @@ class ControllerNode(Node):
             return
         goals = parse_command(text)
         if not goals:
-            self.get_logger().warn("Parse produced no goals for: %r" % text)
+            # "wander" / "wander <speed>" are handled by wander_planner; no need to warn
+            if not text.lower().strip().startswith("wander"):
+                self.get_logger().warn("Parse produced no goals for: %r" % text)
             return
         with self._lock:
             self._goal_queue = goals

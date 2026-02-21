@@ -690,6 +690,46 @@ async def get_front_frame():
     return JSONResponse(content=response_data)
 
 
+@app.get("/v2/front_full")
+async def get_front_frame_full():
+    """Return one front camera frame at viewport (full) resolution for calibration."""
+    await need_start_mission()
+    if os.getenv("SDK_SKIP_BROWSER_JOIN", "").lower() in ("1", "true", "yes"):
+        response_data = {
+            "front_frame": _get_placeholder_front_frame_b64(),
+            "timestamp": datetime.utcnow().timestamp(),
+            "capture_ms": 0,
+        }
+        return JSONResponse(content=response_data)
+    try:
+        t0 = time.perf_counter()
+        front_frame = await browser_service.front_full_res()
+        capture_ms = (time.perf_counter() - t0) * 1000
+    except Exception as e:
+        logger.warning("Browser front_full_res unavailable: %s", e)
+        response_data = {
+            "front_frame": _get_placeholder_front_frame_b64(),
+            "timestamp": datetime.utcnow().timestamp(),
+            "capture_ms": 0,
+        }
+        return JSONResponse(content=response_data)
+    if front_frame:
+        _, base64_data = front_frame.split(",", 1)
+        return JSONResponse(
+            content={
+                "front_frame": base64_data,
+                "timestamp": datetime.utcnow().timestamp(),
+                "capture_ms": round(capture_ms, 2),
+            }
+        )
+    response_data = {
+        "front_frame": _get_placeholder_front_frame_b64(),
+        "timestamp": datetime.utcnow().timestamp(),
+        "capture_ms": 0,
+    }
+    return JSONResponse(content=response_data)
+
+
 @app.get("/v2/rear")
 async def get_rear_frame():
     await need_start_mission()

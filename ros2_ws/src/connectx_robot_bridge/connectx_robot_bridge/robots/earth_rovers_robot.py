@@ -10,6 +10,7 @@ from connectx_robot_bridge.core.constants import (
     SDK_CHECK_TIMEOUT,
     SDK_DATA_ENDPOINT,
     SDK_FRONT_ENDPOINT,
+    SDK_FRONT_FULL_ENDPOINT,
 )
 from connectx_robot_bridge.core.exceptions import AuthenticationError
 from connectx_robot_bridge.core.models.telemetry import TelemetryFrame
@@ -144,6 +145,30 @@ class EarthRoversRobot(RobotBase):
                     SDK_FRONT_ENDPOINT,
                     e,
                 )
+            return None
+
+    def get_front_camera_frame_full(self) -> Optional[Tuple[bytes, Dict[str, float]]]:
+        """
+        Get one front camera frame at full (viewport) resolution via SDK /v2/front_full.
+        Use for calibration or when full-resolution image is needed; rate should be kept low.
+        Returns (frame_bytes, metrics) or None.
+        """
+        if self._camera_disabled:
+            return None
+        try:
+            t0 = time.perf_counter()
+            r = requests.get(SDK_FRONT_FULL_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
+            fetch_ms = (time.perf_counter() - t0) * 1000
+            r.raise_for_status()
+            data = r.json()
+            b64 = data.get("front_frame")
+            if not b64:
+                return None
+            capture_ms = float(data.get("capture_ms", 0))
+            metrics = {"capture_ms": capture_ms, "fetch_ms": fetch_ms}
+            return (base64_to_bytes(b64), metrics)
+        except Exception as e:
+            self._logger.debug("Front camera full frame unavailable: %s", e)
             return None
 
     # Minimum delay between frame pulls when using stream; actual rate limited by get_front_camera_frame() (HTTP + SDK).

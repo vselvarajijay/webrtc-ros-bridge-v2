@@ -13,8 +13,10 @@ from connectx_robot_bridge.core.config_manager import ConfigManager
 from connectx_robot_bridge.core.constants import (
     CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
+    CAMERA_FRONT_FULL_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
     LAMP_TOPIC,
+    DEFAULT_CAMERA_FULL_PUBLISH_RATE,
     DEFAULT_CAMERA_PUBLISH_RATE,
     DEFAULT_IMAGE_FORMAT,
     DEFAULT_MAX_ANGULAR_SPEED,
@@ -183,6 +185,50 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
         node.create_timer(1.0 / camera_rate, on_camera_timer)
 
 
+def setup_camera_full_publisher(node: Node, robot: RobotBase) -> None:
+    """
+    Publish full-resolution (viewport) front camera on a separate topic at a low rate.
+    Only active if the robot implements get_front_camera_frame_full().
+    """
+    if robot is None or not hasattr(robot, 'get_front_camera_frame_full'):
+        return
+    node.declare_parameter('camera_full_publish_rate', DEFAULT_CAMERA_FULL_PUBLISH_RATE)
+    full_rate = node.get_parameter('camera_full_publish_rate').value
+    image_format = os.getenv('IMAGE_FORMAT', DEFAULT_IMAGE_FORMAT)
+
+    camera_full_pub = node.create_publisher(
+        CompressedImage,
+        CAMERA_FRONT_FULL_COMPRESSED_TOPIC,
+        10,
+    )
+    frame_counter_ref = [0]
+
+    def on_camera_full_timer() -> None:
+        try:
+            result = robot.get_front_camera_frame_full()
+            if result is None:
+                return
+            if isinstance(result, tuple):
+                frame_bytes, metrics = result
+            else:
+                frame_bytes, metrics = result, {}
+            frame_counter_ref[0] += 1
+            msg = CompressedImage()
+            msg.header = Header()
+            msg.header.stamp = node.get_clock().now().to_msg()
+            msg.header.frame_id = f"{CAMERA_FRAME_ID}_full_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
+            msg.format = image_format
+            msg.data = list(frame_bytes)
+            camera_full_pub.publish(msg)
+        except Exception as e:
+            node.get_logger().debug(f'Failed to get full camera frame: {e}')
+
+    node.create_timer(1.0 / full_rate, on_camera_full_timer)
+    node.get_logger().info(
+        f'Publishing full-resolution camera on {CAMERA_FRONT_FULL_COMPRESSED_TOPIC} at {full_rate} Hz'
+    )
+
+
 def setup_telemetry_publisher(node: Node, robot: RobotBase) -> None:
     """
     Set up telemetry publisher for robot sensor data (velocity, battery, GPS, IMU, etc.).
@@ -234,6 +280,7 @@ def main(args=None):
         setup_cmd_vel_subscriber(node, robot, last_lamp_ref)
         setup_lamp_subscriber(node, robot, last_lamp_ref)
         setup_camera_publisher(node, robot)
+        setup_camera_full_publisher(node, robot)
         setup_telemetry_publisher(node, robot)
 
         # Run node

@@ -1,6 +1,10 @@
+import json
 import logging
+import os
 import time
 import threading
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -286,3 +290,65 @@ def floor_mask_image():
         media_type="image/jpeg",
         headers=headers,
     )
+
+
+# Calibration proxy: forward to scout_bridge calibration HTTP API
+_CALIBRATION_BRIDGE_URL = os.environ.get("CALIBRATION_BRIDGE_URL", "http://scout_bridge:8766").rstrip("/")
+_CALIBRATION_TIMEOUT = 10
+
+
+def _calibration_proxy(method: str, path: str, body: Optional[bytes] = None) -> Response:
+    """Forward request to calibration service; return 503 on connection error."""
+    url = f"{_CALIBRATION_BRIDGE_URL}{path}"
+    try:
+        req = urllib.request.Request(url, data=body, method=method)
+        if body is not None:
+            req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=_CALIBRATION_TIMEOUT) as resp:
+            return Response(
+                content=resp.read(),
+                status_code=resp.status,
+                media_type="application/json",
+            )
+    except urllib.error.HTTPError as e:
+        return Response(
+            content=e.read() if e.fp else b"",
+            status_code=e.code,
+            media_type="application/json",
+        )
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        logger.warning("Calibration proxy error: %s", e)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Calibration service unavailable. Ensure scout_bridge is running."},
+        )
+
+
+@app.post("/api/calibration/start")
+async def api_calibration_start(request: Request):
+    """Start calibration session with target image count."""
+    try:
+        body = await request.json()
+        target_count = int(body.get("target_count", 25))
+    except (ValueError, TypeError):
+        target_count = 25
+    payload = json.dumps({"target_count": target_count}).encode("utf-8")
+    return _calibration_proxy("POST", "/calibration/start", body=payload)
+
+
+@app.post("/api/calibration/capture")
+async def api_calibration_capture():
+    """Capture current camera frame for calibration."""
+    return _calibration_proxy("POST", "/calibration/capture")
+
+
+@app.get("/api/calibration/status")
+def api_calibration_status():
+    """Return calibration status (captured count, target, state)."""
+    return _calibration_proxy("GET", "/calibration/status")
+
+
+@app.post("/api/calibration/run")
+async def api_calibration_run():
+    """Run calibration and save to robot/."""
+    return _calibration_proxy("POST", "/calibration/run")

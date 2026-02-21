@@ -233,6 +233,22 @@ class BrowserService:
 
         return front_frame or ""
 
+    async def front_full_res(self) -> str:
+        """Capture front frame at viewport size for full-resolution calibration."""
+        await self.initialize_browser()
+        if self.page is None:
+            return ""
+        w = self.default_viewport["width"]
+        h = self.default_viewport["height"]
+        front_frame = await self.page.evaluate(
+            """(w, h) => {
+        return getLastBase64FrameAtSize(1000, w, h) || null;
+        }""",
+            w,
+            h,
+        )
+        return front_frame or ""
+
     async def rear(self) -> str:
         await self.initialize_browser()
         if self.page is None:

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'connectx_controller'
+package_name = 'connectx_planner'
 
 setup(
     name=package_name,
@@ -17,7 +17,7 @@ setup(
     maintainer='root',
     maintainer_email='root@todo.todo',
     description='TODO: Package description',
-    license='Apache-2.0',
+    license='TODO: License declaration',
     extras_require={
         'test': [
             'pytest',
@@ -25,8 +25,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'controller_node = connectx_controller.nodes.controller_node:main',
-            'manual_controller = connectx_controller.nodes.manual_controller:main',
+            'wander_node = connectx_planner.nodes.wander_node:main',
+            'world_model_node = connectx_planner.nodes.world_model_node:main',
         ],
     },
 )

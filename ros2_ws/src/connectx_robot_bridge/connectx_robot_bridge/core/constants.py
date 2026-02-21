@@ -9,6 +9,7 @@ FRODOBOTS_API_URL = os.getenv(
 SDK_LOCAL_URL = os.getenv("SDK_LOCAL_URL", "http://127.0.0.1:8000")
 SDK_LOCAL_ENDPOINT = f"{SDK_LOCAL_URL}/sdk"
 SDK_FRONT_ENDPOINT = f"{SDK_LOCAL_URL}/v2/front"
+SDK_FRONT_FULL_ENDPOINT = f"{SDK_LOCAL_URL}/v2/front_full"
 SDK_DATA_ENDPOINT = f"{SDK_LOCAL_URL}/data"
 
 # Velocity limits
@@ -47,6 +48,7 @@ DEFAULT_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chr
 CMD_VEL_TOPIC = "/cmd_vel"
 LAMP_TOPIC = "/robot/lamp"
 CAMERA_FRONT_COMPRESSED_TOPIC = "/camera/front/compressed"
+CAMERA_FRONT_FULL_COMPRESSED_TOPIC = "/camera/front/full/compressed"
 CAMERA_FRAME_ID = "camera_front"
 ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"
 
@@ -56,6 +58,8 @@ DEFAULT_MAX_LINEAR_SPEED = 1.0
 DEFAULT_MAX_ANGULAR_SPEED = 1.0
 # Limited by SDK /v2/front (HTTP + Playwright capture). 5 Hz is reliable for WebRTC; increase if SDK keeps up.
 DEFAULT_CAMERA_PUBLISH_RATE = 5.0
+# Full-resolution front camera (viewport size); keep low to avoid overloading SDK.
+DEFAULT_CAMERA_FULL_PUBLISH_RATE = 1.0
 DEFAULT_TELEMETRY_PUBLISH_RATE = 10.0
 DEFAULT_MAP_ZOOM_LEVEL = "18"
 

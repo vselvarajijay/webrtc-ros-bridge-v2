@@ -175,6 +175,9 @@ def parse_command(command: str) -> List[dict]:
     raw = command.strip().lower()
     if raw == STOP_COMMAND:
         return []
+    # "wander" and "wander <speed>" are handled by wander_planner; no goals for controller
+    if raw == "wander" or raw.startswith("wander "):
+        return []
 
     goals: List[dict] = []
     clauses = re.split(r"\s+then\s+|\s*,\s*", raw, flags=re.IGNORECASE)

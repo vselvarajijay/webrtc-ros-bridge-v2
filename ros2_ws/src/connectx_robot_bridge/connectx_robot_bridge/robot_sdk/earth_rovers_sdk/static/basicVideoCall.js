@@ -424,6 +424,38 @@ async function captureFrameAsBase64(videoTrack) {
   }
 }
 
+/** Capture frame at a specific size (e.g. viewport for full-resolution calibration). */
+async function captureFrameAsBase64AtSize(videoTrack, targetWidth, targetHeight) {
+  try {
+    const frame = await videoTrack.getCurrentFrameData();
+    if (!frame || frame.width === 0 || frame.height === 0) {
+      return null;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = frame.width;
+    canvas.height = frame.height;
+    const ctx = canvas.getContext("2d");
+    ctx.putImageData(frame, 0, 0);
+    if (targetWidth > 0 && targetHeight > 0 && (targetWidth !== frame.width || targetHeight !== frame.height)) {
+      const canvas2 = document.createElement("canvas");
+      canvas2.width = targetWidth;
+      canvas2.height = targetHeight;
+      const ctx2 = canvas2.getContext("2d");
+      ctx2.drawImage(canvas, 0, 0, frame.width, frame.height, 0, 0, targetWidth, targetHeight);
+      return canvas2.toDataURL(
+        `image/${window.imageParams["imageFormat"]}`,
+        window.imageParams["imageQuality"]
+      );
+    }
+    return canvas.toDataURL(
+      `image/${window.imageParams["imageFormat"]}`,
+      window.imageParams["imageQuality"]
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
 // Add at the beginning of the file
 const DEBUG_MODE = false;
 const lastBase64Frames = {};
@@ -440,8 +472,20 @@ async function getLastBase64Frame(uid) {
   return base64Frame;
 }
 
+/** Get latest base64 frame at target size (for full-resolution calibration). */
+async function getLastBase64FrameAtSize(uid, targetWidth, targetHeight) {
+  const user = remoteUsers[uid];
+  if (!user || !user.videoTrack || !user.videoTrack.captureEnabled) {
+    return null;
+  }
+  const base64Frame = await captureFrameAsBase64AtSize(user.videoTrack, targetWidth, targetHeight);
+  if (base64Frame) lastBase64Frames[uid] = base64Frame;
+  return base64Frame;
+}
+
 function initializeImageParams({ imageFormat, imageQuality }) {
   window.imageParams = { imageFormat, imageQuality };
 }
 window.initializeImageParams = initializeImageParams;
-window.getLastBase64Frame = getLastBase64Frame
+window.getLastBase64Frame = getLastBase64Frame;
+window.getLastBase64FrameAtSize = getLastBase64FrameAtSize;
