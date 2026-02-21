@@ -15,6 +15,8 @@ SDK_DATA_ENDPOINT = f"{SDK_LOCAL_URL}/data"
 # Velocity limits
 MIN_VELOCITY = -1.0
 MAX_VELOCITY = 1.0
+# Some robots/SDK expect opposite linear sign (e.g. positive = backward). Set to -1 to flip.
+EARTH_ROVERS_LINEAR_SIGN = int(os.getenv("EARTH_ROVERS_LINEAR_SIGN", "1"))
 
 # Timeouts (in seconds)
 AUTH_TIMEOUT = 15

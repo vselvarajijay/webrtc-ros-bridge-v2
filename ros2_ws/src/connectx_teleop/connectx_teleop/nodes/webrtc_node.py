@@ -452,6 +452,8 @@ def run_ros_node(
     last_no_frame_log = [0.0]
     last_no_telemetry_log = [0.0]
     NO_DATA_WARN_INTERVAL = 15.0
+    last_twist_ref: list = [None]  # [Twist|None]; repeat at drain rate when queue empty for smooth control
+    last_lamp_published: list = [0]
 
     while not stop_event.is_set():
         now = time.monotonic()
@@ -481,20 +483,28 @@ def run_ros_node(
         now = time.monotonic()
         if now - last_drain >= dt:
             last_drain = now
+            published_this_cycle = False
             try:
                 # Drain control queue: each item is (twist, lamp) so state is passed together
                 while True:
                     item = control_queue.get_nowait()
                     try:
                         twist, lamp = item
-                        lamp_pub.publish(Int32(data=int(lamp) if lamp else 0))
+                        last_twist_ref[0] = twist
+                        last_lamp_published[0] = int(lamp) if lamp else 0
+                        lamp_pub.publish(Int32(data=last_lamp_published[0]))
                         cmd_pub.publish(twist)
+                        published_this_cycle = True
                     except (TypeError, ValueError) as e:
                         LOG.warning("Control queue item invalid (twist, lamp): %s", e)
             except queue.Empty:
                 pass
             except Exception as e:
                 LOG.warning("Control drain error (continuing): %s", e)
+            # Repeat last twist at drain rate when queue empty so robot gets steady 50 Hz stream
+            if not published_this_cycle and last_twist_ref[0] is not None:
+                lamp_pub.publish(Int32(data=last_lamp_published[0]))
+                cmd_pub.publish(last_twist_ref[0])
             try:
                 while True:
                     cmd = autonomy_command_queue.get_nowait()
@@ -820,7 +830,7 @@ def main(args=None) -> None:
 
     image_format = os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
-    control_queue: queue.Queue = queue.Queue(maxsize=64)  # items: (twist, lamp) — state tracked and passed together
+    control_queue: queue.Queue = queue.Queue(maxsize=128)  # items: (twist, lamp); larger so bursts from browser aren't dropped
     telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
     autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()

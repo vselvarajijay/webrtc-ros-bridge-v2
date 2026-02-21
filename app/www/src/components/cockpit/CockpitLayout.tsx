@@ -1,7 +1,7 @@
 import { Box } from '@mantine/core';
 import { OpticalFlowView, FloorMaskView } from '@/components/telemetry';
-import { LiveViewWithHUD } from './LiveViewWithHUD';
-import { ControlPanel } from './ControlPanel';
+import { VideoStream } from '@/features/VideoStream';
+import { RobotControl } from '@/features/RobotControl';
 import { SystemLogsPanel } from './SystemLogsPanel';
 
 export function CockpitLayout() {
@@ -35,11 +35,11 @@ export function CockpitLayout() {
       </Box>
 
       <Box style={{ gridArea: 'center', minHeight: 0 }}>
-        <LiveViewWithHUD />
+        <VideoStream />
       </Box>
 
       <Box style={{ gridArea: 'right', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <ControlPanel />
+        <RobotControl />
       </Box>
 
       <Box style={{ gridArea: 'logs', minHeight: 0 }}>

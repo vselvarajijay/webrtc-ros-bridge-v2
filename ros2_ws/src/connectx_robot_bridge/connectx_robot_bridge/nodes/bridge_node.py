@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+import time
 from dataclasses import asdict
 
 import rclpy
@@ -44,10 +45,23 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) 
     node.declare_parameter('max_angular_speed', DEFAULT_MAX_ANGULAR_SPEED)
     max_linear = node.get_parameter('max_linear_speed').value
     max_angular = node.get_parameter('max_angular_speed').value
+    last_cmd_vel_log = [0.0]
+    cmd_vel_log_count = [0]
+    rtm_first_ok_logged = [False]
+    last_rtm_fail_log = [0.0]
+    CMD_VEL_LOG_INTERVAL = 2.0
+    CMD_VEL_LOG_FIRST_N = 3  # log first N non-zero cmd_vel immediately so operator sees response
+    RTM_FAIL_LOG_INTERVAL = 5.0
 
     def on_cmd_vel(msg: Twist) -> None:
         if robot is None:
-            node.get_logger().warn('cmd_vel received but no robot (robot is None); check auth/env.')
+            now = time.monotonic()
+            if now - last_cmd_vel_log[0] >= CMD_VEL_LOG_INTERVAL:
+                last_cmd_vel_log[0] = now
+                node.get_logger().error(
+                    'cmd_vel received but no robot (robot is None). '
+                    'Set SDK_API_TOKEN and BOT_SLUG in .env and ensure bridge_node can authenticate.'
+                )
             return
         # Apply latest lamp state so this velocity command carries it to the SDK
         if hasattr(robot, 'set_lamp'):
@@ -61,14 +75,36 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) 
         )
         
         # Send continuous velocity command for smooth control (includes lamp via set_lamp above)
-        robot.send_velocity(linear_normalized, angular_normalized)
-        
-        # Log periodically (not every message to reduce spam)
-        if abs(linear_x) > 0.01 or abs(angular_z) > 0.01:
-            node.get_logger().debug(
-                f'cmd_vel: linear={linear_x:.2f} (norm={linear_normalized:.2f}) '
-                f'angular={angular_z:.2f} (norm={angular_normalized:.2f})'
+        rtm_ok = robot.send_velocity(linear_normalized, angular_normalized)
+        if rtm_ok and not rtm_first_ok_logged[0]:
+            rtm_first_ok_logged[0] = True
+            node.get_logger().info(
+                'RTM send OK: velocity commands are being accepted by Agora. '
+                'If the robot still does not move, ensure the robot (or SDK) is in the same channel and receiving peer messages.'
             )
+        if not rtm_ok and (abs(linear_x) > 0.01 or abs(angular_z) > 0.01):
+            now = time.monotonic()
+            if now - last_rtm_fail_log[0] >= RTM_FAIL_LOG_INTERVAL:
+                last_rtm_fail_log[0] = now
+                node.get_logger().warning(
+                    'RTM send failed: Agora API rejected or network error. '
+                    'Check RTM_TOKEN, BOT_UID, and that the robot is online and in the channel.'
+                )
+        
+        # Log so operators see that commands are reaching the bridge (first few immediately, then rate-limited)
+        if abs(linear_x) > 0.01 or abs(angular_z) > 0.01:
+            now = time.monotonic()
+            should_log = (
+                cmd_vel_log_count[0] < CMD_VEL_LOG_FIRST_N
+                or (now - last_cmd_vel_log[0] >= CMD_VEL_LOG_INTERVAL)
+            )
+            if should_log:
+                cmd_vel_log_count[0] += 1
+                last_cmd_vel_log[0] = now
+                node.get_logger().info(
+                    f'cmd_vel -> robot: linear={linear_x:.2f} (norm={linear_normalized:.2f}) '
+                    f'angular={angular_z:.2f} (norm={angular_normalized:.2f})'
+                )
 
     node.create_subscription(Twist, CMD_VEL_TOPIC, on_cmd_vel, 10)
     node.get_logger().info(
@@ -146,9 +182,8 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     if none_count >= 50 and not no_frame_logged[0]:
                         no_frame_logged[0] = True
                         node.get_logger().warning(
-                            "No camera frames from SDK after 50 attempts. Check SDK is running, %s is reachable, "
-                            "and with SDK_SKIP_BROWSER_JOIN=0 that auth/channel are configured and browser has joined.",
-                            SDK_FRONT_ENDPOINT,
+                            f"No camera frames from SDK after 50 attempts. Check SDK is running, {SDK_FRONT_ENDPOINT} is reachable, "
+                            "and with SDK_SKIP_BROWSER_JOIN=0 that auth/channel are configured and browser has joined."
                         )
                     continue
                 none_count = 0
@@ -259,9 +294,20 @@ def main(args=None):
         robot = create_robot(robot_type)
         node.robot = robot
         if robot is None:
-            node.get_logger().warn(
-                f'Unknown robot_type "{robot_type}"; running without robot.'
+            node.get_logger().error(
+                f'Unknown robot_type "{robot_type}"; running without robot. Joystick/control will not move the robot.'
             )
+        else:
+            rtm_ok = getattr(robot, '_rtm_client', None) is not None
+            if rtm_ok:
+                node.get_logger().info(
+                    'Robot control ready (RTM client initialized). Joystick commands will be sent to the robot.'
+                )
+            else:
+                node.get_logger().error(
+                    'Robot instance created but RTM client not initialized. '
+                    'Set SDK_API_TOKEN and BOT_SLUG in .env (and MISSION_SLUG if needed). Joystick will not move the robot.'
+                )
 
         # Shared ref so cmd_vel always sends with latest lamp (0=off, 1=on)
         last_lamp_ref = [0]

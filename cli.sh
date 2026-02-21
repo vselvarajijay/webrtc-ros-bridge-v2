@@ -24,7 +24,7 @@ start_storybook() {
     if lsof -i :6006 -t &>/dev/null; then
       echo "Storybook already running on port 6006."
     else
-      (cd app/www && nohup pnpm run storybook > "${SCRIPT_DIR}/.storybook.log" 2>&1 &)
+      (cd app/www && nohup pnpm run storybook -- --no-open > "${SCRIPT_DIR}/.storybook.log" 2>&1 &)
       echo $! > "$STORYBOOK_PID_FILE"
       echo "Started Storybook (port 6006). Log: .storybook.log"
     fi

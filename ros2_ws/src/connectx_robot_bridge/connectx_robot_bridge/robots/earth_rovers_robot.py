@@ -5,6 +5,7 @@ from typing import Dict, Iterator, Optional, Tuple
 import requests
 
 from connectx_robot_bridge.core.constants import (
+    EARTH_ROVERS_LINEAR_SIGN,
     MAX_VELOCITY,
     MIN_VELOCITY,
     SDK_CHECK_TIMEOUT,
@@ -37,7 +38,9 @@ class EarthRoversRobot(RobotBase):
         self._last_telemetry_warning_time = 0.0
         self._telemetry_warning_interval = 5.0  # Only log warning every 5 seconds
         self._lamp = 0  # Bitfield: 0=off, 1=front, 2=back, 3=both
-        
+        self._first_velocity_sent = False
+        self._last_rtm_fail_log = 0.0
+
         try:
             auth = fetch_auth_sync()
             self._rtm_client = RtmClient(auth)
@@ -49,25 +52,35 @@ class EarthRoversRobot(RobotBase):
         """Set lamp state (0=off, 1=on). Sent with next velocity command to SDK."""
         self._lamp = 1 if lamp else 0
 
-    def _send_velocity_command(self, linear: float, angular: float, lamp: Optional[int] = None) -> None:
+    def _send_velocity_command(self, linear: float, angular: float, lamp: Optional[int] = None) -> bool:
         """
         Internal method to send velocity commands to the robot.
-        
-        Args:
-            linear: Forward/backward speed (-1.0 to 1.0)
-            angular: Rotation speed left/right (-1.0 to 1.0)
-            lamp: Lamp value (default: use current self._lamp). SDK accepts 0=off, 1=on.
+
+        Returns:
+            True if the message was sent via RTM (HTTP 200), False otherwise.
         """
         if self._rtm_client is None:
             self._logger.warning("Cannot send velocity command: RTM client not initialized")
-            return
+            return False
         lamp_val = self._lamp if lamp is None else (1 if lamp else 0)
         self._logger.debug(f"Sending velocity command: linear={linear:.3f}, angular={angular:.3f}, lamp={lamp_val}")
-        self._rtm_client.send_message({
+        ok = self._rtm_client.send_message({
             "linear": linear,
             "angular": angular,
             "lamp": lamp_val
         })
+        if ok and not self._first_velocity_sent:
+            self._first_velocity_sent = True
+            self._logger.info("First velocity command sent via RTM; robot should respond to joystick.")
+        if not ok and (abs(linear) > 0.01 or abs(angular) > 0.01):
+            now = time.monotonic()
+            if now - self._last_rtm_fail_log >= 5.0:
+                self._last_rtm_fail_log = now
+                self._logger.warning(
+                    "RTM send_message returned False; robot may not be receiving commands. "
+                    "Check RTM_TOKEN, BOT_UID, and that the robot is online and in the channel."
+                )
+        return ok
 
     def move_forward(self) -> None:
         """Move robot forward."""
@@ -89,20 +102,19 @@ class EarthRoversRobot(RobotBase):
         """Stop the robot by sending zero velocity commands."""
         self._send_velocity_command(linear=0.0, angular=0.0)
 
-    def send_velocity(self, linear: float, angular: float) -> None:
+    def send_velocity(self, linear: float, angular: float) -> bool:
         """
         Send continuous velocity commands to the robot.
-        
-        Args:
-            linear: Forward/backward speed (-1.0 to 1.0)
-            angular: Rotation speed left/right (-1.0 to 1.0)
-            
-        Clamps values to [-1.0, 1.0] range as per Frodobots SDK spec.
+
+        Returns:
+            True if the message was sent via RTM (HTTP 200), False otherwise.
         """
         # Clamp values to valid range [-1.0, 1.0]
         linear_clamped = max(MIN_VELOCITY, min(MAX_VELOCITY, linear))
         angular_clamped = max(MIN_VELOCITY, min(MAX_VELOCITY, angular))
-        self._send_velocity_command(linear=linear_clamped, angular=angular_clamped)
+        # Some robots expect opposite linear sign (backward works, forward doesn't). Flip via env.
+        linear_signed = linear_clamped * EARTH_ROVERS_LINEAR_SIGN
+        return self._send_velocity_command(linear=linear_signed, angular=angular_clamped)
 
     def get_front_camera_frame(self) -> Optional[Tuple[bytes, Dict[str, float]]]:
         """

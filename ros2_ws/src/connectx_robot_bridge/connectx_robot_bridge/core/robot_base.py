@@ -36,14 +36,14 @@ class RobotBase(ABC):
         """
         pass
 
-    def send_velocity(self, linear: float, angular: float) -> None:
+    def send_velocity(self, linear: float, angular: float) -> bool:
         """
         Send continuous velocity commands to the robot.
         linear: forward/backward speed (-1.0 to 1.0)
         angular: rotation speed left/right (-1.0 to 1.0)
-        
-        Default implementation converts to discrete commands for backward compatibility.
-        Subclasses should override for smooth continuous control.
+
+        Returns:
+            True if the command was sent successfully (e.g. RTM HTTP 200), False otherwise.
         """
         # Default: convert to discrete commands
         if abs(linear) > abs(angular):
@@ -60,6 +60,7 @@ class RobotBase(ABC):
                 self.move_left()
             else:
                 self.stop()
+        return True
 
     @abstractmethod
     def get_front_camera_frame(self) -> Optional[Union[bytes, Tuple[bytes, Dict[str, float]]]]:

@@ -26,10 +26,14 @@ export function DriveControls() {
   const [joystickActive, setJoystickActive] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const joystickWrapRef = useRef<HTMLDivElement>(null);
+  const sendControlRef = useRef(sendControl);
+  sendControlRef.current = sendControl;
 
   const mul = SPEED_MULTIPLIERS[Math.min(4, Math.max(0, speedLevel - 1))];
 
-  const applyVelocity = useCallback(() => {
+  const velocityRef = useRef({ linearX: 0, angularZ: 0 });
+  const updateVelocityRefRef = useRef<() => void>(() => {});
+  const updateVelocityRef = useCallback(() => {
     let linearX = 0;
     let angularZ = 0;
     if (joystickActive) {
@@ -44,8 +48,13 @@ export function DriveControls() {
       linearX = LINEAR_VEL * mul * direction.linear;
       angularZ = ANGULAR_VEL * mul * direction.angular;
     }
-    sendControl(linearX, angularZ);
-  }, [joystickActive, joystick, direction, mul, sendControl]);
+    velocityRef.current = { linearX, angularZ };
+  }, [joystickActive, joystick, direction, mul]);
+  updateVelocityRefRef.current = updateVelocityRef;
+
+  useEffect(() => {
+    updateVelocityRef();
+  }, [updateVelocityRef]);
 
   const hasInput = direction.linear !== 0 || direction.angular !== 0 || joystickActive;
 
@@ -61,24 +70,39 @@ export function DriveControls() {
   useEffect(() => {
     if (hasInput) {
       if (!intervalRef.current) {
-        intervalRef.current = setInterval(applyVelocity, CONTROL_SEND_INTERVAL_MS);
+        intervalRef.current = setInterval(() => {
+          updateVelocityRefRef.current();
+          const v = velocityRef.current;
+          sendControlRef.current(v.linearX, v.angularZ);
+        }, CONTROL_SEND_INTERVAL_MS);
       }
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
-        sendControl(0, 0);
+        sendControlRef.current(0, 0);
       }
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [hasInput, applyVelocity, sendControl]);
+  }, [hasInput]);
 
-  const handleGridButton = (linear: number, angular: number) => {
+  const handleGridButtonDown = (linear: number, angular: number) => {
     setDirection({ linear, angular });
     setJoystickActive(false);
     setJoystick({ x: 0, y: 0 });
+    // Send first command immediately so bridge/robot respond without waiting for interval (50ms)
+    const linearX = LINEAR_VEL * mul * linear;
+    const angularZ = ANGULAR_VEL * mul * angular;
+    sendControlRef.current(linearX, angularZ);
+  };
+
+  const handleGridButtonUp = () => {
+    setDirection({ linear: 0, angular: 0 });
+    setJoystickActive(false);
+    setJoystick({ x: 0, y: 0 });
+    sendControlRef.current(0, 0);
   };
 
   const handleJoystickMove = useCallback(
@@ -111,6 +135,29 @@ export function DriveControls() {
     setDirection({ linear: 0, angular: 0 });
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     handleJoystickMove(e.clientX, e.clientY);
+    const wrap = joystickWrapRef.current;
+    if (wrap) {
+      const rect = wrap.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const radius = Math.min(rect.width, rect.height) / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= 1e-6) {
+        const r = Math.min(1, dist / radius);
+        const nx = (r * dx) / dist;
+        const ny = (-r * dy) / dist;
+        let linearX = LINEAR_VEL * mul * ny;
+        let angularZ = -ANGULAR_VEL * mul * nx;
+        if (Math.abs(linearX) > 0.01 && Math.abs(angularZ) > 0.01) {
+          const factor = 1 / Math.sqrt(2);
+          linearX *= factor;
+          angularZ *= factor;
+        }
+        sendControlRef.current(linearX, angularZ);
+      }
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -123,7 +170,7 @@ export function DriveControls() {
     e.preventDefault();
     setJoystickActive(false);
     setJoystick({ x: 0, y: 0 });
-    sendControl(0, 0);
+    sendControlRef.current(0, 0);
     (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
   };
 
@@ -204,8 +251,18 @@ export function DriveControls() {
                   size="xs"
                   className="!h-full !w-full !min-h-0 !p-0"
                   styles={{ root: { height: '100%', width: '100%', minHeight: 0 } }}
-                  onClick={() => handleGridButton(GRID_BUTTONS[idx].linear, GRID_BUTTONS[idx].angular)}
                   disabled={!commandsReady}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                    handleGridButtonDown(GRID_BUTTONS[idx].linear, GRID_BUTTONS[idx].angular);
+                  }}
+                  onPointerUp={(e) => {
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+                    handleGridButtonUp();
+                  }}
+                  onPointerLeave={handleGridButtonUp}
                 >
                   {GRID_BUTTONS[idx].label}
                 </Button>

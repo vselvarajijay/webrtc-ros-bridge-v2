@@ -27,12 +27,20 @@ export interface ConnectionDebug {
 
 export type DriveMode = 'teleop' | 'autonomous';
 
+export interface LastControlSent {
+  linearX: number;
+  angularZ: number;
+  at: number;
+}
+
 interface WebRTCContextValue {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   pipelineState: PipelineState;
   connectionDebug: ConnectionDebug;
   telemetry: TelemetryData | null;
   commandsReady: boolean;
+  /** Last control message actually sent over the WebRTC data channel (throttled updates for display). */
+  lastControlSent: LastControlSent | null;
   lampOn: boolean;
   setLampOn: (on: boolean) => void;
   driveMode: DriveMode;
@@ -51,11 +59,17 @@ const defaultDebug: ConnectionDebug = {
   data: '—',
 };
 
-const WebRTCContext = createContext<WebRTCContextValue | null>(null);
+export const WebRTCContext = createContext<WebRTCContextValue | null>(null);
 
 function getWsUrl(): string {
   const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${scheme}//${window.location.host}/ws/signaling`;
+}
+
+/** When true, control is sent over the signaling WebSocket (browser → API → bridge) so you can see it in Network tab. */
+function useSignalingForControl(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('control_via_signaling') === '1';
 }
 
 export function WebRTCProvider({ children }: { children: ReactNode }) {
@@ -68,6 +82,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
   const [connectionDebug, setConnectionDebug] = useState<ConnectionDebug>(defaultDebug);
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [commandsReady, setCommandsReady] = useState(false);
+  const [lastControlSent, setLastControlSent] = useState<LastControlSent | null>(null);
   const [lampOn, setLampOn] = useState(false);
   const [driveMode, setDriveMode] = useState<DriveMode>('teleop');
 
@@ -76,6 +91,9 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const iceServersRef = useRef<RTCIceServer[]>([{ urls: 'stun:stun.l.google.com:19302' }]);
   const lastControlRef = useRef<{ linearX: number; angularZ: number }>({ linearX: 0, angularZ: 0 });
+  const lastControlSentDisplayRef = useRef(0);
+  const LAST_SENT_DISPLAY_MS = 400;
+  const controlViaSignaling = useSignalingForControl();
 
   const setDebug = useCallback((key: keyof ConnectionDebug, value: string, _ok?: boolean) => {
     setConnectionDebug((prev) => ({ ...prev, [key]: value }));
@@ -98,6 +116,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     ws.onopen = () => {
       setPipelineState((p) => ({ ...p, signaling: true }));
       setDebug('signaling', 'connected', true);
+      if (controlViaSignaling) setCommandsReady(true);
       ws.send(JSON.stringify({ role: 'browser' }));
       setTimeout(() => {
         if (!pcRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -162,7 +181,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
         );
       }
     };
-  }, [setDebug]);
+  }, [setDebug, controlViaSignaling]);
 
   const attachRemoteVideoTrack = useCallback(() => {
     const pc = pcRef.current;
@@ -242,7 +261,8 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const dc = pc.createDataChannel('control', { ordered: false });
+    // Use ordered reliable channel so control messages are not dropped (unordered can drop under load)
+    const dc = pc.createDataChannel('control', { ordered: true });
     dataChannelRef.current = dc;
     dc.onopen = () => {
       setCommandsReady(true);
@@ -297,23 +317,58 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     };
   }, [connect]);
 
-  const sendControl = useCallback((linearX: number, angularZ: number) => {
-    lastControlRef.current = { linearX, angularZ };
-    const dc = dataChannelRef.current;
-    if (!dc || dc.readyState !== 'open') return;
-    dc.send(
-      JSON.stringify({
-        linear_x: linearX,
-        angular_z: angularZ,
-        lamp: lampOn ? 1 : 0,
-      })
-    );
-  }, [lampOn]);
+  const sendControl = useCallback(
+    (linearX: number, angularZ: number) => {
+      lastControlRef.current = { linearX, angularZ };
+      const now = Date.now();
+      const updateSentDisplay = () => {
+        if (now - lastControlSentDisplayRef.current >= LAST_SENT_DISPLAY_MS) {
+          lastControlSentDisplayRef.current = now;
+          setLastControlSent({ linearX, angularZ, at: now });
+        }
+      };
+
+      if (controlViaSignaling) {
+        // Path: browser → API (WebSocket) → bridge (visible in Network tab)
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        try {
+          ws.send(
+            JSON.stringify({
+              type: 'control',
+              data: { linear_x: linearX, angular_z: angularZ },
+            })
+          );
+          updateSentDisplay();
+        } catch (_) {}
+        return;
+      }
+
+      // Default: path browser → WebRTC data channel → bridge (lower latency)
+      const dc = dataChannelRef.current;
+      if (!dc || dc.readyState !== 'open') return;
+      const maxBufferedBytes = 32 * 1024;
+      if (dc.bufferedAmount > maxBufferedBytes) return;
+      try {
+        dc.send(
+          JSON.stringify({
+            linear_x: linearX,
+            angular_z: angularZ,
+            lamp: lampOn ? 1 : 0,
+          })
+        );
+        updateSentDisplay();
+      } catch (_) {}
+    },
+    [lampOn, controlViaSignaling]
+  );
 
   const sendWander = useCallback((enable: boolean) => {
     const dc = dataChannelRef.current;
     if (!dc || dc.readyState !== 'open') return;
-    dc.send(JSON.stringify({ command: enable ? 'wander_start' : 'wander_stop' }));
+    try {
+      dc.send(JSON.stringify({ command: enable ? 'wander_start' : 'wander_stop' }));
+    } catch (_) {}
   }, []);
 
   const eStop = useCallback(() => {
@@ -334,6 +389,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     connectionDebug,
     telemetry,
     commandsReady,
+    lastControlSent,
     lampOn,
     setLampOn,
     driveMode,

@@ -82,7 +82,7 @@ class KeyboardNode(Node):
                 self._run_keyboard_lib_listener()
                 return
             except Exception as e:
-                self.get_logger().warning("keyboard library failed: %s, falling back to terminal", e)
+                self.get_logger().warning(f"keyboard library failed: {e}, falling back to terminal")
         self._run_terminal_key_reader()
 
     def _run_keyboard_lib_listener(self) -> None:

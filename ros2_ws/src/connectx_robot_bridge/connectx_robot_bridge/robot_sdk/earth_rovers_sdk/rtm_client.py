@@ -84,14 +84,17 @@ class RtmClient:
             }
 
             response = requests.post(url, headers=headers, json=payload, timeout=5)
-            
+
             if response.status_code == 200:
                 return True
-            else:
-                logger.warning(
-                    f"RTM message send failed with status {response.status_code}: {response.text}"
-                )
-                return False
+            # Log so operators see why RTM is failing (e.g. 401 token, 404 destination, 429 rate limit)
+            err_body = (response.text or "").strip() or "(no body)"
+            logger.warning(
+                "RTM peer_messages failed: status=%s body=%s",
+                response.status_code,
+                err_body[:500],
+            )
+            return False
                 
         except requests.RequestException as e:
             logger.warning(f"RTM message send failed due to network error: {e}")
