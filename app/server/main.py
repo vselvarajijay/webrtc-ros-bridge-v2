@@ -38,10 +38,14 @@ class StaticFilesWithJsMime(StaticFiles):
 
 
 from .signaling import get_last_telemetry, handle_signaling_websocket, send_control_to_robot
+from .robot_profiles import router as robot_profiles_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 app = FastAPI()
+
+# Robot profile CRUD routes (must be included before the static-file catch-all)
+app.include_router(robot_profiles_router)
 
 WWW_DIR = Path(__file__).resolve().parent.parent / "www"
 # Prefer built frontend (dist) when it has index.html; otherwise serve raw www
@@ -246,7 +250,7 @@ async def api_control(request: Request):
 
 @app.websocket("/ws/signaling")
 async def ws_signaling(websocket: WebSocket):
-    """WebRTC signaling: exchange offer/answer and ICE between browser and robot."""
+    """WebRTC signaling: exchange offer/answer and ICE between browser and robot (default room)."""
     await handle_signaling_websocket(websocket)
 
 
@@ -254,6 +258,12 @@ async def ws_signaling(websocket: WebSocket):
 async def ws_signaling_trailing(websocket: WebSocket):
     """Same as /ws/signaling for clients that send a trailing slash."""
     await handle_signaling_websocket(websocket)
+
+
+@app.websocket("/ws/signaling/{robot_id}")
+async def ws_signaling_robot(websocket: WebSocket, robot_id: str):
+    """Per-robot WebRTC signaling room. Use robot profile id as robot_id."""
+    await handle_signaling_websocket(websocket, robot_id=robot_id)
 
 
 # Max body size for perception image ingest (e.g. 5 MB JPEG)

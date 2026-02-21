@@ -1,7 +1,9 @@
 import { createTheme, MantineProvider } from '@mantine/core';
 import { AppLayout } from '@/components/layout';
 import { CockpitHeader } from '@/components/cockpit';
+import { RobotSidebar } from '@/components/fleet';
 import { WebRTCProvider } from '@/context/WebRTCContext';
+import { RobotFleetProvider, useRobotFleet } from '@/context/RobotFleetContext';
 import { TelemetryPage } from '@/pages/TelemetryPage';
 
 const cockpitTheme = createTheme({
@@ -22,17 +24,29 @@ const cockpitTheme = createTheme({
   },
 });
 
+/** Inner app that consumes the fleet context to wire the active robot to WebRTC. */
+function AppInner() {
+  const { activeRobotId } = useRobotFleet();
+
+  return (
+    <WebRTCProvider robotId={activeRobotId} isActive>
+      <AppLayout
+        headerLeft={<CockpitHeader />}
+        navbar={<RobotSidebar />}
+        padding="md"
+      >
+        <TelemetryPage />
+      </AppLayout>
+    </WebRTCProvider>
+  );
+}
+
 function App() {
   return (
     <MantineProvider theme={cockpitTheme} defaultColorScheme="dark">
-      <WebRTCProvider>
-        <AppLayout
-          headerLeft={<CockpitHeader />}
-          padding="md"
-        >
-          <TelemetryPage />
-        </AppLayout>
-      </WebRTCProvider>
+      <RobotFleetProvider>
+        <AppInner />
+      </RobotFleetProvider>
     </MantineProvider>
   );
 }

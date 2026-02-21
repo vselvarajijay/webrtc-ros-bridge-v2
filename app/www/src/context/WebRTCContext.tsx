@@ -66,9 +66,10 @@ const defaultDebug: ConnectionDebug = {
 
 export const WebRTCContext = createContext<WebRTCContextValue | null>(null);
 
-function getWsUrl(): string {
+function getWsUrl(robotId?: string | null): string {
   const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${scheme}//${window.location.host}/ws/signaling`;
+  const path = robotId ? `/ws/signaling/${robotId}` : '/ws/signaling';
+  return `${scheme}//${window.location.host}${path}`;
 }
 
 /** When true, control is sent over the signaling WebSocket (browser → API → bridge) so you can see it in Network tab. */
@@ -95,7 +96,23 @@ function mergeTelemetry(
   return out as TelemetryData;
 }
 
-export function WebRTCProvider({ children }: { children: ReactNode }) {
+export interface WebRTCProviderProps {
+  children: ReactNode;
+  /**
+   * Robot ID to use for the signaling room.  When omitted (or null) the
+   * legacy /ws/signaling endpoint is used so single-robot setups are
+   * unaffected.  When `isActive` is false the connection is held paused to
+   * preserve bandwidth for background robots.
+   */
+  robotId?: string | null;
+  /**
+   * When false the provider immediately disconnects/pauses (background tab).
+   * When true (default) it maintains a live connection.
+   */
+  isActive?: boolean;
+}
+
+export function WebRTCProvider({ children, robotId, isActive = true }: WebRTCProviderProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [pipelineState, setPipelineState] = useState<PipelineState>({
     signaling: false,
@@ -137,9 +154,32 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Tear down the current WebRTC peer connection and WebSocket cleanly. */
+  const disconnect = useCallback(() => {
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+    dataChannelRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    // Pause background video to save bandwidth
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
+    setPipelineState({ signaling: false, robot: false, video: false });
+    setCommandsReady(false);
+    setConnectionDebug(defaultDebug);
+  }, []);
+
   const connect = useCallback(() => {
+    if (!isActive) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
-    const wsUrl = getWsUrl();
+    const wsUrl = getWsUrl(robotId);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -159,7 +199,9 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
       setDebug('signaling', 'disconnected', false);
       setPipelineState({ signaling: false, robot: false, video: false });
       setCommandsReady(false);
-      setTimeout(connect, 3000);
+      if (isActive) {
+        setTimeout(connect, 3000);
+      }
     };
 
     ws.onerror = () => {
@@ -211,7 +253,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
         );
       }
     };
-  }, [setDebug, controlViaSignaling]);
+  }, [setDebug, controlViaSignaling, robotId, isActive]);
 
   const attachRemoteVideoTrack = useCallback(() => {
     const pc = pcRef.current;
@@ -327,7 +369,12 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
       });
   }, [attachRemoteVideoTrack, hideVideoPlaceholder, setDebug]);
 
+  // Connect / disconnect based on isActive and robotId
   useEffect(() => {
+    if (!isActive) {
+      disconnect();
+      return;
+    }
     fetchConfig()
       .then((data) => {
         if (data.iceServers?.length) iceServersRef.current = data.iceServers;
@@ -335,20 +382,13 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
       .finally(connect);
     return () => {
-      if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
-      }
-      dataChannelRef.current = null;
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      disconnect();
     };
-  }, [connect]);
+  }, [isActive, robotId, connect, disconnect]);
 
   const sendControl = useCallback(
     (linearX: number, angularZ: number) => {
+      if (!isActive) return;
       lastControlRef.current = { linearX, angularZ };
       const now = Date.now();
       const updateSentDisplay = () => {
@@ -402,11 +442,12 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
         maybeLogControl();
       } catch (_) {}
     },
-    [lampOn, controlViaSignaling]
+    [lampOn, controlViaSignaling, isActive]
   );
 
   const sendWander = useCallback(
     (enable: boolean) => {
+      if (!isActive) return;
       const dc = dataChannelRef.current;
       if (!dc || dc.readyState !== 'open') return;
       try {
@@ -415,7 +456,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
         appendSystemLog(`[${ts}] Autonomous: wander ${enable ? 'started' : 'stopped'}`);
       } catch (_) {}
     },
-    [appendSystemLog]
+    [appendSystemLog, isActive]
   );
 
   const eStop = useCallback(() => {
