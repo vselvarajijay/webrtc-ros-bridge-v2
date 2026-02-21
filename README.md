@@ -1,8 +1,16 @@
 # ConnectX
 
-**Write once, run on any robot.**
+**Hardware Abstraction for Embodied AI**
 
-ConnectX lets you build control systems that work across different robot hardware without rewriting code for each platform. Connect any robot's native SDK over WebRTC and your autonomy stack stays hardware-agnostic.
+ConnectX is a modular control runtime that separates robot intelligence from robot hardware.
+
+It:
+- Wraps native SDKs
+- Streams control over WebRTC
+- Provides a unified ROS 2 interface
+- Exposes robot capabilities via MCP to LLM agents or planners
+
+**The result:** portable autonomy, interchangeable hardware, and agent-driven control.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=vselvarajijay/connectX&machine=basicLinux32gb&location=EastUs)
 
