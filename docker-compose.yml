@@ -157,6 +157,39 @@ services:
     profiles:
       - shell
 
+  connectx_mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mcp
+    image: connectx-mcp
+    container_name: connectx_mcp
+    ports:
+      - "8002:8002"
+    environment:
+      - APP_URL=${APP_URL:-http://app:8000}
+      - MCP_PORT=8002
+    depends_on:
+      - app
+    profiles:
+      - webrtc
+
+  connectx_langgraph:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.langgraph
+    image: connectx-langgraph
+    container_name: connectx_langgraph
+    ports:
+      - "8123:8123"
+    environment:
+      - MCP_SERVER_URL=${MCP_SERVER_URL:-http://connectx_mcp:8002/mcp}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+    depends_on:
+      - connectx_mcp
+    profiles:
+      - webrtc
+
 volumes:
   pip_cache:
     driver: local

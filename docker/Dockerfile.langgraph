@@ -1,0 +1,20 @@
+# LangGraph chat agent with Studio support
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    langgraph \
+    langchain-core \
+    langchain-openai \
+    mcp \
+    httpx \
+    "langgraph-cli[inmem]"
+
+COPY agents/ .
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8123
+
+CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8123", "--no-browser"]
