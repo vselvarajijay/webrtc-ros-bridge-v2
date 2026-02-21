@@ -25,6 +25,8 @@ export interface ConnectionDebug {
   data: string;
 }
 
+export type DriveMode = 'teleop' | 'autonomous';
+
 interface WebRTCContextValue {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   pipelineState: PipelineState;
@@ -33,6 +35,8 @@ interface WebRTCContextValue {
   commandsReady: boolean;
   lampOn: boolean;
   setLampOn: (on: boolean) => void;
+  driveMode: DriveMode;
+  setDriveMode: (mode: DriveMode) => void;
   sendControl: (linearX: number, angularZ: number) => void;
   sendWander: (enable: boolean) => void;
   eStop: () => void;
@@ -65,6 +69,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [commandsReady, setCommandsReady] = useState(false);
   const [lampOn, setLampOn] = useState(false);
+  const [driveMode, setDriveMode] = useState<DriveMode>('teleop');
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -331,6 +336,8 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     commandsReady,
     lampOn,
     setLampOn,
+    driveMode,
+    setDriveMode,
     sendControl,
     sendWander,
     eStop,

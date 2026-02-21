@@ -6,7 +6,6 @@ const LINEAR_VEL = 0.8;
 const ANGULAR_VEL = 1.0;
 const SPEED_MULTIPLIERS = [0.2, 0.4, 0.6, 0.8, 1.0];
 const CONTROL_SEND_INTERVAL_MS = 50;
-const JOYSTICK_MAX = 22;
 
 const GRID_BUTTONS: { linear: number; angular: number; label: string }[] = [
   { linear: 1, angular: 1, label: '↖' },
@@ -19,14 +18,8 @@ const GRID_BUTTONS: { linear: number; angular: number; label: string }[] = [
   { linear: -1, angular: -1, label: '↘' },
 ];
 
-function headingToArrow(deg: number): string {
-  const arrows = ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘'];
-  const idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
-  return arrows[idx];
-}
-
 export function DriveControls() {
-  const { sendControl, sendWander, commandsReady, telemetry } = useWebRTC();
+  const { sendControl, sendWander, commandsReady, driveMode } = useWebRTC();
   const [speedLevel, setSpeedLevel] = useState(3);
   const [direction, setDirection] = useState<{ linear: number; angular: number }>({ linear: 0, angular: 0 });
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
@@ -35,12 +28,6 @@ export function DriveControls() {
   const joystickWrapRef = useRef<HTMLDivElement>(null);
 
   const mul = SPEED_MULTIPLIERS[Math.min(4, Math.max(0, speedLevel - 1))];
-  const headingDeg = telemetry?.orientation != null
-    ? ((Number(telemetry.orientation) / 255) * 360) % 360
-    : null;
-  const headingLabel = headingDeg != null
-    ? `${headingToArrow(headingDeg)} ${headingDeg.toFixed(1)}°`
-    : '—';
 
   const applyVelocity = useCallback(() => {
     let linearX = 0;
@@ -61,6 +48,15 @@ export function DriveControls() {
   }, [joystickActive, joystick, direction, mul, sendControl]);
 
   const hasInput = direction.linear !== 0 || direction.angular !== 0 || joystickActive;
+
+  useEffect(() => {
+    if (driveMode === 'autonomous') {
+      setDirection({ linear: 0, angular: 0 });
+      setJoystickActive(false);
+      setJoystick({ x: 0, y: 0 });
+      sendControl(0, 0);
+    }
+  }, [driveMode, sendControl]);
 
   useEffect(() => {
     if (hasInput) {
@@ -92,6 +88,7 @@ export function DriveControls() {
       const rect = wrap.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
+      const radius = Math.min(rect.width, rect.height) / 2;
       const dx = clientX - cx;
       const dy = clientY - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -99,7 +96,7 @@ export function DriveControls() {
         setJoystick({ x: 0, y: 0 });
         return;
       }
-      const r = Math.min(1, dist / JOYSTICK_MAX);
+      const r = Math.min(1, dist / radius);
       setJoystick({
         x: (r * dx) / dist,
         y: (-r * dy) / dist,
@@ -131,11 +128,12 @@ export function DriveControls() {
   };
 
   return (
-    <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
+    <Stack gap="md" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
       <Text size="xs" c="dimmed">
         Commands: {commandsReady ? 'connected' : 'connecting…'}
       </Text>
 
+      {/* Speed always visible */}
       <Stack gap="xs">
         <Text size="xs">Speed: {(LINEAR_VEL * mul).toFixed(2)} m/s</Text>
         <Slider
@@ -148,55 +146,69 @@ export function DriveControls() {
         />
       </Stack>
 
-      <Text size="sm" fw={600}>
-        Heading {headingLabel}
-      </Text>
+      {driveMode === 'teleop' && (
+        /* Arrow controls + joystick */
+        <div
+          className="min-h-0 w-full shrink-0"
+          style={{ aspectRatio: '1 / 1' }}
+        >
+          <div
+            className="grid h-full w-full gap-2"
+            style={{
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gridTemplateRows: 'repeat(3, 1fr)',
+            }}
+          >
+            {[0, 1, 2, 3, -1, 4, 5, 6, 7].map((idx) =>
+              idx === -1 ? (
+                <Box
+                  key="joy"
+                  ref={joystickWrapRef}
+                  className="relative rounded-full border-2 border-gray-600 cursor-grab active:cursor-grabbing"
+                  style={{ width: '100%', height: '100%', minHeight: 0, minWidth: 0 }}
+                  role="group"
+                  aria-label="Joystick"
+                  onPointerDown={onPointerDown}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerLeave={onPointerUp}
+                >
+                  <div
+                    className="absolute top-1/2 left-1/2 h-3 w-3 rounded-full bg-blue-500"
+                    style={{
+                      transform: `translate(calc(-50% + ${joystick.x * 50}%), calc(-50% + ${-joystick.y * 50}%))`,
+                    }}
+                  />
+                </Box>
+              ) : (
+                <Button
+                  key={idx}
+                  variant={direction.linear === GRID_BUTTONS[idx].linear && direction.angular === GRID_BUTTONS[idx].angular ? 'filled' : 'light'}
+                  size="xs"
+                  className="!h-full !w-full !min-h-0 !p-0"
+                  styles={{ root: { height: '100%', width: '100%', minHeight: 0 } }}
+                  onClick={() => handleGridButton(GRID_BUTTONS[idx].linear, GRID_BUTTONS[idx].angular)}
+                  disabled={!commandsReady}
+                >
+                  {GRID_BUTTONS[idx].label}
+                </Button>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
-      <div className="grid grid-cols-3 gap-1 w-[150px] mx-auto">
-        {[0, 1, 2, 3, -1, 4, 5, 6, 7].map((idx) =>
-          idx === -1 ? (
-            <Box key="joy" className="flex items-center justify-center">
-              <Box
-                ref={joystickWrapRef}
-                className="relative w-12 h-12 rounded-full border-2 border-gray-600 cursor-grab active:cursor-grabbing"
-                role="group"
-                aria-label="Joystick"
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerLeave={onPointerUp}
-              >
-                <div
-                  className="absolute w-3 h-3 rounded-full bg-blue-500 top-1/2 left-1/2"
-                  style={{
-                    transform: `translate(calc(-50% + ${joystick.x * JOYSTICK_MAX}px), calc(-50% + ${-joystick.y * JOYSTICK_MAX}px))`,
-                  }}
-                />
-              </Box>
-            </Box>
-          ) : (
-            <Button
-              key={idx}
-              variant={direction.linear === GRID_BUTTONS[idx].linear && direction.angular === GRID_BUTTONS[idx].angular ? 'filled' : 'light'}
-              size="xs"
-              onClick={() => handleGridButton(GRID_BUTTONS[idx].linear, GRID_BUTTONS[idx].angular)}
-              disabled={!commandsReady}
-            >
-              {GRID_BUTTONS[idx].label}
-            </Button>
-          )
-        )}
-      </div>
-
-      <Stack gap="sm" mt="md">
-        <Button size="sm" color="green" onClick={() => sendWander(true)} disabled={!commandsReady}>
-          Start wandering
-        </Button>
-        <Button size="sm" variant="light" color="red" onClick={() => sendWander(false)} disabled={!commandsReady}>
-          Stop wandering
-        </Button>
-        <Text size="xs" c="dimmed">Requires wander_node on robot</Text>
-      </Stack>
+      {driveMode === 'autonomous' && (
+        <Stack gap="sm" mt="xs">
+          <Button size="sm" color="green" onClick={() => sendWander(true)} disabled={!commandsReady}>
+            Start wandering
+          </Button>
+          <Button size="sm" variant="light" color="red" onClick={() => sendWander(false)} disabled={!commandsReady}>
+            Stop wandering
+          </Button>
+          <Text size="xs" c="dimmed">Requires wander_node on robot</Text>
+        </Stack>
+      )}
     </Stack>
   );
 }

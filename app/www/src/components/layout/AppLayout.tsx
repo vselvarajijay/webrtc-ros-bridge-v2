@@ -51,7 +51,7 @@ export function AppLayout({
       }
       padding={padding}
     >
-      <AppShell.Header>
+      <AppShell.Header style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}>
         <AppHeader
           left={headerLeft}
           right={headerRight}
@@ -63,12 +63,12 @@ export function AppLayout({
           asideBreakpoint="md"
         />
       </AppShell.Header>
-      {navbar && <AppShell.Navbar p="md">{navbar}</AppShell.Navbar>}
+      {navbar && <AppShell.Navbar p="md" style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}>{navbar}</AppShell.Navbar>}
       <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
         <Box style={{ flex: 1, minHeight: 0 }}>{children}</Box>
       </AppShell.Main>
       {aside && (
-        <AppShell.Aside p="md" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+        <AppShell.Aside p="md" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', backgroundColor: 'var(--mantine-color-dark-9)' }}>
           <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             {aside}
           </Box>

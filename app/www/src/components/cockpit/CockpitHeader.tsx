@@ -1,8 +1,8 @@
-import { Box, Button, Group, Text, Title } from '@mantine/core';
+import { Box, Button, Group, SegmentedControl, Text, Title } from '@mantine/core';
 import { useWebRTC } from '@/context/WebRTCContext';
 
 export function CockpitHeader() {
-  const { connectionDebug, telemetry, eStop } = useWebRTC();
+  const { connectionDebug, telemetry, eStop, driveMode, setDriveMode } = useWebRTC();
 
   const battery =
     telemetry?.battery != null && Number.isFinite(telemetry.battery)
@@ -28,19 +28,15 @@ export function CockpitHeader() {
         </Group>
       </Group>
 
-      <Box
-        px="md"
-        py="xs"
-        style={{
-          borderRadius: 6,
-          backgroundColor: 'var(--mantine-color-green-8)',
-          color: 'var(--mantine-color-white)',
-          fontWeight: 600,
-          fontSize: '0.9rem',
-        }}
-      >
-        Teleop Mode
-      </Box>
+      <SegmentedControl
+        value={driveMode}
+        onChange={(v) => setDriveMode(v as 'teleop' | 'autonomous')}
+        data={[
+          { label: 'Teleop', value: 'teleop' },
+          { label: 'Autonomous', value: 'autonomous' },
+        ]}
+        size="sm"
+      />
 
       <Group wrap="nowrap" gap="md">
         <Group gap="xs" wrap="nowrap">

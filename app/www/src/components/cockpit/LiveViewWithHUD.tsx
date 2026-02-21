@@ -36,7 +36,7 @@ export function LiveViewWithHUD() {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: 'var(--mantine-color-dark-7)',
+        backgroundColor: 'var(--mantine-color-dark-9)',
         borderColor: 'var(--mantine-color-dark-4)',
         borderRadius: 8,
       }}
@@ -46,7 +46,7 @@ export function LiveViewWithHUD() {
       </Text>
       <Box
         className="relative rounded overflow-hidden flex-1 min-h-0 flex items-center justify-center"
-        style={{ backgroundColor: 'var(--mantine-color-dark-8)' }}
+        style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}
       >
         <video
           ref={videoRef}

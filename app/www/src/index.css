@@ -6,4 +6,5 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  background-color: #18181b; /* zinc-900 */
 }

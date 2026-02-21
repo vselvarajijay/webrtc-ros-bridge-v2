@@ -16,8 +16,8 @@ const cockpitTheme = createTheme({
       '#868e96',
       '#495057',
       '#373a40',
-      '#25262b',
-      '#1a1b1e',
+      '#27272a', /* zinc-800 */
+      '#18181b', /* zinc-900 - main background */
     ],
   },
 });

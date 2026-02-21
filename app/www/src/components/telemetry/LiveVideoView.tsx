@@ -5,11 +5,12 @@ export function LiveVideoView() {
   const { videoRef, pipelineState } = useWebRTC();
 
   return (
-    <Card withBorder padding="sm" className="overflow-hidden">
+    <Card withBorder padding="sm" className="overflow-hidden" style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}>
       <Text size="sm" fw={600} mb="xs">Live view</Text>
       <Text size="xs" c="dimmed" mb="xs">Live camera (WebRTC)</Text>
       <Box
-        className="relative rounded overflow-hidden bg-gray-900 min-h-[200px] flex items-center justify-center"
+        className="relative rounded overflow-hidden min-h-[200px] flex items-center justify-center"
+        style={{ backgroundColor: 'var(--mantine-color-dark-9)', aspectRatio: '4/3' }}
         style={{ aspectRatio: '4/3' }}
       >
         <video
