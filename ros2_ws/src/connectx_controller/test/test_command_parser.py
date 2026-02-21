@@ -16,6 +16,8 @@ import pytest
 
 from connectx_controller.command_parser import STOP_COMMAND, parse_command
 
+pytestmark = pytest.mark.unit
+
 
 def test_stop_returns_empty() -> None:
     assert parse_command("stop") == []

@@ -20,6 +20,8 @@ from connectx_planner.nodes.world_model_node import (
     compute_risk_and_turn,
 )
 
+pytestmark = pytest.mark.unit
+
 
 def test_parse_speed_empty_or_invalid() -> None:
     assert parse_speed_from_telemetry("") == 0.0

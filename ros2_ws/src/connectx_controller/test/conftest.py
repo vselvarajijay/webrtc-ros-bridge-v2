@@ -12,22 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Minimal integration test: launch file is valid and loadable by ros2 launch."""
+"""Pytest markers for connectx_controller tests."""
 
-import subprocess
 import pytest
 
-pytestmark = pytest.mark.integration
 
-
-def test_launch_file_show_args() -> None:
-    """Run ros2 launch --show-args to verify the launch file is found and valid."""
-    result = subprocess.run(
-        ["ros2", "launch", "connectx_boot", "connectx.launch.py", "--show-args"],
-        capture_output=True,
-        text=True,
-        timeout=10,
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line(
+        'markers',
+        'unit: pure unit tests, no ROS context (deselect with -m "not unit")',
     )
-    assert result.returncode == 0, (
-        f"ros2 launch failed: stderr={result.stderr!r} stdout={result.stdout!r}"
+    config.addinivalue_line(
+        'markers',
+        'integration: tests that require rclpy or ROS (deselect with -m "not integration")',
     )

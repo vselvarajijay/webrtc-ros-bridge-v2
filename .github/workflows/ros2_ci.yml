@@ -1,4 +1,5 @@
 # CI for ROS2 workspace: build and test on push/PR when ros2_ws changes.
+# Uses ROS 2 Humble (LTS) so no custom distro (e.g. kilted) is required.
 name: ROS2 CI
 
 on:
@@ -12,11 +13,8 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-22.04
-    defaults:
-      run:
-        shell: bash
     container:
-      image: osrf/ros:kilted-desktop
+      image: osrf/ros:humble-desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +26,7 @@ jobs:
             python3-colcon-common-extensions \
             python3-pytest
           rm -rf /var/lib/apt/lists/*
+        shell: bash
 
       - name: Cache colcon
         uses: actions/cache@v4
@@ -36,27 +35,30 @@ jobs:
             ros2_ws/build
             ros2_ws/install
             ros2_ws/log
-          key: ros2-${{ runner.os }}-kilted-${{ hashFiles('ros2_ws/src/**') }}
+          key: ros2-${{ runner.os }}-humble-${{ hashFiles('ros2_ws/src/**') }}
           restore-keys: |
-            ros2-${{ runner.os }}-kilted-
+            ros2-${{ runner.os }}-humble-
 
       - name: Build
         run: |
-          source /opt/ros/kilted/setup.bash
+          source /opt/ros/humble/setup.bash
           cd ros2_ws
           colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+        shell: bash
 
       - name: Test
         run: |
-          source /opt/ros/kilted/setup.bash
+          source /opt/ros/humble/setup.bash
           cd ros2_ws
           source install/setup.bash
           colcon test --event-handlers console_direct+
+        shell: bash
 
       - name: Test results
         if: always()
         run: |
-          source /opt/ros/kilted/setup.bash
+          source /opt/ros/humble/setup.bash
           cd ros2_ws
           source install/setup.bash
           colcon test-result --verbose --all
+        shell: bash

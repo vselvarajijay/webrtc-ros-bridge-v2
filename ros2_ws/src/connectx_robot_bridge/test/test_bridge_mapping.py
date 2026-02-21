@@ -14,25 +14,27 @@
 
 import json
 import pytest
-
 from dataclasses import asdict
 
 from connectx_robot_bridge.core.cmd_vel_mapping import twist_to_sdk_normalized
 from connectx_robot_bridge.core.models.telemetry import TelemetryFrame
 
 
+@pytest.mark.unit
 def test_twist_to_sdk_normalized_zero() -> None:
     lin, ang = twist_to_sdk_normalized(0.0, 0.0, 0.5, 0.8)
     assert lin == 0.0
     assert ang == 0.0
 
 
+@pytest.mark.unit
 def test_twist_to_sdk_normalized_full_forward() -> None:
     lin, ang = twist_to_sdk_normalized(0.5, 0.0, 0.5, 0.8)
     assert lin == 1.0
     assert ang == 0.0
 
 
+@pytest.mark.unit
 def test_twist_to_sdk_normalized_clamped() -> None:
     lin, ang = twist_to_sdk_normalized(2.0, 2.0, 0.5, 0.8)
     assert lin == 1.0
@@ -43,18 +45,21 @@ def test_twist_to_sdk_normalized_clamped() -> None:
     assert ang == -1.0
 
 
+@pytest.mark.unit
 def test_twist_to_sdk_normalized_scaling() -> None:
     lin, ang = twist_to_sdk_normalized(0.25, 0.4, 0.5, 0.8)
     assert abs(lin - 0.5) < 1e-6
     assert abs(ang - 0.5) < 1e-6
 
 
+@pytest.mark.unit
 def test_twist_to_sdk_normalized_zero_max_speeds() -> None:
     lin, ang = twist_to_sdk_normalized(0.1, 0.1, 0.0, 0.0)
     assert lin == 0.0
     assert ang == 0.0
 
 
+@pytest.mark.unit
 def test_telemetry_json_roundtrip_speed() -> None:
     """TelemetryFrame serializes to JSON that contains 'speed'; parsing yields same value."""
     frame = TelemetryFrame(
