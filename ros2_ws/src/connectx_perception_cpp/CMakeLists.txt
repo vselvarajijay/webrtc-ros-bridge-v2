@@ -66,6 +66,8 @@ if(BUILD_TESTING)
   # comment the line when this package is in a git repo and when
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
+  # Exclude vendored third_party from all linters (onnxruntime headers use C++ that uncrustify cannot parse)
+  file(GLOB_RECURSE AMENT_LINT_AUTO_FILE_EXCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/*")
   ament_lint_auto_find_test_dependencies()
 endif()
 
