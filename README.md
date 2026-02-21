@@ -12,13 +12,26 @@ It:
 
 **The result:** portable autonomy, interchangeable hardware, and agent-driven control.
 
+ConnectX is for development and research. Use in a safe environment; it is not intended for safety-critical or unsupervised operation.
+
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=vselvarajijay/connectX&machine=basicLinux32gb&location=EastUs)
+
+---
+
+## Requirements
+
+- **Docker** and **Docker Compose** — Used for the app, bridge, SDK, TURN server, and perception services.
+- **pnpm** — For building the React app (`app/www`). Install from [pnpm.io](https://pnpm.io) or your package manager.
+- **Python 3.10+** — For local scripts (e.g. `scripts/download_models.py`).
 
 ---
 
 ## Quick Start
 
 ```bash
+# Copy env and set ROBOT_TYPE + any API keys for your robot (see .env.example)
+cp .env.example .env
+
 # Build Docker images (run once after clone or when deps change)
 ./cli.sh build
 
@@ -47,6 +60,8 @@ Run `python3 scripts/download_models.py` once to download models, then `./cli.sh
 ---
 
 ## Adding a New Robot
+
+**Currently supported:** `earth_rovers_sdk` (Earth Rovers). Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` and configure the relevant variables in `.env.example`. To add another robot type:
 
 ### 1. Implement `RobotBase`
 
@@ -84,3 +99,15 @@ MY_ROBOT_API_KEY=your_api_key_here
 ```
 
 Copy `.env.example` to `.env` to see all available options.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup, development workflow, and how to submit changes.
+
+---
+
+## License
+
+Apache 2.0 — see [LICENSE](LICENSE).
