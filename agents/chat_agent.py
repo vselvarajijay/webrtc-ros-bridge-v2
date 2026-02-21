@@ -9,6 +9,7 @@ Environment variables:
   LLM_MODEL       – OpenAI model name (default: gpt-4o-mini)
 """
 
+import inspect
 import os
 
 import mcp.types as mcp_types
@@ -65,8 +66,12 @@ _system_message = SystemMessage(
     )
 )
 
-graph = create_react_agent(
-    _llm,
-    tools=[get_robot_state, send_velocity],
-    state_modifier=_system_message,
-)
+# Support both older (state_modifier) and newer (prompt) LangGraph API
+_params = inspect.signature(create_react_agent).parameters
+_agent_kwargs = {"tools": [get_robot_state, send_velocity]}
+if "state_modifier" in _params:
+    _agent_kwargs["state_modifier"] = _system_message
+elif "prompt" in _params:
+    _agent_kwargs["prompt"] = _system_message
+
+graph = create_react_agent(_llm, **_agent_kwargs)

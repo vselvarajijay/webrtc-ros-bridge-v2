@@ -184,6 +184,10 @@ services:
     environment:
       - MCP_SERVER_URL=${MCP_SERVER_URL:-http://connectx_mcp:8002/mcp}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-true}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-robot}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
       - connectx_mcp
