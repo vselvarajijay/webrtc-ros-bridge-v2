@@ -2,6 +2,7 @@ import { createTheme, MantineProvider } from '@mantine/core';
 import { AppLayout } from '@/components/layout';
 import { CockpitHeader } from '@/components/cockpit';
 import { WebRTCProvider } from '@/context/WebRTCContext';
+import { DashboardProvider } from '@/features/Dashboard';
 import { TelemetryPage } from '@/pages/TelemetryPage';
 
 const cockpitTheme = createTheme({
@@ -26,12 +27,14 @@ function App() {
   return (
     <MantineProvider theme={cockpitTheme} defaultColorScheme="dark">
       <WebRTCProvider>
-        <AppLayout
-          headerLeft={<CockpitHeader />}
-          padding="md"
-        >
-          <TelemetryPage />
-        </AppLayout>
+        <DashboardProvider>
+          <AppLayout
+            headerLeft={<CockpitHeader />}
+            padding="md"
+          >
+            <TelemetryPage />
+          </AppLayout>
+        </DashboardProvider>
       </WebRTCProvider>
     </MantineProvider>
   );
