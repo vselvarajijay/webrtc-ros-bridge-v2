@@ -52,6 +52,24 @@ def get_last_telemetry() -> Optional[dict]:
     return _last_telemetry_from_robot
 
 
+async def send_control_to_robot(linear_x: float, angular_z: float) -> bool:
+    """Send a velocity command to the robot via the signaling WebSocket, if connected.
+    Returns True if the message was sent, False if no robot is connected."""
+    global _robot_ws
+    if _robot_ws is None:
+        return False
+    try:
+        payload = json.dumps({
+            "type": "control",
+            "data": {"linear_x": linear_x, "angular_z": angular_z},
+        })
+        await _robot_ws.send_text(payload)
+        return True
+    except Exception as e:
+        logger.warning("Failed to send control to robot: %s", e)
+        return False
+
+
 async def handle_signaling_websocket(websocket: WebSocket) -> None:
     global _pending_offer, _first_telemetry_relayed, _last_telemetry_from_robot
     await websocket.accept()

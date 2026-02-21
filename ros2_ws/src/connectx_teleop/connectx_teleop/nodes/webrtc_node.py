@@ -676,6 +676,13 @@ async def run_signaling_and_webrtc(
                         except json.JSONDecodeError:
                             continue
                         typ = msg.get("type")
+                        if typ == "control":
+                            # Velocity command from app (e.g. POST /api/control / MCP send_velocity)
+                            data = msg.get("data") or {}
+                            twist = _twist_from_control(data)
+                            if twist is not None:
+                                _put_latest(control_queue, (twist, last_lamp_ref[0]))
+                            continue
                         if typ == "offer" and "sdp" in msg:
                             if pc is not None:
                                 await pc.close()

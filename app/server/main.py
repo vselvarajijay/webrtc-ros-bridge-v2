@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .ice_servers import get_ice_servers
-from .signaling import get_last_telemetry, handle_signaling_websocket
+from .signaling import get_last_telemetry, handle_signaling_websocket, send_control_to_robot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -196,6 +196,28 @@ def data():
     if last is not None:
         return last
     return _stub_telemetry()
+
+
+@app.post("/api/control")
+async def api_control(request: Request):
+    """
+    Send velocity command to the robot (when connected via signaling).
+    Body: {"linear_x": float, "angular_z": float} (optional, default 0).
+    Used by MCP server and other HTTP clients for agent-driven control.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    linear_x = float(body.get("linear_x", 0))
+    angular_z = float(body.get("angular_z", 0))
+    sent = await send_control_to_robot(linear_x, angular_z)
+    if not sent:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Robot not connected. Connect the robot via ConnectX signaling first."},
+        )
+    return {"ok": True, "linear_x": linear_x, "angular_z": angular_z}
 
 
 @app.websocket("/ws/signaling")
