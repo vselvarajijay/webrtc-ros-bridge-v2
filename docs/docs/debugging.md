@@ -9,7 +9,7 @@ Notes on how to debug the ConnectX stack: bridge, controls, and message paths.
 
 ## Joystick / controls don't move the robot
 
-1. **Check bridge logs** — `./cli.sh logs bridge` (or `docker compose --profile webrtc logs scout_bridge`). Look for:
+1. **Check bridge logs** — `./cli.sh logs bridge` (or `docker compose --profile webrtc logs connectx_bridge`). Look for:
    - **"Robot control ready (RTM client initialized)"** — Bridge has a robot and RTM; commands should reach the robot.
    - **"Robot instance created but RTM client not initialized"** — Auth failed. Set `SDK_API_TOKEN` and `BOT_SLUG` in `.env` (see `.env.example`). Restart the bridge.
    - **"cmd_vel received but no robot"** — Bridge is getting velocity commands but has no robot instance (wrong `ROBOT_TYPE` or auth). Fix env and restart.

@@ -1,12 +1,12 @@
 services:
-  app:
+  connectx_app:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
       args:
         CACHEBUST: ${CACHEBUST:-0}
-    image: webrtc-ros-bridge-v2-app
-    container_name: scout_app
+    image: webrtc-ros-bridge-v2-connectx_app
+    container_name: connectx_app
     ports:
       - "8000:8000"
     volumes:
@@ -21,9 +21,9 @@ services:
     profiles:
       - webrtc
 
-  scout_turn:
+  connectx_turn:
     image: coturn/coturn:latest
-    container_name: scout_turn
+    container_name: connectx_turn
     ports:
       - "3478:3478"
       - "3478:3478/udp"
@@ -33,14 +33,17 @@ services:
     profiles:
       - webrtc
 
-  scout_sdk:
+  connectx_sdk:
     build:
       context: .
       dockerfile: docker/Dockerfile.sdk
-    image: webrtc-ros-bridge-v2-scout_sdk
-    container_name: scout_sdk
+    image: webrtc-ros-bridge-v2-connectx_sdk
+    container_name: connectx_sdk
     ports:
       - "8001:8001"
+    env_file:
+      - path: .env
+        required: false
     environment:
       # Browser loads the SDK page from same container (port 8001)
       - SDK_PAGE_URL=http://127.0.0.1:8001/sdk
@@ -52,47 +55,50 @@ services:
     profiles:
       - webrtc
 
-  scout_bridge:
+  connectx_bridge:
     build:
       context: .
       dockerfile: docker/Dockerfile.bridge
-    image: webrtc-ros-bridge-v2-scout_bridge
-    container_name: scout_bridge
+    image: webrtc-ros-bridge-v2-connectx_bridge
+    container_name: connectx_bridge
     ports:
       - "8765:8765"
     depends_on:
-      - scout_sdk
-      - app
+      - connectx_sdk
+      - connectx_app
     stdin_open: true
     tty: true
+    env_file:
+      - path: .env
+        required: false
     environment:
       - DISPLAY=${DISPLAY:-host.docker.internal:0}
       - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=1
       # Use Docker service names so bridge can reach SDK/app/TURN on all platforms (Mac host networking doesn't share 127.0.0.1)
-      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://scout_sdk:8001}
-      - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://app:8000/ws/signaling}
-      - APP_URL=${APP_URL:-http://app:8000}
+      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://connectx_sdk:8001}
+      - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://connectx_app:8000/ws/signaling}
+      - APP_URL=${APP_URL:-http://connectx_app:8000}
       - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}
-      - TURN_URL=${TURN_URL_NODE:-turn:scout_turn:3478}
+      - TURN_URL=${TURN_URL_NODE:-turn:connectx_turn:3478}
       - TURN_USERNAME=${TURN_USERNAME:-scout}
       - TURN_CREDENTIAL=${TURN_CREDENTIAL:-scout}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
-    # No network_mode: host so bridge can reach scout_sdk via Docker DNS (required on Docker Desktop for Mac)
+    # No network_mode: host so bridge can reach connectx_sdk via Docker DNS (required on Docker Desktop for Mac)
     # bridge_node, controller_node, floor_mask_node, optical_flow_node, world_model_node, wander_node, foxglove_bridge in background; webrtc_node in foreground
     command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && source install/setup.bash && (ros2 run connectx_robot_bridge bridge_node &) && (ros2 run connectx_robot_bridge calibration_node &) && (ros2 run connectx_controller controller_node &) && (ros2 run connectx_perception_cpp floor_mask_node 2>&1 | sed 's/^/[floor_mask_node] /' &) && (ros2 run connectx_perception_cpp optical_flow_node 2>&1 | sed 's/^/[optical_flow_node] /' &) && (python3 /root/workspace/scripts/optical_flow_relay_to_app.py &) && (python3 /root/workspace/scripts/floor_mask_relay_to_app.py &) && (ros2 run connectx_planner world_model_node 2>&1 | sed 's/^/[world_model_node] /' &) && (ros2 run connectx_planner wander_node &) && (ros2 run foxglove_bridge foxglove_bridge &) && sleep 1 && exec ros2 run connectx_teleop webrtc_node"]
     profiles:
       - webrtc
 
-  scout_perception:
+  connectx_perception:
     build:
       context: .
       dockerfile: docker/Dockerfile.perception
-    image: webrtc-ros-bridge-v2-scout_perception
-    container_name: scout_perception
+    image: webrtc-ros-bridge-v2-connectx_perception
+    container_name: connectx_perception
     stdin_open: true
     tty: true
     environment:
@@ -111,12 +117,12 @@ services:
     profiles:
       - webrtc
 
-  scout_webrtc:
+  connectx_webrtc:
     build:
       context: .
       dockerfile: docker/Dockerfile.bridge
-    image: webrtc-ros-bridge-v2-scout_bridge
-    container_name: scout_webrtc
+    image: webrtc-ros-bridge-v2-connectx_bridge
+    container_name: connectx_webrtc
     stdin_open: true
     tty: true
     environment:
@@ -139,12 +145,12 @@ services:
     profiles:
       - webrtc
 
-  scout_shell:
+  connectx_shell:
     build:
       context: .
       dockerfile: docker/Dockerfile.shell
-    image: webrtc-ros-bridge-v2-scout_shell
-    container_name: scout_shell
+    image: webrtc-ros-bridge-v2-connectx_shell
+    container_name: connectx_shell
     stdin_open: true
     tty: true
     environment:
@@ -168,10 +174,10 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - APP_URL=${APP_URL:-http://app:8000}
+      - APP_URL=${APP_URL:-http://connectx_app:8000}
       - MCP_PORT=8002
     depends_on:
-      - app
+      - connectx_app
     profiles:
       - webrtc
 
@@ -184,7 +190,7 @@ services:
     ports:
       - "8123:8123"
     environment:
-      - APP_URL=${APP_URL:-http://app:8000}
+      - APP_URL=${APP_URL:-http://connectx_app:8000}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LANGSMITH_TRACING=${LANGSMITH_TRACING:-true}
       - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
@@ -192,7 +198,7 @@ services:
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-robot}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
-      - app
+      - connectx_app
     profiles:
       - webrtc
 

@@ -3,16 +3,16 @@
 Relay floor mask images from ROS2 /perception/floor_mask/image/compressed to the app's
 POST /api/floor_mask_image_ingest.
 
-Run in an environment where ROS2 sees the topic (e.g. scout_bridge container
+Run in an environment where ROS2 sees the topic (e.g. connectx_bridge container
 where floor_mask_node runs). The app must be reachable at APP_URL.
 
 Usage:
   source /opt/ros/kilted/setup.bash
   source /root/workspace/ros2_ws/install/setup.bash  # if needed
-  APP_URL=http://app:8000 python3 scripts/floor_mask_relay_to_app.py
+  APP_URL=http://connectx_app:8000 python3 scripts/floor_mask_relay_to_app.py
 
 Env:
-  APP_URL  Base URL of the app (e.g. http://app:8000 in Docker, http://127.0.0.1:8000 on host)
+  APP_URL  Base URL of the app (e.g. http://connectx_app:8000 in Docker, http://127.0.0.1:8000 on host)
 """
 
 import os

@@ -212,7 +212,7 @@ def _stub_telemetry():
 @app.get("/data")
 def data():
     """
-    Telemetry endpoint. Bridge (scout_bridge) polls this when SDK is expected on port 8000.
+    Telemetry endpoint. Bridge (connectx_bridge) polls this when SDK is expected on port 8000.
     Returns last telemetry received from robot via signaling when available;
     otherwise returns minimal stub so the bridge does not 404 and the UI can show something.
     """
@@ -348,8 +348,8 @@ def floor_mask_image():
     )
 
 
-# Calibration proxy: forward to scout_bridge calibration HTTP API
-_CALIBRATION_BRIDGE_URL = os.environ.get("CALIBRATION_BRIDGE_URL", "http://scout_bridge:8766").rstrip("/")
+# Calibration proxy: forward to connectx_bridge calibration HTTP API
+_CALIBRATION_BRIDGE_URL = os.environ.get("CALIBRATION_BRIDGE_URL", "http://connectx_bridge:8766").rstrip("/")
 _CALIBRATION_TIMEOUT = 10
 
 
@@ -376,7 +376,7 @@ def _calibration_proxy(method: str, path: str, body: Optional[bytes] = None) -> 
         logger.warning("Calibration proxy error: %s", e)
         return JSONResponse(
             status_code=503,
-            content={"detail": "Calibration service unavailable. Ensure scout_bridge is running."},
+            content={"detail": "Calibration service unavailable. Ensure connectx_bridge is running."},
         )
 
 
@@ -410,7 +410,42 @@ async def api_calibration_run():
     return _calibration_proxy("POST", "/calibration/run")
 
 
-# Serve static assets (JS, CSS, etc.) so that index.html can load /src/main.tsx or built /assets/*
-# Mount last so API and WebSocket routes take precedence.
-# Use StaticFilesWithJsMime so .js/.ts/.tsx are served as application/javascript (avoids MIME type error).
-app.mount("/", StaticFilesWithJsMime(directory=str(STATIC_DIR), html=False), name="www")
+# Serve static assets via HTTP-only catch-all (not Mount) so WebSocket /ws/signaling is never
+# dispatched to StaticFiles, which asserts scope["type"] == "http" and raises on WebSocket.
+# Mount("/") in Starlette matches all paths including WebSocket, causing AssertionError in staticfiles.
+def _static_file_response(full_path: Path) -> Optional[Response]:
+    """Return FileResponse with correct MIME for JS/TS, or None if path invalid/not found."""
+    if not full_path.is_file():
+        return None
+    try:
+        full_path.resolve().relative_to(STATIC_DIR.resolve())
+    except ValueError:
+        return None
+    suffix = full_path.suffix.lower()
+    media_type = "application/javascript" if suffix in _JS_MIME_EXTENSIONS else None
+    return FileResponse(full_path, media_type=media_type)
+
+
+@app.get("/{full_path:path}")
+def serve_static_or_spa(full_path: str):
+    """Serve static file from STATIC_DIR or index.html for SPA. HTTP GET only (WebSocket uses other routes)."""
+    if not full_path or full_path in ("index.html", "index.htm"):
+        for path in (_DIST_INDEX, WWW_DIR / "index.html"):
+            if path.is_file():
+                return FileResponse(path)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "React app not built. Run: pnpm build (in app/www), then restart the server."},
+        )
+    safe_path = Path(full_path)
+    if ".." in safe_path.parts or safe_path.is_absolute():
+        return Response(status_code=404, content="Not Found")
+    resolved = (STATIC_DIR / safe_path).resolve()
+    resp = _static_file_response(resolved)
+    if resp is not None:
+        return resp
+    # SPA fallback: serve index.html so client-side routing works
+    for path in (_DIST_INDEX, WWW_DIR / "index.html"):
+        if path.is_file():
+            return FileResponse(path)
+    return Response(status_code=404, content="Not Found")

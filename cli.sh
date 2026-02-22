@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Use BuildKit for cache mounts (apt, pip, cv_bridge) in scout_perception Dockerfile
+# Use BuildKit for cache mounts (apt, pip, cv_bridge) in connectx_perception Dockerfile
 export DOCKER_BUILDKIT=1
 
 cmd="${1:-}"
@@ -52,7 +52,7 @@ stop_storybook() {
 case "$cmd" in
   build)
     echo "Removing any existing containers that might conflict..."
-    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
+    docker rm -f connectx_app connectx_sdk connectx_bridge connectx_perception connectx_webrtc connectx_shell connectx_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     echo ""
     if [[ -f app/www/package.json ]]; then
@@ -73,7 +73,7 @@ case "$cmd" in
     # Try --remove-orphans, fall back if not supported
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     echo "Building ROS 2 workspace in container..."
-    docker compose --profile webrtc run --rm scout_bridge bash -c \
+    docker compose --profile webrtc run --rm connectx_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
     echo "Build complete. Run ./cli.sh start to start services and open a shell."
     ;;
@@ -110,17 +110,25 @@ case "$cmd" in
       rm -f "$APP_PID_FILE"
     fi
 
-    echo "Starting app (signaling + www), scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
+    echo "Starting all webrtc profile services (connectx_app, connectx_turn, connectx_sdk, connectx_bridge, connectx_perception, connectx_mcp, connectx_langgraph)..."
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d
     else
-      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc up -d --remove-orphans 2>/dev/null || \
+      docker compose --profile webrtc up -d
     fi
-    # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
+    # Give connectx_sdk time to bind to 8001 before connectx_bridge hits /v2/front (depends_on only waits for start, not ready)
     echo "Waiting for services to be ready..."
     sleep 5
+    if ! docker compose --profile webrtc ps connectx_sdk 2>/dev/null | grep -q Up; then
+      echo ""
+      echo "Warning: connectx_sdk is not running. Front camera will show no video until it is."
+      echo "  Check: docker compose --profile webrtc ps connectx_sdk"
+      echo "  Logs:  ./cli.sh logs sdk"
+      echo "  Restart: docker compose --profile webrtc up -d connectx_sdk"
+      echo ""
+    fi
     start_storybook
     echo ""
     echo "App (signaling + www): http://localhost:8000/"
@@ -138,11 +146,11 @@ case "$cmd" in
     echo "  3. URL: ws://localhost:8765"
     echo "  4. Connect to view /cmd_vel, /camera/front/compressed, /robot/telemetry, and other ROS 2 topics."
     echo ""
-    echo "Perception (optical flow, floor mask): scout_perception runs automatically. Run once: python3 scripts/download_models.py"
+    echo "Perception (optical flow, floor mask): connectx_perception runs automatically. Run once: python3 scripts/download_models.py"
     echo ""
     if [[ "$RUN_TELEOP" == true ]]; then
       echo "Opening teleop (keyboard control) — do not drive from the web UI at the same time (both use /cmd_vel)."
-      RUN_CMD="docker compose --profile webrtc exec -it scout_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && (ros2 run connectx_controller manual_controller &) && sleep 0.5 && exec ros2 run connectx_teleop keyboard_node'"
+      RUN_CMD="docker compose --profile webrtc exec -it connectx_bridge bash -c 'source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a; source /root/workspace/ros2_ws/install/setup.bash && (ros2 run connectx_controller manual_controller &) && sleep 0.5 && exec ros2 run connectx_teleop keyboard_node'"
       if [[ "$USE_XTERM" == true ]]; then
         if command -v xterm &>/dev/null; then
           xterm -e "$RUN_CMD"
@@ -161,8 +169,8 @@ case "$cmd" in
     fi
     ;;
   stop)
-    echo "Stopping app, scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
-    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+    echo "Stopping all webrtc profile services..."
+    docker compose --profile webrtc stop
     stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
@@ -195,7 +203,7 @@ case "$cmd" in
     ;;
   rebuild)
     echo "=== Rebuild: Stopping services ==="
-    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || true
+    docker compose --profile webrtc stop 2>/dev/null || true
     stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
@@ -221,14 +229,14 @@ case "$cmd" in
     fi
     echo ""
     echo "=== Rebuild: Building Docker images and ROS 2 workspace ==="
-    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
+    docker rm -f connectx_app connectx_sdk connectx_bridge connectx_perception connectx_webrtc connectx_shell connectx_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     export CACHEBUST="${CACHEBUST:-$(date +%s)}"
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
-    docker compose --profile webrtc run --rm scout_bridge bash -c \
+    docker compose --profile webrtc run --rm connectx_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
     echo ""
-    echo "=== Rebuild: Starting services (force-recreate so app serves latest www) ==="
+    echo "=== Rebuild: Starting all webrtc profile services (force-recreate) ==="
     if [[ "$(uname)" == Darwin ]]; then
       if command -v xhost &>/dev/null; then
         xhost + 127.0.0.1 2>/dev/null || true
@@ -240,14 +248,22 @@ case "$cmd" in
       fi
     fi
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate --remove-orphans 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate
     else
-      docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      docker compose --profile webrtc up -d --force-recreate app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc up -d --force-recreate --remove-orphans 2>/dev/null || \
+      docker compose --profile webrtc up -d --force-recreate
     fi
     echo "Waiting for services to be ready..."
     sleep 5
+    if ! docker compose --profile webrtc ps connectx_sdk 2>/dev/null | grep -q Up; then
+      echo ""
+      echo "Warning: connectx_sdk is not running. Front camera will show no video until it is."
+      echo "  Check: docker compose --profile webrtc ps connectx_sdk"
+      echo "  Logs:  ./cli.sh logs sdk"
+      echo "  Restart: docker compose --profile webrtc up -d connectx_sdk"
+      echo ""
+    fi
     start_storybook
     echo ""
     echo "Rebuild complete! Services are running."
@@ -273,44 +289,44 @@ case "$cmd" in
     echo "To use keyboard teleop instead: ./cli.sh teleop   or   ./cli.sh start --teleop"
     ;;
   teleop)
-    echo "Running manual_controller + keyboard_node in scout_bridge container..."
-    docker compose --profile webrtc exec -it scout_bridge bash -c \
+    echo "Running manual_controller + keyboard_node in connectx_bridge container..."
+    docker compose --profile webrtc exec -it connectx_bridge bash -c \
       'source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash && (ros2 run connectx_controller manual_controller &) && sleep 0.5 && exec ros2 run connectx_teleop keyboard_node'
     ;;
   test)
     echo "Running all tests in ROS 2 workspace..."
-    docker compose --profile webrtc run --rm scout_bridge bash -c \
+    docker compose --profile webrtc run --rm connectx_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon test"
     echo "Tests complete."
     ;;
   logs)
     target="${1:-webrtc}"
     if [[ "$target" == "webrtc" ]]; then
-      docker compose --profile webrtc logs -f scout_bridge
+      docker compose --profile webrtc logs -f connectx_bridge
     elif [[ "$target" == "app" ]]; then
-      docker compose --profile webrtc logs -f app
+      docker compose --profile webrtc logs -f connectx_app
     elif [[ "$target" == "sdk" ]]; then
-      docker compose --profile webrtc logs -f scout_sdk
+      docker compose --profile webrtc logs -f connectx_sdk
     elif [[ "$target" == "bridge" ]]; then
-      docker compose --profile webrtc logs -f scout_bridge
+      docker compose --profile webrtc logs -f connectx_bridge
     elif [[ "$target" == "perception" ]]; then
-      docker compose logs -f scout_perception
+      docker compose logs -f connectx_perception
     elif [[ "$target" == "turn" ]]; then
-      docker compose --profile webrtc logs -f scout_turn
+      docker compose --profile webrtc logs -f connectx_turn
     elif [[ "$target" == "mcp" ]]; then
       docker compose --profile webrtc logs -f connectx_mcp
     elif [[ "$target" == "langgraph" ]]; then
       docker compose --profile webrtc logs -f connectx_langgraph
     elif [[ "$target" == "all" ]]; then
-      docker compose --profile webrtc logs -f app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc logs -f connectx_app connectx_turn connectx_sdk connectx_bridge connectx_perception connectx_mcp connectx_langgraph
     else
       echo "Usage: $0 logs {webrtc|app|turn|sdk|bridge|perception|mcp|langgraph|all}"
-      echo "  webrtc     Follow scout_bridge logs (WebRTC node runs there)"
-      echo "  app        Follow app server (signaling + www) logs"
-      echo "  turn       Follow scout_turn (TURN server) logs"
-      echo "  sdk        Follow Earth Rovers SDK logs (front camera)"
-      echo "  bridge     Follow scout_bridge logs"
-      echo "  perception Follow scout_perception logs"
+      echo "  webrtc     Follow connectx_bridge logs (WebRTC node runs there)"
+      echo "  app        Follow connectx_app (signaling + www) logs"
+      echo "  turn       Follow connectx_turn (TURN server) logs"
+      echo "  sdk        Follow Earth Rovers SDK (connectx_sdk) logs (front camera)"
+      echo "  bridge     Follow connectx_bridge logs"
+      echo "  perception Follow connectx_perception logs"
       echo "  mcp        Follow connectx_mcp (MCP server) logs"
       echo "  langgraph  Follow connectx_langgraph (LangGraph Studio) logs"
       echo "  all        Follow all container logs"
@@ -322,15 +338,15 @@ case "$cmd" in
     echo ""
     echo "Commands:"
     echo "  build       Build Docker images and ROS 2 workspace (run once after clone or when deps change)"
-    echo "  start       Start App (signaling + www), TURN, Earth Rovers SDK, scout_bridge, scout_perception,"
+    echo "  start       Start connectx_app (signaling + www), connectx_turn, Earth Rovers SDK (connectx_sdk), connectx_bridge, connectx_perception,"
     echo "               connectx_mcp (MCP server), connectx_langgraph (LangGraph Studio chat agent)"
     echo "               By default only containers start; drive from http://localhost:8000/ (no conflict with web UI)"
     echo "               Options: --teleop  Also run CLI keyboard teleop (don't use with web UI at same time)"
     echo "                        --xterm   Run teleop in a separate xterm window (implies --teleop)"
     echo "  stop        Stop all services including connectx_mcp and connectx_langgraph"
     echo "  rebuild     Stop services, rebuild Docker images and ROS 2 workspace, then start services"
-    echo "  teleop      Run manual_controller + keyboard_node in scout_bridge (arrow key control)"
-    echo "  test        Run all ROS 2 workspace tests (colcon test in scout_bridge container)"
+    echo "  teleop      Run manual_controller + keyboard_node in connectx_bridge (arrow key control)"
+    echo "  test        Run all ROS 2 workspace tests (colcon test in connectx_bridge container)"
     echo "  logs        Follow container logs. Run in another terminal while start is running."
     echo "               $0 logs [webrtc|app|turn|sdk|bridge|perception|mcp|langgraph|all]  (default: webrtc)"
     echo "  clean       Remove orphaned containers (ros2-ws, ros2-kilted, etc.)"

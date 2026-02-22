@@ -51,6 +51,8 @@ Once running, open `http://localhost:8000` to access the live view interface:
 - **Telemetry dashboard** — Battery, speed, heading, and signal strength
 - **Perception panels** — Optical flow and floor mask overlays
 
+**No video frames?** The front camera is served by the **connectx_sdk** container (`http://connectx_sdk:8001/v2/front`). If you see "Name or service not known" or "Front camera disabled after 5 failures", connectx_sdk is not running. Check: `docker compose --profile webrtc ps connectx_sdk` and `./cli.sh logs sdk`. Restart it with: `docker compose --profile webrtc up -d connectx_sdk`.
+
 ---
 
 ## ROS 2 CI (run tests locally)

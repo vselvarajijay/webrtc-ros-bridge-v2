@@ -3,7 +3,14 @@ import logging
 
 import requests  # type: ignore[import]
 
-from connectx_robot_bridge.core.exceptions import ConfigurationError
+try:
+    from connectx_robot_bridge.core.exceptions import ConfigurationError
+except ImportError:
+    # Standalone SDK (e.g. connectx_sdk container): same dir has exceptions.py
+    try:
+        from .exceptions import ConfigurationError
+    except ImportError:
+        from exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 

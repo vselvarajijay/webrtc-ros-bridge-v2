@@ -1,0 +1,15 @@
+[
+  {
+    "id": "2e939cd4-8017-49b0-b2be-1e4c56072227",
+    "name": "Robot 1",
+    "robot_type": "earth_rover",
+    "host": "localhost",
+    "port": 8001,
+    "optical_flow": true,
+    "floor_mask": true,
+    "config": {
+      "FRODOBOT_SDK_API_TOKEN": "Nij2b8kiazkQ4VF5fgTr9Dy8byZqHdUierXSC18ZLyHKBBg7YFGLN2CcMWXpfYxuduTBh5iu76f3Vh8FQ8vYAybHvVEomif7FqUB",
+      "FRODOBOT_BOT_SLUG": "quark-sith-zeta"
+    }
+  }
+]

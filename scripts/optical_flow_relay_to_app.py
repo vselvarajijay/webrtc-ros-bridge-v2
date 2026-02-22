@@ -3,16 +3,16 @@
 Relay optical flow images from ROS2 /optical_flow/image/compressed to the app's
 POST /api/optical_flow_image_ingest.
 
-Run in an environment where ROS2 sees the topic (e.g. scout_bridge container
+Run in an environment where ROS2 sees the topic (e.g. connectx_bridge container
 where optical_flow_node runs). The app must be reachable at APP_URL.
 
 Usage:
   source /opt/ros/kilted/setup.bash
   source /root/workspace/ros2_ws/install/setup.bash  # if needed
-  APP_URL=http://app:8000 python3 scripts/optical_flow_relay_to_app.py
+  APP_URL=http://connectx_app:8000 python3 scripts/optical_flow_relay_to_app.py
 
 Env:
-  APP_URL  Base URL of the app (e.g. http://app:8000 in Docker, http://127.0.0.1:8000 on host)
+  APP_URL  Base URL of the app (e.g. http://connectx_app:8000 in Docker, http://127.0.0.1:8000 on host)
 """
 
 import os

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run optical_flow_node, floor_mask_node, and their relays so the UI receives optical flow and floor mask images.
-# Use from the scout_perception container or on the host with ROS2 workspace sourced.
+# Use from the connectx_perception container or on the host with ROS2 workspace sourced.
 #
 # Prerequisites: app running (port 8000). Set APP_URL if app is not at http://127.0.0.1:8000.
 #

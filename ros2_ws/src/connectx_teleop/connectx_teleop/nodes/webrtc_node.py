@@ -230,7 +230,7 @@ def _make_placeholder_frame() -> np.ndarray:
             )
             cv2.putText(
                 img,
-                "Start Earth Rovers SDK (scout_sdk) /v2/front",
+                "Start Earth Rovers SDK (connectx_sdk) /v2/front",
                 (10, h // 2 + 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
@@ -274,7 +274,7 @@ class CameraTrack(VideoStreamTrack):
                 self._placeholder_frame = _make_placeholder_frame()
                 LOG.info(
                     "CameraTrack: no frames from %s yet; showing placeholder. "
-                    "Start Earth Rovers SDK (scout_sdk) for live feed.",
+                    "Start Earth Rovers SDK (connectx_sdk) for live feed.",
                     CAMERA_FRONT_COMPRESSED_TOPIC,
                 )
             self._last_frame = self._placeholder_frame
@@ -490,7 +490,7 @@ def run_ros_node(
             last_no_frame_log[0] = now
             LOG.warning(
                 "No camera frames on %s yet. Is bridge_node running? "
-                "Is scout_sdk reachable and /v2/front returning frames?",
+                "Is connectx_sdk reachable and /v2/front returning frames?",
                 CAMERA_FRONT_COMPRESSED_TOPIC,
             )
         no_telem_cond = (
@@ -501,7 +501,7 @@ def run_ros_node(
         if no_telem_cond:
             last_no_telemetry_log[0] = now
             LOG.warning(
-                "No telemetry on %s yet. Is bridge_node running? Is scout_sdk /data reachable?",
+                "No telemetry on %s yet. Is bridge_node running? Is connectx_sdk /data reachable?",
                 ROBOT_TELEMETRY_TOPIC,
             )
         try:
