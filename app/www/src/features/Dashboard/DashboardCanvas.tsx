@@ -25,7 +25,7 @@ function widgetLayout(id: string, widgets: Record<string, WidgetLayout>): Widget
  * Layout state is managed by DashboardContext and persisted to localStorage.
  */
 export function DashboardCanvas() {
-  const { layout, updateWidget } = useDashboard();
+  const { layout, updateWidget, isEditing } = useDashboard();
 
   return (
     <div
@@ -42,6 +42,7 @@ export function DashboardCanvas() {
       <DraggableResizableWidget
         config={WIDGET_MAP['optical-flow']}
         layout={widgetLayout('optical-flow', layout.widgets)}
+        isEditing={isEditing}
         onLayoutChange={updateWidget}
       >
         <OpticalFlowView />
@@ -50,6 +51,7 @@ export function DashboardCanvas() {
       <DraggableResizableWidget
         config={WIDGET_MAP['floor-mask']}
         layout={widgetLayout('floor-mask', layout.widgets)}
+        isEditing={isEditing}
         onLayoutChange={updateWidget}
       >
         <FloorMaskView />
@@ -58,6 +60,7 @@ export function DashboardCanvas() {
       <DraggableResizableWidget
         config={WIDGET_MAP['video-stream']}
         layout={widgetLayout('video-stream', layout.widgets)}
+        isEditing={isEditing}
         onLayoutChange={updateWidget}
       >
         <VideoStream />
@@ -66,6 +69,7 @@ export function DashboardCanvas() {
       <DraggableResizableWidget
         config={WIDGET_MAP['robot-control']}
         layout={widgetLayout('robot-control', layout.widgets)}
+        isEditing={isEditing}
         onLayoutChange={updateWidget}
       >
         <RobotControl />
@@ -74,6 +78,7 @@ export function DashboardCanvas() {
       <DraggableResizableWidget
         config={WIDGET_MAP['system-logs']}
         layout={widgetLayout('system-logs', layout.widgets)}
+        isEditing={isEditing}
         onLayoutChange={updateWidget}
       >
         <SystemLogsPanel />

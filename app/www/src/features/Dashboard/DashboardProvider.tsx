@@ -5,6 +5,7 @@ import type { DashboardLayout, WidgetLayout } from './LayoutManager';
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const [layout, setLayout] = useState<DashboardLayout>(() => loadLayout());
+  const [isEditing, setIsEditing] = useState(false);
 
   const updateWidget = useCallback((id: string, widgetLayout: WidgetLayout) => {
     setLayout((prev) => {
@@ -22,8 +23,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setLayout(defaults);
   }, []);
 
+  const enterEditMode = useCallback(() => setIsEditing(true), []);
+  const exitEditMode = useCallback(() => setIsEditing(false), []);
+
   return (
-    <DashboardContext.Provider value={{ layout, updateWidget, handleReset }}>
+    <DashboardContext.Provider value={{ layout, isEditing, updateWidget, handleReset, enterEditMode, exitEditMode }}>
       {children}
     </DashboardContext.Provider>
   );
