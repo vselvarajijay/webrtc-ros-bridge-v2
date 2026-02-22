@@ -32,6 +32,7 @@ class RobotBase(ABC):
     def set_lamp(self, lamp: int) -> None:
         """
         Set lamp state (bitfield: 0=off, 1=front, 2=back, 3=both).
+
         Default no-op; subclasses that support lamps should override.
         """
         pass
@@ -39,11 +40,15 @@ class RobotBase(ABC):
     def send_velocity(self, linear: float, angular: float) -> bool:
         """
         Send continuous velocity commands to the robot.
+
         linear: forward/backward speed (-1.0 to 1.0)
         angular: rotation speed left/right (-1.0 to 1.0)
 
-        Returns:
+        Returns
+        -------
+        bool
             True if the command was sent successfully (e.g. RTM HTTP 200), False otherwise.
+
         """
         # Default: convert to discrete commands
         if abs(linear) > abs(angular):
@@ -63,13 +68,28 @@ class RobotBase(ABC):
         return True
 
     @abstractmethod
-    def get_front_camera_frame(self) -> Optional[Union[bytes, Tuple[bytes, Dict[str, float]]]]:
-        """Return latest front camera frame as raw bytes (or (bytes, metrics)), or None if unavailable."""
+    def get_front_camera_frame(
+        self,
+    ) -> Optional[Union[bytes, Tuple[bytes, Dict[str, float]]]]:
+        """Return latest front camera frame as raw bytes (or (bytes, metrics)), or None."""
         pass
 
-    def get_front_camera_stream(self, stop_event=None) -> Iterator[Optional[Union[bytes, Tuple[bytes, Dict[str, float]]]]]:
+    def get_front_camera_frame_full(
+        self,
+    ) -> Optional[Tuple[bytes, Dict[str, float]]]:
+        """
+        Return one full-resolution front camera frame, or None.
+
+        Optional; bridge only uses this when present. Default returns None.
+        """
+        return None
+
+    def get_front_camera_stream(
+        self, stop_event=None
+    ) -> Iterator[Optional[Union[bytes, Tuple[bytes, Dict[str, float]]]]]:
         """
         Yield front camera frames continuously at max sustainable rate.
+
         Caller can pass a threading.Event; when set, the iterator exits.
         """
         while stop_event is None or not stop_event.is_set():
@@ -81,8 +101,11 @@ class RobotBase(ABC):
     def get_telemetry(self) -> Optional[TelemetryFrame]:
         """
         Get latest telemetry data from the robot.
-        
-        Returns:
-            TelemetryFrame containing sensor data, or None if unavailable.
+
+        Returns
+        -------
+        TelemetryFrame or None
+            Sensor data, or None if unavailable.
+
         """
         pass

@@ -1,6 +1,7 @@
 """
-Parse /robot/telemetry JSON (same format as bridge TelemetryFrame) into a minimal
-type for manual_controller safety. No dependency on connectx_robot_bridge.
+Parse /robot/telemetry JSON into a minimal type for manual_controller safety.
+
+Same format as bridge TelemetryFrame. No dependency on connectx_robot_bridge.
 """
 
 import json
@@ -42,8 +43,10 @@ def parse_telemetry_json(json_str: str) -> Optional[TelemetryForSafety]:
     """
     Parse /robot/telemetry JSON string (bridge publishes asdict(TelemetryFrame)).
 
-    Returns:
+    Returns
+    -------
         TelemetryForSafety or None if invalid/missing.
+
     """
     if not json_str or not json_str.strip():
         return None

@@ -62,7 +62,8 @@ FloorMaskNode::FloorMaskNode(const rclcpp::NodeOptions & options)
   mask_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
     "/perception/floor_mask/image/compressed", 10);
 
-  RCLCPP_INFO(this->get_logger(),
+  RCLCPP_INFO(
+    this->get_logger(),
     "floor_mask_node: sub /camera/front/compressed, pub /perception/floor_mask, "
     "/perception/floor_mask/image/compressed (mask %dx%d, seed_bottom=%.2f, "
     "seed_width=%.2f, hsv_thresh=%.1f, morph=%s)",
@@ -161,12 +162,14 @@ cv::Mat FloorMaskNode::compute_floor_mask(const cv::Mat & img)
   // Morphological operations
   if (enable_morphology_) {
     if (erode_kernel_ > 0) {
-      cv::Mat kernel_erode = cv::getStructuringElement(cv::MORPH_RECT,
+      cv::Mat kernel_erode = cv::getStructuringElement(
+        cv::MORPH_RECT,
         cv::Size(erode_kernel_, erode_kernel_));
       cv::erode(mask, mask, kernel_erode);
     }
     if (dilate_kernel_ > 0) {
-      cv::Mat kernel_dilate = cv::getStructuringElement(cv::MORPH_RECT,
+      cv::Mat kernel_dilate = cv::getStructuringElement(
+        cv::MORPH_RECT,
         cv::Size(dilate_kernel_, dilate_kernel_));
       cv::dilate(mask, mask, kernel_dilate);
     }
@@ -210,7 +213,7 @@ cv::Mat FloorMaskNode::create_visualization(const cv::Mat & img, const cv::Mat &
   green_overlay.convertTo(green_float, CV_32F);
 
   cv::Mat overlay_float = img_float.mul(cv::Scalar::all(1.0) - alpha * mask_normalized) +
-                           green_float.mul(alpha * mask_normalized);
+    green_float.mul(alpha * mask_normalized);
   overlay_float.convertTo(overlay, CV_8U);
 
   return overlay;

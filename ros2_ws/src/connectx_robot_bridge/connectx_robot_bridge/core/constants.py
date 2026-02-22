@@ -58,7 +58,7 @@ ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"
 DEFAULT_ROBOT_TYPE = "earth_rovers_sdk"
 DEFAULT_MAX_LINEAR_SPEED = 1.0
 DEFAULT_MAX_ANGULAR_SPEED = 1.0
-# Limited by SDK /v2/front (HTTP + Playwright capture). 5 Hz is reliable for WebRTC; increase if SDK keeps up.
+# Limited by SDK /v2/front (HTTP + Playwright). 5 Hz is reliable for WebRTC.
 DEFAULT_CAMERA_PUBLISH_RATE = 5.0
 # Full-resolution front camera (viewport size); keep low to avoid overloading SDK.
 DEFAULT_CAMERA_FULL_PUBLISH_RATE = 1.0

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Keyboard connection node: reads arrow keys and speed mode 1-5, publishes target
-Twist to /teleop/velocity_target. Run manual_controller (connectx_controller) for
+Keyboard connection node.
+
+Reads arrow keys and speed mode 1-5, publishes target Twist to
+/teleop/velocity_target. Run manual_controller (connectx_controller) for
 ramping and safety; this node is connection-only.
 """
 
@@ -82,7 +84,9 @@ class KeyboardNode(Node):
                 self._run_keyboard_lib_listener()
                 return
             except Exception as e:
-                self.get_logger().warning(f"keyboard library failed: {e}, falling back to terminal")
+                self.get_logger().warning(
+                    "keyboard library failed: %s, falling back to terminal", e
+                )
         self._run_terminal_key_reader()
 
     def _run_keyboard_lib_listener(self) -> None:
@@ -153,7 +157,11 @@ class KeyboardNode(Node):
                             if key:
                                 now = time.monotonic()
                                 with self._lock:
-                                    opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}.get(key)
+                                    opposite = (
+                                        {"up": "down", "down": "up",
+                                         "left": "right", "right": "left"}
+                                        .get(key)
+                                    )
                                     if opposite and opposite in self._held:
                                         self._held.discard(opposite)
                                         if opposite in last_seen:

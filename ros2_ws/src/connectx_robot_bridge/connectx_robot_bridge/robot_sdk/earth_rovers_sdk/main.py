@@ -9,14 +9,14 @@ from datetime import datetime
 
 import cv2
 import numpy as np
-import requests
+import requests  # type: ignore[import]
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Literal
+from typing import Any, Dict, Literal
 
 from browser_service import BrowserService
 from rtm_client import RtmClient
@@ -101,8 +101,8 @@ class AuthResponse(BaseModel):
 
 
 # In-memory storage for the response
-auth_response_data = {}
-checkpoints_list_data = {}
+auth_response_data: Dict[str, Any] = {}
+checkpoints_list_data: Dict[str, Any] = {}
 
 app.mount("/static", StaticFiles(directory="./static"), name="static")
 
@@ -336,7 +336,7 @@ async def end_mission():
     }
 
     try:
-        end_ride_response = await end_ride(headers, bot_slug, mission_slug)
+        await end_ride(headers, bot_slug, mission_slug)
         # Clear the stored auth and checkpoints data
         global auth_response_data, checkpoints_list_data
         auth_response_data = {}
@@ -440,7 +440,7 @@ async def get_screenshot(view_types: str = "rear,map,front"):
 
     await browser_service.take_screenshot("screenshots", views_list)
 
-    response_content = {}
+    response_content: Dict[str, Any] = {}
     for view in views_list:
         file_path = f"screenshots/{view}.png"
         try:
@@ -626,7 +626,8 @@ if __name__ == "__main__":
     config.bind = ["0.0.0.0:8000"]
 
 
-# Placeholder frame when SDK_SKIP_BROWSER_JOIN=1 so bridge gets frames and UI shows "No camera feed" instead of 404/black.
+# Placeholder frame when SDK_SKIP_BROWSER_JOIN=1 so bridge gets frames and
+# UI shows "No camera feed" instead of 404/black.
 _PLACEHOLDER_FRAME_JPEG_B64 = None
 
 
@@ -654,7 +655,7 @@ def _get_placeholder_front_frame_b64() -> str:
 async def get_front_frame():
     await need_start_mission()
     if os.getenv("SDK_SKIP_BROWSER_JOIN", "").lower() in ("1", "true", "yes"):
-        # Return placeholder so bridge/webrtc pipeline stays active and UI shows message instead of black.
+        # Return placeholder so bridge/webrtc stays active; UI shows message.
         response_data = {
             "front_frame": _get_placeholder_front_frame_b64(),
             "timestamp": datetime.utcnow().timestamp(),
@@ -667,7 +668,7 @@ async def get_front_frame():
         capture_ms = (time.perf_counter() - t0) * 1000
     except Exception as e:
         logger.warning("Browser front frame unavailable: %s", e)
-        # Return placeholder so bridge/webrtc keep publishing; UI shows "No camera feed" instead of black.
+        # Return placeholder so bridge/webrtc keep publishing; UI shows message.
         response_data = {
             "front_frame": _get_placeholder_front_frame_b64(),
             "timestamp": datetime.utcnow().timestamp(),

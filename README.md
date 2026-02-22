@@ -53,6 +53,18 @@ Once running, open `http://localhost:8000` to access the live view interface:
 
 ---
 
+## ROS 2 CI (run tests locally)
+
+To run the same build and test as GitHub Actions (e.g. before pushing):
+
+```bash
+./scripts/run_ros2_ci_local.sh
+```
+
+The script mounts the repo and overlays **empty volumes** on `ros2_ws/build`, `ros2_ws/install`, and `ros2_ws/log`, so the container never sees stale paths (e.g. `/root/workspace/ros2_ws`) and you avoid CMake/colcon path mismatches. If you run `docker run` yourself, include those same volume args; see `scripts/run_ros2_ci_local.sh` for the exact command.
+
+---
+
 ## Perception
 
 Run `python3 scripts/download_models.py` once to download models, then `./cli.sh start` — perception runs automatically. Use `./scripts/test_perception.sh` to verify everything is working.

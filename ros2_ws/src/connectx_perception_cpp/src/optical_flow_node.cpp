@@ -100,10 +100,11 @@ OpticalFlowNode::OpticalFlowNode(const rclcpp::NodeOptions & options)
   flow_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
     "/optical_flow/image/compressed", 10);
 
-  const char* format_str = use_enhanced_ ? "enhanced (18)" : "legacy (9)";
-  const char* blur_str = blur_kernel_ > 0 ? "blur" : "no blur";
-  const char* mask_str = use_floor_mask_ ? "mask" : "no mask";
-  RCLCPP_INFO(this->get_logger(),
+  const char * format_str = use_enhanced_ ? "enhanced (18)" : "legacy (9)";
+  const char * blur_str = blur_kernel_ > 0 ? "blur" : "no blur";
+  const char * mask_str = use_floor_mask_ ? "mask" : "no mask";
+  RCLCPP_INFO(
+    this->get_logger(),
     "optical_flow_node: sub /camera/front/compressed, pub /optical_flow "
     "(flow %dx%d, format=%s, %s, %s, middle=%.2f-%.2f, top_band=%.2f, max_dt=%.2fs, "
     "noise_floor=%.2f, ema_alpha=%.2f)",
@@ -351,11 +352,15 @@ void OpticalFlowNode::image_callback(const sensor_msgs::msg::CompressedImage::Sh
       // Set values with absolute value < noise_floor to zero
       cv::Mat abs_channel = cv::abs(channel);
       cv::Mat mask_small;
-      cv::compare(abs_channel, cv::Scalar(static_cast<float>(noise_floor_)), mask_small, cv::CMP_LT);
+      cv::compare(
+        abs_channel, cv::Scalar(static_cast<float>(noise_floor_)), mask_small,
+        cv::CMP_LT);
       channel.setTo(0.0f, mask_small);
 
       // Cap magnitude: clip to [-flow_max_, flow_max_]
-      cv::threshold(channel, channel, static_cast<float>(flow_max_), static_cast<float>(flow_max_), cv::THRESH_TRUNC);
+      cv::threshold(
+        channel, channel, static_cast<float>(flow_max_), static_cast<float>(flow_max_),
+        cv::THRESH_TRUNC);
       cv::Mat neg_mask;
       cv::compare(channel, cv::Scalar(-static_cast<float>(flow_max_)), neg_mask, cv::CMP_LT);
       channel.setTo(-static_cast<float>(flow_max_), neg_mask);

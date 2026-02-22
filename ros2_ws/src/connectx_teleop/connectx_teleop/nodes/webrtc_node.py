@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-WebRTC node: subscribes to /camera/front/compressed, sends video over WebRTC;
-receives control on data channel and publishes to /cmd_vel.
-Connects to App server WebSocket for signaling (offer/answer/ICE).
+WebRTC node.
+
+Subscribes to /camera/front/compressed, sends video over WebRTC; receives
+control on data channel and publishes to /cmd_vel. Connects to App server
+WebSocket for signaling (offer/answer/ICE).
 """
 
 import asyncio
@@ -13,7 +15,7 @@ import queue
 import threading
 import time
 from fractions import Fraction
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import rclpy
@@ -89,18 +91,26 @@ SIGNALING_WS_URL = os.getenv("SIGNALING_WS_URL", "ws://localhost:8000/ws/signali
 # Keep only latest frame to minimize latency (no backlog).
 FRAME_QUEUE_MAXSIZE = 1
 FRAME_CLOCK_RATE = 90000
-# Send a keyframe (I-frame) at least this often so the browser decoder can display (and recover after packet loss).
+# Send a keyframe (I-frame) at least this often so browser decoder can display
+# (and recover after packet loss).
 # 5 Hz video (previously working rate; steady keyframes help browser decode)
 CAMERA_TRACK_FPS = 5
 KEYFRAME_INTERVAL_FRAMES = 15  # ~3 s at 5 fps
-KEYFRAME_BURST_FIRST_N = 5  # First N frames as keyframes so browser gets one even if first packets are lost
+# First N frames as keyframes so browser gets one even if first packets are lost
+KEYFRAME_BURST_FIRST_N = 5
 
 # Frame metrics log: one line per frame when FRAME_METRICS_ENABLED != 0
 # Default path: workspace root (project root in Docker) so frame_metrics.log appears next to cli.sh
-FRAME_METRICS_ENABLED = os.getenv("FRAME_METRICS_ENABLED", "1").strip() not in ("0", "false", "False", "no")
+FRAME_METRICS_ENABLED = (
+    os.getenv("FRAME_METRICS_ENABLED", "1").strip()
+    not in ("0", "false", "False", "no")
+)
 _def_metrics_log = os.getenv("FRAME_METRICS_LOG")
 if _def_metrics_log:
-    FRAME_METRICS_LOG_PATH = _def_metrics_log if os.path.isabs(_def_metrics_log) else os.path.abspath(_def_metrics_log)
+    FRAME_METRICS_LOG_PATH = (
+        _def_metrics_log if os.path.isabs(_def_metrics_log)
+        else os.path.abspath(_def_metrics_log)
+    )
 else:
     _nodes_dir = os.path.dirname(os.path.abspath(__file__))
     _ros2_ws = os.path.abspath(os.path.join(_nodes_dir, "..", "..", "..", ".."))
@@ -110,11 +120,11 @@ _metrics_log_file = [None]  # Open-once file handle for append
 
 
 def _parse_frame_metrics_from_header(frame_id_str: str, fallback_frame_id: int) -> tuple:
-    """Parse frame_id,sdk_capture_ms,fetch_ms from header.frame_id (e.g. camera_front_42_45.2_52.1)."""
+    """Parse frame_id,sdk_capture_ms,fetch_ms from header.frame_id."""
     prefix = f"{CAMERA_FRAME_ID}_"
     if not frame_id_str or not frame_id_str.startswith(prefix):
         return (fallback_frame_id, 0.0, 0.0)
-    parts = frame_id_str[len(prefix) :].split("_")
+    parts = frame_id_str[len(prefix):].split("_")
     if len(parts) < 3:
         return (fallback_frame_id, 0.0, 0.0)
     try:
@@ -263,7 +273,8 @@ class CameraTrack(VideoStreamTrack):
             if self._placeholder_frame is None:
                 self._placeholder_frame = _make_placeholder_frame()
                 LOG.info(
-                    "CameraTrack: no frames from %s yet; showing placeholder. Start Earth Rovers SDK (scout_sdk) for live feed.",
+                    "CameraTrack: no frames from %s yet; showing placeholder. "
+                    "Start Earth Rovers SDK (scout_sdk) for live feed.",
                     CAMERA_FRONT_COMPRESSED_TOPIC,
                 )
             self._last_frame = self._placeholder_frame
@@ -279,7 +290,7 @@ class CameraTrack(VideoStreamTrack):
         frame = VideoFrame.from_ndarray(self._last_frame, format="bgr24")
         frame.pts = self._pts
         frame.time_base = Fraction(1, self._clock_rate)
-        # Force keyframe (I-frame) for first frames and periodically so the browser decoder can display.
+        # Force keyframe (I-frame) for first frames and periodically for decoder.
         if (
             self._recv_count <= KEYFRAME_BURST_FIRST_N
             or (self._recv_count % KEYFRAME_INTERVAL_FRAMES) == 1
@@ -294,7 +305,7 @@ class CameraTrack(VideoStreamTrack):
 
 
 def _twist_from_control(data: dict) -> Optional[Twist]:
-    """Parse JSON control message to geometry_msgs/Twist. Supports linear_x/angular_z or full linear/angular."""
+    """Parse JSON control to Twist. Supports linear_x/angular_z or full linear/angular."""
     try:
         msg = Twist()
         if "linear_x" in data and "angular_z" in data:
@@ -330,8 +341,13 @@ def run_ros_node(
     last_flow_ref: list,
     wander_mode_ref: list,
 ) -> None:
-    """Run rclpy node. Drains control_queue of (twist, lamp) and autonomy_command_queue of command strings.
-    When wander_mode_ref[0] is True (wander active), do not publish to /cmd_vel so wander_planner is the sole source."""
+    """
+    Run rclpy node.
+
+    Drains control_queue of (twist, lamp) and autonomy_command_queue of
+    command strings. When wander_mode_ref[0] is True (wander active), do not
+    publish to /cmd_vel so wander_planner is the sole source.
+    """
     rclpy.init()
     node = Node("webrtc_node")
     cmd_pub = node.create_publisher(Twist, CMD_VEL_TOPIC, 10)
@@ -345,7 +361,10 @@ def run_ros_node(
             return
         if not first_telemetry_logged[0]:
             first_telemetry_logged[0] = True
-            LOG.info("First telemetry received on %s (len=%d)", ROBOT_TELEMETRY_TOPIC, len(msg.data))
+            LOG.info(
+                "First telemetry received on %s (len=%d)",
+                ROBOT_TELEMETRY_TOPIC, len(msg.data),
+            )
         _put_latest(telemetry_queue, msg.data)
 
     node.create_subscription(
@@ -415,12 +434,13 @@ def run_ros_node(
                 except queue.Empty:
                     pass
             local_frame_counter[0] += 1
-            # One line per frame: [frame_N],[sdk_capture],[ms],[bridge_fetch],[ms],[decode],[ms],[resize],[ms],[UI],[-]
+            # One line per frame: frame_N, sdk_capture, bridge_fetch, decode, resize, UI
             log_handle = _get_metrics_log_handle()
             if log_handle is not None:
                 line = (
-                    f"[frame_{frame_id}],[sdk_capture],[{sdk_capture_ms:.2f}],[bridge_fetch],[{fetch_ms:.2f}],"
-                    f"[decode],[{decode_ms:.2f}],[resize],[{resize_ms:.2f}],[UI],[-]\n"
+                    f"[frame_{frame_id}],[sdk_capture],[{sdk_capture_ms:.2f}],"
+                    f"[bridge_fetch],[{fetch_ms:.2f}],[decode],[{decode_ms:.2f}],"
+                    f"[resize],[{resize_ms:.2f}],[UI],[-]\n"
                 )
                 try:
                     log_handle.write(line)
@@ -431,7 +451,8 @@ def run_ros_node(
             if not decode_fail_logged[0]:
                 decode_fail_logged[0] = True
                 LOG.warning(
-                    "Camera frame decode failed (format=%s, len=%d). Check IMAGE_FORMAT matches SDK. No video will show until decode succeeds.",
+                    "Camera frame decode failed (format=%s, len=%d). "
+                    "Check IMAGE_FORMAT matches SDK. No video until decode succeeds.",
                     msg.format or image_format,
                     len(data),
                 )
@@ -454,18 +475,30 @@ def run_ros_node(
     last_no_frame_log = [0.0]
     last_no_telemetry_log = [0.0]
     NO_DATA_WARN_INTERVAL = 15.0
-    last_twist_ref: list = [None]  # [Twist|None]; repeat at drain rate when queue empty for smooth control
+    # [Twist|None]; repeat at drain rate when queue empty for smooth control
+    last_twist_ref: list = [None]
     last_lamp_published: list = [0]
 
     while not stop_event.is_set():
         now = time.monotonic()
-        if not first_frame_logged[0] and (now - last_no_frame_log[0]) >= NO_DATA_WARN_INTERVAL and (now - start_time) >= 5.0:
+        no_frame_cond = (
+            not first_frame_logged[0]
+            and (now - last_no_frame_log[0]) >= NO_DATA_WARN_INTERVAL
+            and (now - start_time) >= 5.0
+        )
+        if no_frame_cond:
             last_no_frame_log[0] = now
             LOG.warning(
-                "No camera frames on %s yet. Is bridge_node running in the same container? Is scout_sdk reachable and /v2/front returning frames?",
+                "No camera frames on %s yet. Is bridge_node running? "
+                "Is scout_sdk reachable and /v2/front returning frames?",
                 CAMERA_FRONT_COMPRESSED_TOPIC,
             )
-        if not first_telemetry_logged[0] and (now - last_no_telemetry_log[0]) >= NO_DATA_WARN_INTERVAL and (now - start_time) >= 5.0:
+        no_telem_cond = (
+            not first_telemetry_logged[0]
+            and (now - last_no_telemetry_log[0]) >= NO_DATA_WARN_INTERVAL
+            and (now - start_time) >= 5.0
+        )
+        if no_telem_cond:
             last_no_telemetry_log[0] = now
             LOG.warning(
                 "No telemetry on %s yet. Is bridge_node running? Is scout_sdk /data reachable?",
@@ -477,7 +510,12 @@ def run_ros_node(
             break
         except Exception as e:
             err_str = str(e)
-            if "context is not valid" in err_str or "rcl_shutdown" in err_str or "rcl_init" in err_str:
+            rcl_err = (
+                "context is not valid" in err_str
+                or "rcl_shutdown" in err_str
+                or "rcl_init" in err_str
+            )
+            if rcl_err:
                 LOG.info("ROS context shut down; exiting ROS thread.")
                 break
             LOG.warning("ROS spin_once error (continuing): %s", e)
@@ -497,7 +535,7 @@ def run_ros_node(
                         is_wander = raw == "wander" or raw.startswith("wander ")
                         wander_mode_ref[0] = is_wander
                         if is_wander:
-                            # Clear last twist so when we exit wander the first webrtc publish is zero
+                            # Clear last twist so first webrtc publish after wander is zero
                             zero_twist = Twist()
                             zero_twist.linear.x = 0.0
                             zero_twist.angular.z = 0.0
@@ -531,7 +569,7 @@ def run_ros_node(
                     pass
                 except Exception as e:
                     LOG.warning("Control drain error (continuing): %s", e)
-                # Repeat last twist at drain rate when queue empty so robot gets steady 50 Hz stream
+                # Repeat last twist at drain rate when queue empty (steady 50 Hz)
                 if not published_this_cycle and last_twist_ref[0] is not None:
                     lamp_pub.publish(Int32(data=last_lamp_published[0]))
                     cmd_pub.publish(last_twist_ref[0])
@@ -547,7 +585,7 @@ def run_ros_node(
 
 
 def _is_full_telemetry(obj: dict) -> bool:
-    """True if this looks like full telemetry (has battery, lat/lon, or rpms), not just speed echo."""
+    """Return True if this looks like full telemetry (battery, lat/lon, or rpms)."""
     return (
         obj.get("battery") is not None
         or (obj.get("latitude") is not None and obj.get("longitude") is not None)
@@ -567,6 +605,7 @@ _HEARTBEAT_TELEMETRY = {
     "timestamp": 0,
 }
 
+
 async def _telemetry_sender_loop(
     ws,
     telemetry_queue: queue.Queue,
@@ -575,9 +614,9 @@ async def _telemetry_sender_loop(
     last_frame_pts_ref: Optional[list] = None,
     last_flow_ref: Optional[list] = None,
 ) -> None:
-    """Send telemetry to app server and browser. Send heartbeat when queue empty so UI stays alive."""
+    """Send telemetry to app and browser. Heartbeat when queue empty so UI stays alive."""
     last_heartbeat = [0.0]
-    last_payload_ws = [None]  # last full payload we sent (for heartbeat)
+    last_payload_ws: List[Optional[Dict[str, Any]]] = [None]  # last full payload we sent
     heartbeat_interval = 2.0  # seconds
     first_ws_telemetry_logged: list = [False]
 
@@ -629,13 +668,17 @@ async def _telemetry_sender_loop(
                 payload_obj_dc = payload_obj_ws
 
             if last_flow_ref is not None and last_flow_ref[0] is not None:
-                payload_obj_ws = dict(payload_obj_ws) if isinstance(payload_obj_ws, dict) else payload_obj_ws
-                payload_obj_dc = dict(payload_obj_dc) if isinstance(payload_obj_dc, dict) else payload_obj_dc
-                flow = last_flow_ref[0]
-                payload_obj_ws["optical_flow"] = flow
-                payload_obj_dc["optical_flow"] = flow
+                if isinstance(payload_obj_ws, dict) and isinstance(payload_obj_dc, dict):
+                    payload_obj_ws = dict(payload_obj_ws)
+                    payload_obj_dc = dict(payload_obj_dc)
+                    flow = last_flow_ref[0]
+                    payload_obj_ws["optical_flow"] = flow
+                    payload_obj_dc["optical_flow"] = flow
 
-            last_payload_ws[0] = payload_obj_ws if _is_full_telemetry(payload_obj_ws) else last_payload_ws[0]
+            if isinstance(payload_obj_ws, dict):
+                last_payload_ws[0] = (
+                    payload_obj_ws if _is_full_telemetry(payload_obj_ws) else last_payload_ws[0]
+                )
             payload_ws = {"type": "telemetry", "data": payload_obj_ws}
             if last_frame_pts_ref is not None:
                 payload_ws["frame_pts"] = last_frame_pts_ref[0]
@@ -650,7 +693,9 @@ async def _telemetry_sender_loop(
             try:
                 if not first_ws_telemetry_logged[0]:
                     first_ws_telemetry_logged[0] = True
-                    LOG.info("First telemetry sent over signaling WebSocket (browser receives via relay)")
+                    LOG.info(
+                        "First telemetry sent over signaling WebSocket (browser via relay)"
+                    )
                 await ws.send(payload_str_ws)
             except Exception as e:
                 LOG.warning("Telemetry ws.send failed (will retry): %s", e)
@@ -693,7 +738,7 @@ async def run_signaling_and_webrtc(
                 pc: Optional[RTCPeerConnection] = None
                 data_channel_ref: list = [None]
                 last_frame_pts_ref: list = [0]
-                # Persist lamp state across datachannel reconnects so it does not reset to 0 on new offer
+                # Persist lamp across datachannel reconnects (no reset to 0 on new offer)
                 last_lamp_ref: list = [0]
 
                 async def recv_loop():
@@ -707,7 +752,7 @@ async def run_signaling_and_webrtc(
                             continue
                         typ = msg.get("type")
                         if typ == "control":
-                            # Velocity command from app (e.g. POST /api/control / MCP send_velocity)
+                            # Velocity from app (e.g. POST /api/control / MCP send_velocity)
                             data = msg.get("data") or {}
                             twist = _twist_from_control(data)
                             if twist is not None:
@@ -724,13 +769,16 @@ async def run_signaling_and_webrtc(
                             )
                             track = CameraTrack(frame_queue, last_frame_pts_ref=last_frame_pts_ref)
                             pc.addTrack(track)
-                            LOG.debug("Video track added to peer connection (source: %s)", CAMERA_FRONT_COMPRESSED_TOPIC)
+                            LOG.debug(
+                                "Video track added to peer (source: %s)",
+                                CAMERA_FRONT_COMPRESSED_TOPIC,
+                            )
 
                             first_control_logged: list = [False]
 
                             @pc.on("icecandidate")
                             def on_ice_candidate(event):
-                                """Send our ICE candidates to the browser so the peer connection can complete."""
+                                """Send ICE candidates to browser so peer connection completes."""
                                 if event.candidate is None:
                                     return
                                 try:
@@ -753,7 +801,7 @@ async def run_signaling_and_webrtc(
                             @pc.on("datachannel")
                             def on_datachannel(channel):
                                 data_channel_ref[0] = channel
-                                # Use outer last_lamp_ref so lamp state persists across reconnects (no reset to 0)
+                                # Use outer last_lamp_ref so lamp persists across reconnects
 
                                 @channel.on("message")
                                 def on_message(message):
@@ -763,7 +811,7 @@ async def run_signaling_and_webrtc(
                                             cmd_str = data.get("command")
                                             if isinstance(cmd_str, str) and cmd_str.strip():
                                                 raw = cmd_str.strip().lower()
-                                                # Map UI commands to ROS autonomy topic format (wander_node expects "wander" / "stop")
+                                                # Map UI to autonomy (wander_node: "wander"/"stop")
                                                 if raw == "wander_start":
                                                     cmd_str = "wander"
                                                 elif raw == "wander_stop":
@@ -778,22 +826,29 @@ async def run_signaling_and_webrtc(
                                                 if not first_control_logged[0]:
                                                     first_control_logged[0] = True
                                                     LOG.info(
-                                                        "First control received on data channel (linear_x=%.2f angular_z=%.2f)",
+                                                        "First control on data channel "
+                                                        "(linear_x=%.2f angular_z=%.2f)",
                                                         twist.linear.x,
                                                         twist.angular.z,
                                                     )
-                                                # Update lamp only when message includes it; otherwise keep current
+                                                # Update lamp only when message includes it
                                                 if "lamp" in data:
                                                     last_lamp_ref[0] = 1 if data.get("lamp") else 0
                                                 lamp = last_lamp_ref[0]
-                                                # Always queue so robot gets a continuous stream (no deduplication)
+                                                # Always queue for continuous stream (no dedup)
                                                 _put_latest(control_queue, (twist, lamp))
-                                                # Always push partial telemetry so UI shows commanded speed
-                                                partial = {"speed": float(twist.linear.x), "timestamp": time.time()}
+                                                # Partial telemetry so UI shows commanded speed
+                                                partial = {
+                                                    "speed": float(twist.linear.x),
+                                                    "timestamp": time.time(),
+                                                }
                                                 _put_latest(telemetry_queue, json.dumps(partial))
                                                 if getattr(channel, "readyState", None) == "open":
                                                     try:
-                                                        channel.send(json.dumps({"type": "telemetry", "data": partial}))
+                                                        ch_payload = json.dumps(
+                                                            {"type": "telemetry", "data": partial}
+                                                        )
+                                                        channel.send(ch_payload)
                                                     except Exception:
                                                         pass
                                         except json.JSONDecodeError:
@@ -829,7 +884,12 @@ async def run_signaling_and_webrtc(
 
                 telemetry_task = asyncio.create_task(
                     _telemetry_sender_loop(
-                        ws, telemetry_queue, data_channel_ref, stop_event, last_frame_pts_ref, last_flow_ref
+                        ws,
+                        telemetry_queue,
+                        data_channel_ref,
+                        stop_event,
+                        last_frame_pts_ref,
+                        last_flow_ref,
                     )
                 )
                 try:
@@ -856,7 +916,8 @@ def main(args=None) -> None:
 
     image_format = os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
-    control_queue: queue.Queue = queue.Queue(maxsize=128)  # items: (twist, lamp); larger so bursts from browser aren't dropped
+    # items: (twist, lamp); larger so browser bursts aren't dropped
+    control_queue: queue.Queue = queue.Queue(maxsize=128)
     telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
     autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()
@@ -865,13 +926,31 @@ def main(args=None) -> None:
 
     ros_thread = threading.Thread(
         target=run_ros_node,
-        args=(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, image_format, stop, last_flow_ref, wander_mode_ref),
+        args=(
+            frame_queue,
+            control_queue,
+            telemetry_queue,
+            autonomy_command_queue,
+            image_format,
+            stop,
+            last_flow_ref,
+            wander_mode_ref,
+        ),
         daemon=True,
     )
     ros_thread.start()
 
     try:
-        asyncio.run(run_signaling_and_webrtc(frame_queue, control_queue, telemetry_queue, autonomy_command_queue, stop, last_flow_ref))
+        asyncio.run(
+            run_signaling_and_webrtc(
+                frame_queue,
+                control_queue,
+                telemetry_queue,
+                autonomy_command_queue,
+                stop,
+                last_flow_ref,
+            )
+        )
     except KeyboardInterrupt:
         pass
     finally:

@@ -15,9 +15,9 @@
 import pytest
 
 from connectx_msgs.msg import NavigationState
+from connectx_planner.nodes.wander_node import compute_wander_twist
 
 pytestmark = pytest.mark.unit
-from connectx_planner.nodes.wander_node import compute_wander_twist
 
 
 def _make_state(

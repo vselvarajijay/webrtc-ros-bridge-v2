@@ -40,7 +40,6 @@ class TeleopController:
         self._linear_target = 0.0
         self._angular_target = 0.0
 
-        dt = 1.0 / control_hz
         self._linear_up_step = linear_max / (ramp_up_sec * control_hz)
         self._linear_dn_step = linear_max / (ramp_dn_sec * control_hz)
         self._angular_up_step = angular_max / (ramp_up_sec * control_hz)
@@ -56,7 +55,11 @@ class TeleopController:
         self._last_telemetry = telemetry
 
     def tick(self, telemetry: Optional[TelemetryForSafety] = None) -> None:
-        """Ramp toward targets and apply safety limits. Telemetry can be passed in or set via set_telemetry."""
+        """
+        Ramp toward targets and apply safety limits.
+
+        Telemetry can be passed in or set via set_telemetry.
+        """
         if telemetry is not None:
             self._last_telemetry = telemetry
 

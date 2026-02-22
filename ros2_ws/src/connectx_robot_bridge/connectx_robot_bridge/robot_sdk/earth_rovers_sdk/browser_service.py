@@ -51,27 +51,34 @@ class BrowserService:
     ):
         """
         Initialize browser service.
-        
+
         Args:
-            image_format: Image format (png, jpeg, webp). Defaults to env var or "png"
-            image_quality: Image quality (0.0-1.0). Defaults to env var or 1.0
-            viewport: Viewport dimensions dict with 'width' and 'height'. Defaults to 3840x2160
+        ----
+        image_format : str, optional
+            Image format (png, jpeg, webp). Defaults to env var or "png"
+        image_quality : float, optional
+            Image quality (0.0-1.0). Defaults to env var or 1.0
+        viewport : dict, optional
+            Viewport dimensions with 'width' and 'height'. Defaults to 3840x2160
+
         """
         self.browser = None
         self.page = None
-        
+
         # Configuration from parameters or environment variables
         self.image_format = image_format or os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
-        self.image_quality = image_quality or float(os.getenv("IMAGE_QUALITY", str(DEFAULT_IMAGE_QUALITY)))
+        self.image_quality = image_quality or float(
+            os.getenv("IMAGE_QUALITY", str(DEFAULT_IMAGE_QUALITY))
+        )
         self.default_viewport = viewport or DEFAULT_VIEWPORT.copy()
-        
+
         # Validate configuration
         if self.image_format not in VALID_IMAGE_FORMATS:
             raise ValueError(
                 f"Invalid image format: {self.image_format}. "
                 f"Supported formats: {', '.join(VALID_IMAGE_FORMATS)}"
             )
-        
+
         if not 0 <= self.image_quality <= 1:
             raise ValueError(
                 f"Invalid image quality: {self.image_quality}. "
@@ -81,27 +88,33 @@ class BrowserService:
     def _find_chrome_executable(self) -> str:
         """
         Find Chrome executable path, checking configured path and fallbacks.
-        
-        Returns:
-            Path to Chrome executable
-            
-        Raises:
-            RuntimeError: If no Chrome executable found
+
+        Returns
+        -------
+        str
+            Path to Chrome executable.
+
+        Raises
+        ------
+        RuntimeError
+            If no Chrome executable found.
+
         """
         executable_path = os.getenv("CHROME_EXECUTABLE_PATH", DEFAULT_CHROME_PATH)
-        
+
         # Check configured path first
         if os.path.isfile(executable_path) and os.access(executable_path, os.X_OK):
             return executable_path
-        
+
         # Try fallback paths
         for fallback in CHROME_FALLBACK_PATHS:
             if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
                 logger.debug(f"Using Chrome fallback path: {fallback}")
                 return fallback
-        
+
         raise RuntimeError(
-            f"Chrome executable not found. Tried: {executable_path} and fallbacks: {CHROME_FALLBACK_PATHS}"
+            f"Chrome executable not found. Tried: {executable_path} "
+            f"and fallbacks: {CHROME_FALLBACK_PATHS}"
         )
 
     async def initialize_browser(self):
@@ -109,7 +122,7 @@ class BrowserService:
         if not self.browser:
             try:
                 executable_path = self._find_chrome_executable()
-                
+
                 self.browser = await launch(
                     executablePath=executable_path,
                     headless=True,
@@ -123,7 +136,8 @@ class BrowserService:
                         "--no-first-run",
                         "--no-zygote",
                         "--disable-extensions",
-                        f"--window-size={self.default_viewport['width']},{self.default_viewport['height']}",
+                        f"--window-size={self.default_viewport['width']},"
+                        f"{self.default_viewport['height']}",
                     ],
                 )
                 self.page = await self.browser.newPage()
@@ -151,7 +165,7 @@ class BrowserService:
                     }});
                 }}"""
                 await self.page.evaluate(call)
-                
+
             except Exception as e:
                 global _last_browser_error_log
                 now = time.time()

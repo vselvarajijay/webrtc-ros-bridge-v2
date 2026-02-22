@@ -7,8 +7,10 @@ def get_ice_servers_dict():
     """
     Build ICE server list from env for WebRTC (STUN + optional TURN).
 
-    Returns:
+    Returns
+    -------
         List of dicts with "urls" and optionally "username" and "credential".
+
     """
     servers = [{"urls": os.getenv("STUN_URL", "stun:stun.l.google.com:19302")}]
     turn_url = os.getenv("TURN_URL")

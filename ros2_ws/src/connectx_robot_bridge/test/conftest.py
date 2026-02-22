@@ -19,7 +19,7 @@ import rclpy
 from rclpy.node import Node
 
 
-def pytest_configure(config: pytest.Config) -> None:
+def pytest_configure(config) -> None:
     """Register custom markers."""
     config.addinivalue_line(
         'markers',

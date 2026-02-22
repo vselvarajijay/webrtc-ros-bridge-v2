@@ -61,7 +61,7 @@ def test_twist_to_sdk_normalized_zero_max_speeds() -> None:
 
 @pytest.mark.unit
 def test_telemetry_json_roundtrip_speed() -> None:
-    """TelemetryFrame serializes to JSON that contains 'speed'; parsing yields same value."""
+    """Verify TelemetryFrame serializes to JSON with 'speed'; parsing yields same value."""
     frame = TelemetryFrame(
         battery=85.0,
         signal_level=4,

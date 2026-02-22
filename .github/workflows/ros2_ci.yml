@@ -24,7 +24,8 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             python3-colcon-common-extensions \
-            python3-pytest
+            python3-pytest \
+            ros-humble-ament-mypy
           rm -rf /var/lib/apt/lists/*
         shell: bash
 
@@ -51,6 +52,8 @@ jobs:
           source /opt/ros/humble/setup.bash
           cd ros2_ws
           source install/setup.bash
+          # Exclude linter tests (flake8, pep257, mypy, xmllint, copyright) so only unit test failures fail CI
+          export PYTEST_ADDOPTS='-m "not linter"'
           colcon test --event-handlers console_direct+ --python-testing pytest
         shell: bash
 

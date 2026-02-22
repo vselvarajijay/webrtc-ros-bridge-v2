@@ -2,11 +2,12 @@
 Parse high-level command strings into a sequence of goals (drive/turn).
 
 No ROS dependency; pure Python for unit testing.
-Input examples: "forward 1m", "turn right 30", "right 30 at 0.3 for 2 s", "forward at 0.4 m/s for 5 s", "stop".
+Input examples: "forward 1m", "turn right 30", "right 30 at 0.3 for 2 s",
+"forward at 0.4 m/s for 5 s", "stop".
 """
 
 import re
-from typing import Any, List, Optional
+from typing import List, Optional
 
 # Unit conversions to meters
 FT_TO_M = 0.3048
@@ -50,17 +51,19 @@ def _parse_angle(s: str) -> float:
 
 def _parse_turn_profile_suffix(clause: str) -> dict:
     """
-    Parse optional turn profile from end of clause: [at <v> rad/s] [for <t> s] [accel <a> decel <d>].
-    Angular velocity can be "0.4" or "0.4 rad/s" (rad/s) or "30 deg/s" (converted to rad/s).
+    Parse optional turn profile from end of clause.
+
+    [at <v> rad/s] [for <t> s] [accel <a> decel <d>].
+    Angular velocity: "0.4" or "0.4 rad/s" or "30 deg/s" (converted to rad/s).
     Returns dict with optional: angular_vel_rad_s, duration_s, accel_rad_s2, decel_rad_s2.
     """
     out: dict = {}
     # at <v> [rad/s|deg/s], for <t> s, accel <a> decel <d>
-    m = re.search(
-        r"at\s+([\d.]+)\s*(rad/s|deg/s)?\s*(?:for\s+([\d.]+)\s*s)?\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$",
-        clause,
-        re.IGNORECASE,
+    pattern = (
+        r"at\s+([\d.]+)\s*(rad/s|deg/s)?\s*(?:for\s+([\d.]+)\s*s)?"
+        r"\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$"
     )
+    m = re.search(pattern, clause, re.IGNORECASE)
     if m:
         v_str, unit, t_str, a_str, d_str = m.groups()
         v = _parse_float(v_str)
@@ -81,7 +84,11 @@ def _parse_turn_profile_suffix(clause: str) -> dict:
                 out["decel_rad_s2"] = d
     else:
         # Try "for X s" and "accel A decel D" without "at"
-        m2 = re.search(r"for\s+([\d.]+)\s*s\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$", clause, re.IGNORECASE)
+        m2 = re.search(
+            r"for\s+([\d.]+)\s*s\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$",
+            clause,
+            re.IGNORECASE,
+        )
         if m2:
             t_str, a_str, d_str = m2.groups()
             if t_str:
@@ -109,14 +116,15 @@ def _parse_turn_profile_suffix(clause: str) -> dict:
 def _parse_drive_profile_suffix(clause: str) -> dict:
     """
     Parse optional drive profile: [at <v> m/s] [for <t> s] [accel <a> decel <d>].
+
     Returns dict with optional: linear_vel_m_s, duration_s, accel_m_s2, decel_m_s2.
     """
     out: dict = {}
-    m = re.search(
-        r"at\s+([\d.]+)\s*(?:m/s)?\s*(?:for\s+([\d.]+)\s*s)?\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$",
-        clause,
-        re.IGNORECASE,
+    pattern = (
+        r"at\s+([\d.]+)\s*(?:m/s)?\s*(?:for\s+([\d.]+)\s*s)?"
+        r"\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$"
     )
+    m = re.search(pattern, clause, re.IGNORECASE)
     if m:
         v_str, t_str, a_str, d_str = m.groups()
         v = _parse_float(v_str)
@@ -133,7 +141,11 @@ def _parse_drive_profile_suffix(clause: str) -> dict:
             if d is not None and d > 0:
                 out["decel_m_s2"] = d
     else:
-        m2 = re.search(r"for\s+([\d.]+)\s*s\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$", clause, re.IGNORECASE)
+        m2 = re.search(
+            r"for\s+([\d.]+)\s*s\s*(?:accel\s+([\d.]+)\s+decel\s+([\d.]+))?$",
+            clause,
+            re.IGNORECASE,
+        )
         if m2:
             t_str, a_str, d_str = m2.groups()
             if t_str:
@@ -162,13 +174,15 @@ def parse_command(command: str) -> List[dict]:
     """
     Parse a command string into a list of goals.
 
-    Returns:
+    Returns
+    -------
         List of goals. Each goal is:
-        - {"type": "drive", "distance_m": float, "direction": 1 or -1 [, optional profile fields]}
-        - {"type": "turn", "angle_deg": float [, optional profile fields]}
-        (positive angle_deg = right/clockwise). Optional profile: angular_vel_rad_s, duration_s,
-        accel_rad_s2, decel_rad_s2 for turn; linear_vel_m_s, duration_s, accel_m_s2, decel_m_s2 for drive.
-        For "stop", returns [].
+        - {"type": "drive", "distance_m": float, "direction": 1 or -1 [, profile]}
+        - {"type": "turn", "angle_deg": float [, profile]}
+        (positive angle_deg = right/clockwise). Optional profile: angular_vel_rad_s,
+        duration_s, accel_rad_s2, decel_rad_s2 for turn; linear_vel_m_s, duration_s,
+        accel_m_s2, decel_m_s2 for drive. For "stop", returns [].
+
     """
     if not command or not isinstance(command, str):
         return []
@@ -186,7 +200,7 @@ def parse_command(command: str) -> List[dict]:
         if not clause:
             continue
 
-        # Short turn: "left 30", "right 45", optionally "right 30 at 0.3 for 2 s accel 0.2 decel 0.3"
+        # Short turn: "left 30", "right 45", or "right 30 at 0.3 for 2 s accel 0.2 decel 0.3"
         short_turn = re.match(
             r"^(left|right)\s+([\d.]+)\s*(deg(rees)?|°)?\s*(.*)$",
             clause,
@@ -205,7 +219,7 @@ def parse_command(command: str) -> List[dict]:
             goals.append(goal)
             continue
 
-        # Full turn: "turn left 30", "turn right 30 deg at 0.4 for 2 s accel 0.2 decel 0.3"
+        # Full turn: "turn left 30", "turn right 30 deg at 0.4 for 2 s accel ..."
         turn_match = re.match(
             r"turn\s+(left|right)\s+([\d.]+)\s*(deg(rees)?|°)?\s*(.*)$",
             clause,
@@ -214,10 +228,11 @@ def parse_command(command: str) -> List[dict]:
         if turn_match:
             direction, num, _, _, rest = turn_match.groups()
             angle = _parse_angle(num)
+            prof = _parse_turn_profile_suffix(rest)
             if direction == "right":
-                goals.append({"type": "turn", "angle_deg": angle, **_parse_turn_profile_suffix(rest)})
+                goals.append({"type": "turn", "angle_deg": angle, **prof})
             else:
-                goals.append({"type": "turn", "angle_deg": -angle, **_parse_turn_profile_suffix(rest)})
+                goals.append({"type": "turn", "angle_deg": -angle, **prof})
             continue
 
         # Time-based drive: "forward at 0.4 m/s for 5 s [accel 0.2 decel 0.3]"
@@ -245,7 +260,7 @@ def parse_command(command: str) -> List[dict]:
                 goals.append(goal)
             continue
 
-        # Distance-based drive: "forward 2 m", "forward 2 m at 0.3 for 7 s accel 0.15 decel 0.2"
+        # Distance-based drive: "forward 2 m", "forward 2 m at 0.3 for 7 s accel ..."
         drive_match = re.match(
             r"(forward|fwd|back|backward)\s+([\d.]+)\s*(m|meter|meters?|ft|feet)?\s*(.*)$",
             clause,

@@ -1,7 +1,8 @@
 """
-Camera calibration node: subscribes to /camera/front/compressed, exposes HTTP API
-for capture/run, and saves calibration YAML under repo root robot/.
-Captures at full resolution via SDK /v2/front_full when available.
+Camera calibration node.
+
+Subscribes to /camera/front/compressed, exposes HTTP API for capture/run, and saves
+calibration YAML under repo root robot/. Captures at full resolution via SDK /v2/front_full.
 """
 
 import asyncio
@@ -11,6 +12,7 @@ import os
 import threading
 import urllib.error
 import urllib.request
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -74,7 +76,11 @@ class CalibrationNode(Node):
         return img
 
     def _fetch_full_res_frame_bgr(self):
-        """Fetch one frame at viewport (full) resolution from SDK for calibration. Returns BGR array or None."""
+        """
+        Fetch one frame at viewport (full) resolution from SDK for calibration.
+
+        Returns BGR array or None.
+        """
         try:
             with urllib.request.urlopen(SDK_FRONT_FULL_ENDPOINT, timeout=15) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -90,7 +96,8 @@ class CalibrationNode(Node):
             return None
 
     def _find_checkerboard(self, img):
-        """Find checkerboard corners. Returns (object_points, image_points) or None.
+        """
+        Find checkerboard corners. Returns (object_points, image_points) or None.
 
         Tries multiple preprocessing strategies to handle low-contrast grey boards.
         """
@@ -124,7 +131,8 @@ class CalibrationNode(Node):
         for img_candidate, flags in candidates:
             ret, corners = try_detect(img_candidate, flags)
             if ret:
-                self.get_logger().debug("Checkerboard found with candidate index %d", candidates.index((img_candidate, flags)))
+                idx = candidates.index((img_candidate, flags))
+                self.get_logger().debug("Checkerboard found with candidate index %d", idx)
                 break
 
         if corners is None:
@@ -136,7 +144,7 @@ class CalibrationNode(Node):
 
         objp = np.zeros((self._board_cols * self._board_rows, 3), np.float32)
         objp[:, :2] = np.mgrid[
-            0 : self._board_cols, 0 : self._board_rows
+            0:self._board_cols, 0:self._board_rows
         ].T.reshape(-1, 2)
         objp *= self._square_size_m
         return (objp, corners_refined)
@@ -159,7 +167,8 @@ class CalibrationNode(Node):
         with self._lock:
             if self._state not in ("collecting", "ready"):
                 if self._state == "idle":
-                    # Auto-start a session so first capture works without explicit /calibration/start
+                    # Auto-start a session so first capture works without
+                    # explicit /calibration/start
                     self._collected_frames = []
                     self._state = "collecting"
                 else:
@@ -193,7 +202,9 @@ class CalibrationNode(Node):
             }
 
     def run_calibration(self) -> tuple[bool, str, str | None]:
-        """Run OpenCV calibration and return YAML content (no file write).
+        """
+        Run OpenCV calibration and return YAML content (no file write).
+
         Returns (success, message, yaml_string or None).
         """
         with self._lock:
@@ -231,6 +242,7 @@ class CalibrationNode(Node):
 
             self.get_logger().info(f"Calibration RMS reprojection error: {rms:.4f} px")
 
+            assert image_size is not None
             yaml_str = self._calibration_to_yaml(
                 image_size[0],
                 image_size[1],
@@ -255,7 +267,7 @@ class CalibrationNode(Node):
         dist_coeffs: np.ndarray,
         rms: float = 0.0,
     ) -> str:
-        import yaml
+        import yaml  # type: ignore[import]
 
         data = {
             "image_width": width,
@@ -276,11 +288,16 @@ class CalibrationNode(Node):
 
 
 # Global node reference for HTTP handlers
-_calibration_node: CalibrationNode = None
+_calibration_node: Optional[CalibrationNode] = None
 
 
 def _run_http_server(port: int) -> None:
     from aiohttp import web
+
+    node = _calibration_node
+    if node is None:
+        return
+    calibration_node = node
 
     async def handle_start(request: web.Request) -> web.Response:
         try:
@@ -288,20 +305,20 @@ def _run_http_server(port: int) -> None:
             target_count = int(body.get("target_count", 25))
         except (ValueError, TypeError):
             target_count = 25
-        _calibration_node.start_session(target_count)
+        calibration_node.start_session(target_count)
         return web.json_response({"status": "ok"})
 
     async def handle_capture(request: web.Request) -> web.Response:
-        ok, msg = _calibration_node.capture()
+        ok, msg = calibration_node.capture()
         if ok:
             return web.json_response({"status": "ok", "message": msg})
         return web.json_response({"status": "error", "message": msg}, status=400)
 
     async def handle_status(request: web.Request) -> web.Response:
-        return web.json_response(_calibration_node.get_status())
+        return web.json_response(calibration_node.get_status())
 
     async def handle_run(request: web.Request) -> web.Response:
-        ok, msg, yaml_content = _calibration_node.run_calibration()
+        ok, msg, yaml_content = calibration_node.run_calibration()
         if ok:
             return web.json_response({
                 "status": "ok",
@@ -311,30 +328,32 @@ def _run_http_server(port: int) -> None:
         return web.json_response({"status": "error", "message": msg}, status=400)
 
     async def handle_debug(request: web.Request) -> web.Response:
-        """Returns an annotated JPEG showing detection results for all preprocessing strategies."""
-        img = _calibration_node._fetch_full_res_frame_bgr()
+        """Return an annotated JPEG showing detection results for all preprocessing strategies."""
+        img = calibration_node._fetch_full_res_frame_bgr()
         source = "full_res"
         if img is None:
-            img = _calibration_node._get_latest_frame_bgr()
+            img = calibration_node._get_latest_frame_bgr()
             source = "compressed_topic"
         if img is None:
             return web.Response(status=503, text="No frame available")
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        board_size = (_calibration_node._board_cols, _calibration_node._board_rows)
+        board_size = (calibration_node._board_cols, calibration_node._board_rows)
 
-        clahe_mild   = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+        clahe_mild = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
         clahe_strong = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4, 4)).apply(gray)
-        normalized   = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
-        _, binary    = cv2.threshold(normalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        base_flags   = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
+        normalized = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
+        _, binary = cv2.threshold(
+            normalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
+        base_flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
 
         candidates = [
-            ("clahe_mild",   clahe_mild,   base_flags),
+            ("clahe_mild", clahe_mild, base_flags),
             ("clahe_strong", clahe_strong, base_flags),
-            ("normalized",   normalized,   base_flags),
-            ("binary",       binary,       cv2.CALIB_CB_NORMALIZE_IMAGE),
-            ("gray_raw",     gray,         base_flags),
+            ("normalized", normalized, base_flags),
+            ("binary", binary, cv2.CALIB_CB_NORMALIZE_IMAGE),
+            ("gray_raw", gray, base_flags),
         ]
 
         debug_img = img.copy()
@@ -368,16 +387,16 @@ def _run_http_server(port: int) -> None:
         )
 
     async def handle_reset(request: web.Request) -> web.Response:
-        _calibration_node.start_session(_calibration_node._target_count)
+        calibration_node.start_session(calibration_node._target_count)
         return web.json_response({"status": "ok", "message": "Session reset"})
 
     app = web.Application()
-    app.router.add_post("/calibration/start",   handle_start)
+    app.router.add_post("/calibration/start", handle_start)
     app.router.add_post("/calibration/capture", handle_capture)
-    app.router.add_get( "/calibration/status",  handle_status)
-    app.router.add_post("/calibration/run",     handle_run)
-    app.router.add_get( "/calibration/debug",   handle_debug)
-    app.router.add_post("/calibration/reset",   handle_reset)
+    app.router.add_get("/calibration/status", handle_status)
+    app.router.add_post("/calibration/run", handle_run)
+    app.router.add_get("/calibration/debug", handle_debug)
+    app.router.add_post("/calibration/reset", handle_reset)
 
     async def run_server():
         runner = web.AppRunner(app)

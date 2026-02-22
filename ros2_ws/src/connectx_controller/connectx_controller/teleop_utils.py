@@ -39,10 +39,10 @@ def print_hud(
     orientation_deg = telemetry.orientation_degrees()
     gps_indicator = "✓" if telemetry.gps_signal > 15 else "✗"
 
-    print(
+    msg = (
         f"\r🔋{telemetry.battery:.0f}% | 📡{telemetry.signal_level} | "
         f"🧭{orientation_deg:.0f}° | GPS({gps_indicator}) | "
-        f"v={telemetry.speed:.2f} cmd=({linear_vel:.2f},{angular_vel:.2f}){speed_str}{stuck_warn}    ",
-        end="",
-        flush=True,
+        f"v={telemetry.speed:.2f} cmd=({linear_vel:.2f},{angular_vel:.2f})"
+        f"{speed_str}{stuck_warn}    "
     )
+    print(msg, end="", flush=True)

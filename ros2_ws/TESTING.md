@@ -22,7 +22,22 @@ Shared fixtures (e.g. `rclpy_node`) live in each package’s `test/conftest.py`.
 
 ## Running tests
 
-From the repo root with a sourced workspace:
+### Run CI locally (Docker)
+
+To replicate the GitHub Actions ROS2 CI on your machine (same image and steps as [.github/workflows/ros2_ci.yml](../.github/workflows/ros2_ci.yml)):
+
+```bash
+# From repo root
+./scripts/run_ros2_ci_local.sh
+```
+
+The script removes `ros2_ws/build`, `ros2_ws/install`, and `ros2_ws/log` (on the host and again inside the container) so the container always does a clean build. That avoids path mismatches when those directories were created with a different path (e.g. `/root/workspace/ros2_ws` from another Docker run).
+
+If you run the Docker command yourself, clean inside the container first, e.g. start the `bash -c '...'` with `rm -rf ros2_ws/build ros2_ws/install ros2_ws/log`.
+
+On Apple Silicon (arm64), the image runs under emulation (linux/amd64); the first run may be slower.
+
+### From the repo root with a sourced workspace
 
 ```bash
 source /opt/ros/kilted/setup.bash

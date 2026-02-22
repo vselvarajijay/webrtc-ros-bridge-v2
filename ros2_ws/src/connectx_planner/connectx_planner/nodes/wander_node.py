@@ -32,10 +32,12 @@ DEFAULT_HYSTERESIS_URGENCY_CLEAR = 0.9
 DEFAULT_TURN_TIMEOUT_FRAMES = 75  # ~3 s at 25 Hz
 DEFAULT_CREEP_SPEED = 0.05
 DEFAULT_ESCAPE_PULSE_FRAMES = 8
-DEFAULT_LOW_CONFIDENCE_GRACE_TICKS = 15  # ~0.6 s at 25 Hz; hold last cmd during brief flow dropouts
-DEFAULT_OUTPUT_SMOOTHING_ALPHA = 0.7  # 0=no smoothing, higher=smoother (EMA of published cmd)
-DEFAULT_FORWARD_STEER_TOWARD_FURTHEST = 0.4  # rad/s; steer toward clearest side (safest_turn) while going forward
-DEFAULT_TURN_LINEAR_FRACTION = 0.6  # fraction of forward_speed to keep while turning (avoid stop-and-turn)
+# ~0.6 s at 25 Hz; hold last cmd during brief flow dropouts
+DEFAULT_LOW_CONFIDENCE_GRACE_TICKS = 15
+DEFAULT_OUTPUT_SMOOTHING_ALPHA = 0.7  # 0=no smoothing, higher=smoother (EMA)
+# rad/s; steer toward clearest side (safest_turn) while going forward
+DEFAULT_FORWARD_STEER_TOWARD_FURTHEST = 0.4
+DEFAULT_TURN_LINEAR_FRACTION = 0.6  # fraction of forward_speed to keep while turning
 
 
 def compute_wander_twist(
@@ -56,9 +58,12 @@ def compute_wander_twist(
     forward_steer_toward_furthest: float,
     turn_linear_fraction: float,
 ) -> tuple[float, float, bool, int, int]:
-    """Compute twist (linear_x, angular_z) and next internal state from current state.
-    Returns (linear_x, angular_z, next_was_forward_safe, next_turning_frames, next_escape_pulse_remaining).
-    Pure function for testing and use by WanderPlanner._tick (wander_bias is updated by caller with random)."""
+    """
+    Compute twist (linear_x, angular_z) and next internal state.
+
+    Returns (linear_x, angular_z, next_was_forward_safe, next_turning_frames,
+    next_escape_pulse_remaining). Pure function for testing and WanderPlanner._tick.
+    """
     if state.confidence < confidence_threshold:
         # Never stop: keep moving at turn_linear while turning in place (low conf).
         min_linear = forward_speed * turn_linear_fraction
@@ -90,7 +95,7 @@ def compute_wander_twist(
     forward_allowed = next_was
 
     if forward_allowed:
-        # Go toward longest distance (furthest): steer only by safest_turn (direction of lowest flow = most open). No random wander.
+        # Steer by safest_turn (direction of lowest flow = most open). No random wander.
         angular_z = float(state.safest_turn) * forward_steer_toward_furthest
         angular_z = max(
             -forward_steer_toward_furthest,
@@ -121,7 +126,8 @@ class WanderPlanner(Node):
         self._escape_pulse_remaining = 0
         self._debug_tick = 0
         self._wander_enabled = False
-        self._stop_sent_count = 0  # publish zero this many ticks after "stop" then leave /cmd_vel to others
+        # Publish zero this many ticks after "stop" then leave /cmd_vel to others.
+        self._stop_sent_count = 0
         self._no_state_warn_count = 0
         self._low_conf_ticks = 0  # consecutive ticks with confidence < threshold
         self._last_linear = 0.0
@@ -222,7 +228,7 @@ class WanderPlanner(Node):
         raw = (msg.data or "").strip().lower()
         if raw == "stop":
             self._wander_enabled = False
-            self._stop_sent_count = 25  # ~1 s at 25 Hz so robot stops, then yield /cmd_vel to manual/controller
+            self._stop_sent_count = 25  # ~1 s at 25 Hz then yield /cmd_vel to manual/controller
             self.get_logger().info("Wander disabled (stop)")
         elif raw == "wander" or raw.startswith("wander "):
             self._wander_enabled = True

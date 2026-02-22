@@ -2,11 +2,13 @@
 """
 World model node: interprets optical flow + velocity into navigation state.
 
-Subscribes to /optical_flow (Float32MultiArray), /robot/telemetry (JSON), and /cmd_vel_target (for velocity fallback).
-Publishes /navigation_state (NavigationState: forward_safe, safest_turn, urgency_score, confidence).
-When telemetry speed is 0 or missing, uses commanded linear from cmd_vel_target so risk is still computed.
+Subscribes to /optical_flow (Float32MultiArray), /robot/telemetry (JSON),
+/cmd_vel_target (for velocity fallback).
+Publishes /navigation_state (NavigationState: forward_safe, safest_turn,
+urgency_score, confidence).
+When telemetry speed is 0 or missing, uses commanded linear from cmd_vel_target.
 
-Does not compute flow or send motor commands; perception and behavior stay in other nodes.
+Does not compute flow or send motor commands; perception and behavior elsewhere.
 """
 
 import json
@@ -47,8 +49,11 @@ def parse_speed_from_telemetry(json_str: str) -> float:
 
 
 def parse_speed_and_angular_from_telemetry(json_str: str) -> tuple[float, float]:
-    """Parse speed (m/s) and angular_z (rad/s) from /robot/telemetry JSON.
-    Returns (0.0, 0.0) if invalid."""
+    """
+    Parse speed (m/s) and angular_z (rad/s) from /robot/telemetry JSON.
+
+    Returns (0.0, 0.0) if invalid.
+    """
     if not json_str or not json_str.strip():
         return (0.0, 0.0)
     try:
@@ -79,8 +84,11 @@ def compute_risk_and_turn(
     min_linear_velocity_for_risk: float,
     max_angular_velocity_for_risk: float,
 ) -> tuple[bool, int, float]:
-    """Compute forward_safe, safest_turn (-1/0/1), and urgency_score from flow mags and velocity.
-    Pure function for testing and use by WorldModelNode."""
+    """
+    Compute forward_safe, safest_turn (-1/0/1), and urgency_score from flow mags.
+
+    Pure function for testing and use by WorldModelNode.
+    """
     if abs(velocity) < min_linear_velocity_for_risk:
         forward_safe = True
         urgency_score = 0.0
@@ -192,7 +200,7 @@ class WorldModelNode(Node):
             cmd_linear = self._last_cmd_linear
         min_lin = self.get_parameter("min_linear_velocity_for_risk").value
         fallback = self.get_parameter("fallback_velocity_for_risk").value
-        # Use telemetry speed when valid; else commanded linear; else nominal fallback so risk is still computed
+        # Use telemetry speed when valid; else commanded linear; else fallback for risk
         if abs(telemetry_velocity) >= min_lin:
             velocity = telemetry_velocity
         elif abs(cmd_linear) >= min_lin:

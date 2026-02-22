@@ -32,11 +32,12 @@ setup(
     zip_safe=True,
     maintainer='ConnectX',
     maintainer_email='connectx@example.com',
-    description='ROS2 bridge for ConnectX robot: cmd_vel to robot control, camera feed, telemetry. Teleop/WebRTC nodes live in connectx_teleop.',
+    description='ROS2 bridge: cmd_vel to robot, camera, telemetry. Teleop in connectx_teleop.',
     license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
+            'types-requests',
         ],
     },
     tests_require=['pytest'],

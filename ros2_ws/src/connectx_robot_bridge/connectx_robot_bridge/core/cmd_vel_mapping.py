@@ -12,14 +12,22 @@ def twist_to_sdk_normalized(
     """
     Map ROS Twist (m/s, rad/s) to SDK range [-1.0, 1.0].
 
-    Args:
-        linear_x: Forward/backward velocity in m/s
-        angular_z: Rotation in rad/s
-        max_linear: Max linear speed (m/s) for scaling
-        max_angular: Max angular speed (rad/s) for scaling
+    Args
+    ----
+    linear_x : float
+        Forward/backward velocity in m/s
+    angular_z : float
+        Rotation in rad/s
+    max_linear : float
+        Max linear speed (m/s) for scaling
+    max_angular : float
+        Max angular speed (rad/s) for scaling
 
-    Returns:
+    Returns
+    -------
+    tuple[float, float]
         (linear_normalized, angular_normalized) in [-1.0, 1.0]
+
     """
     linear_normalized = (
         max(MIN_VELOCITY, min(MAX_VELOCITY, linear_x / max_linear))

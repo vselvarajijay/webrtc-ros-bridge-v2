@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Dict, Iterator, Optional, Tuple
 
-import requests
+import requests  # type: ignore[import]
 
 from connectx_robot_bridge.core.constants import (
     EARTH_ROVERS_LINEAR_SIGN,
@@ -26,9 +26,12 @@ class EarthRoversRobot(RobotBase):
     def __init__(self, logger: Optional[logging.Logger] = None) -> None:
         """
         Initialize Earth Rovers robot.
-        
+
         Args:
-            logger: Optional logger instance. If None, uses default logger.
+        ----
+        logger : logging.Logger, optional
+            Logger instance. If None, uses default logger.
+
         """
         self._logger = logger or logging.getLogger(__name__)
         self._rtm_client: Optional[RtmClient] = None
@@ -45,25 +48,35 @@ class EarthRoversRobot(RobotBase):
             auth = fetch_auth_sync()
             self._rtm_client = RtmClient(auth)
         except AuthenticationError as e:
-            self._logger.warning(f"Failed to authenticate: {e}. Robot will operate without RTM client.")
+            self._logger.warning(
+                "Failed to authenticate: %s. Robot will operate without RTM client.", e
+            )
             self._rtm_client = None
 
     def set_lamp(self, lamp: int) -> None:
         """Set lamp state (0=off, 1=on). Sent with next velocity command to SDK."""
         self._lamp = 1 if lamp else 0
 
-    def _send_velocity_command(self, linear: float, angular: float, lamp: Optional[int] = None) -> bool:
+    def _send_velocity_command(
+        self, linear: float, angular: float, lamp: Optional[int] = None
+    ) -> bool:
         """
-        Internal method to send velocity commands to the robot.
+        Send velocity commands to the robot via RTM.
 
-        Returns:
+        Returns
+        -------
+        bool
             True if the message was sent via RTM (HTTP 200), False otherwise.
+
         """
         if self._rtm_client is None:
             self._logger.warning("Cannot send velocity command: RTM client not initialized")
             return False
         lamp_val = self._lamp if lamp is None else (1 if lamp else 0)
-        self._logger.debug(f"Sending velocity command: linear={linear:.3f}, angular={angular:.3f}, lamp={lamp_val}")
+        self._logger.debug(
+            "Sending velocity: linear=%.3f, angular=%.3f, lamp=%s",
+            linear, angular, lamp_val,
+        )
         ok = self._rtm_client.send_message({
             "linear": linear,
             "angular": angular,
@@ -71,7 +84,9 @@ class EarthRoversRobot(RobotBase):
         })
         if ok and not self._first_velocity_sent:
             self._first_velocity_sent = True
-            self._logger.info("First velocity command sent via RTM; robot should respond to joystick.")
+            self._logger.info(
+                "First velocity command sent via RTM; robot should respond to joystick."
+            )
         if not ok and (abs(linear) > 0.01 or abs(angular) > 0.01):
             now = time.monotonic()
             if now - self._last_rtm_fail_log >= 5.0:
@@ -106,8 +121,11 @@ class EarthRoversRobot(RobotBase):
         """
         Send continuous velocity commands to the robot.
 
-        Returns:
+        Returns
+        -------
+        bool
             True if the message was sent via RTM (HTTP 200), False otherwise.
+
         """
         # Clamp values to valid range [-1.0, 1.0]
         linear_clamped = max(MIN_VELOCITY, min(MAX_VELOCITY, linear))
@@ -120,16 +138,25 @@ class EarthRoversRobot(RobotBase):
         """
         Get latest front camera frame as raw bytes via SDK /v2/front API, with timing metrics.
 
-        Returns:
-            (frame_bytes, metrics) with metrics containing capture_ms and fetch_ms, or None if unavailable or disabled.
+        Returns
+        -------
+        tuple or None
+            (frame_bytes, metrics) with capture_ms and fetch_ms, or None if unavailable.
+
         """
-        # Re-enable after cooldown so temporary SDK unavailability doesn't kill video for the session
+        # Re-enable after cooldown so temporary SDK unavailability doesn't kill video
         if self._camera_disabled:
-            if self._camera_disabled_at is not None and (time.monotonic() - self._camera_disabled_at) >= 30.0:
+            if (
+                self._camera_disabled_at is not None
+                and (time.monotonic() - self._camera_disabled_at) >= 30.0
+            ):
                 self._camera_disabled = False
                 self._camera_fail_count = 0
                 self._camera_disabled_at = None
-                self._logger.info("Front camera re-enabled after 30s cooldown; retrying %s", SDK_FRONT_ENDPOINT)
+                self._logger.info(
+                    "Front camera re-enabled after 30s cooldown; retrying %s",
+                    SDK_FRONT_ENDPOINT,
+                )
             else:
                 return None
         try:
@@ -141,10 +168,13 @@ class EarthRoversRobot(RobotBase):
             b64 = data.get("front_frame")
             if not b64:
                 return None
+            decoded = base64_to_bytes(b64)
+            if decoded is None:
+                return None
             capture_ms = float(data.get("capture_ms", 0))
             self._camera_fail_count = 0  # success: allow retries after future failures
             metrics = {"capture_ms": capture_ms, "fetch_ms": fetch_ms}
-            return (base64_to_bytes(b64), metrics)
+            return (decoded, metrics)
         except Exception as e:
             self._camera_fail_count += 1
             # Only disable after several consecutive failures so one timeout doesn't kill video
@@ -152,7 +182,8 @@ class EarthRoversRobot(RobotBase):
                 self._camera_disabled = True
                 self._camera_disabled_at = time.monotonic()
                 self._logger.warning(
-                    "Front camera disabled after %d failures: %s (%s). Run Earth Rovers SDK to enable.",
+                    "Front camera disabled after %d failures: %s (%s). "
+                    "Run Earth Rovers SDK to enable.",
                     self._camera_fail_count,
                     SDK_FRONT_ENDPOINT,
                     e,
@@ -162,7 +193,8 @@ class EarthRoversRobot(RobotBase):
     def get_front_camera_frame_full(self) -> Optional[Tuple[bytes, Dict[str, float]]]:
         """
         Get one front camera frame at full (viewport) resolution via SDK /v2/front_full.
-        Use for calibration or when full-resolution image is needed; rate should be kept low.
+
+        Use for calibration or when full-resolution image is needed; keep rate low.
         Returns (frame_bytes, metrics) or None.
         """
         if self._camera_disabled:
@@ -176,20 +208,26 @@ class EarthRoversRobot(RobotBase):
             b64 = data.get("front_frame")
             if not b64:
                 return None
+            decoded = base64_to_bytes(b64)
+            if decoded is None:
+                return None
             capture_ms = float(data.get("capture_ms", 0))
             metrics = {"capture_ms": capture_ms, "fetch_ms": fetch_ms}
-            return (base64_to_bytes(b64), metrics)
+            return (decoded, metrics)
         except Exception as e:
             self._logger.debug("Front camera full frame unavailable: %s", e)
             return None
 
-    # Minimum delay between frame pulls when using stream; actual rate limited by get_front_camera_frame() (HTTP + SDK).
+    # Min delay between frame pulls; rate limited by get_front_camera_frame() (HTTP + SDK).
     CAMERA_STREAM_LOOP_SLEEP = 0.01
 
-    def get_front_camera_stream(self, stop_event=None) -> Iterator[Optional[Tuple[bytes, Dict[str, float]]]]:
+    def get_front_camera_stream(
+        self, stop_event=None
+    ) -> Iterator[Optional[Tuple[bytes, Dict[str, float]]]]:
         """
-        Yield front camera frames continuously at max sustainable rate (reuses get_front_camera_frame).
-        Frame rate is dominated by get_front_camera_frame() latency (HTTP + SDK capture); loop sleep is a cap only.
+        Yield front camera frames at max sustainable rate (reuses get_front_camera_frame).
+
+        Frame rate dominated by get_front_camera_frame() latency (HTTP + SDK).
         Yields (frame_bytes, metrics) or None.
         """
         while stop_event is None or not stop_event.is_set():
@@ -200,22 +238,20 @@ class EarthRoversRobot(RobotBase):
     def get_telemetry(self) -> Optional[TelemetryFrame]:
         """
         Get latest telemetry data from the robot.
-        
-        Fetches sensor data from the SDK's /data endpoint, including:
-        - Battery level, signal strength, speed, lamp state
-        - GPS coordinates and signal quality
-        - Compass orientation
-        - IMU data (accelerometer, gyroscope, magnetometer)
-        - Wheel RPMs for all four wheels
-        
-        Returns:
-            TelemetryFrame containing sensor data, or None if unavailable.
+
+        Fetches sensor data from the SDK's /data endpoint (battery, GPS, IMU, RPMs, etc.).
+
+        Returns
+        -------
+        TelemetryFrame or None
+            Sensor data, or None if unavailable.
+
         """
         try:
             r = requests.get(SDK_DATA_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
             r.raise_for_status()
             data = r.json()
-            
+
             # Create TelemetryFrame from JSON response
             return TelemetryFrame(
                 battery=data.get("battery", 0.0),
@@ -247,6 +283,7 @@ class EarthRoversRobot(RobotBase):
     def cleanup(self) -> None:
         """
         Clean up resources. Call when robot is no longer needed.
+
         Intentionally no-op for now; RTM connection is not explicitly closed.
         """
         pass

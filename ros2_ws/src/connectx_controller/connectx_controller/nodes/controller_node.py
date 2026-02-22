@@ -70,6 +70,7 @@ def _compute_trapezoidal_turn(
 ) -> tuple[float, float, float]:
     """
     Compute phase durations (t_accel, t_hold, t_decel) for a turn.
+
     total_angle_rad is absolute. Returns (t_accel, t_hold, t_decel) in seconds.
     """
     if v_max <= 0 or accel <= 0 or decel <= 0:
@@ -271,13 +272,13 @@ class ControllerNode(Node):
                 self._target_heading_deg = _normalize_angle_deg(current + goal["angle_deg"])
             else:
                 self._target_heading_deg = _normalize_angle_deg(goal["angle_deg"])
-            # Trapezoidal profile when angular_vel_rad_s is specified, or use default for open-loop turn (no telemetry needed)
+            # Trapezoidal profile when angular_vel_rad_s set, or default for open-loop turn
             v_ang = goal.get("angular_vel_rad_s")
             max_angular = self.get_parameter("max_angular_speed").value
             if v_ang is not None and v_ang > 0:
                 v_max = min(v_ang, max_angular)
             else:
-                # No telemetry or no explicit velocity: use open-loop trapezoidal turn so autonomy works without /robot/telemetry
+                # No telemetry or no explicit velocity: open-loop trapezoidal turn
                 v_max = max_angular * 0.5 if max_angular > 0 else 0.4
             accel = goal.get("accel_rad_s2") or self.get_parameter("default_angular_accel").value
             decel = goal.get("decel_rad_s2") or self.get_parameter("default_angular_decel").value
@@ -301,7 +302,7 @@ class ControllerNode(Node):
         with self._lock:
             telemetry = self._last_telemetry
             goals = list(self._goal_queue)
-            state = self._state
+            _ = self._state  # snapshot under lock
             traveled = self._traveled_m
             target_heading = self._target_heading_deg
             goal_start = self._goal_start_time
@@ -321,7 +322,7 @@ class ControllerNode(Node):
         twist.angular.y = 0.0
         twist.angular.z = 0.0
 
-        # When idle, do not publish to /cmd_vel so webrtc_node arrow (manual) commands can take effect.
+        # When idle, do not publish to /cmd_vel so webrtc manual commands can take effect.
         if not goals:
             return
 
@@ -351,9 +352,16 @@ class ControllerNode(Node):
                 )
                 self._profile_t_elapsed += dt
                 self._profile_integrated += setpoint * dt
-                twist.linear.x = self._profile_sign * max(-max_linear, min(max_linear, setpoint))
-                total_time = self._profile_t_accel + self._profile_t_hold + self._profile_t_decel
-                if self._profile_integrated >= self._profile_total - dist_tol or self._profile_t_elapsed >= total_time:
+                linear_val = self._profile_sign * max(-max_linear, min(max_linear, setpoint))
+                twist.linear.x = linear_val
+                total_time = (
+                    self._profile_t_accel + self._profile_t_hold + self._profile_t_decel
+                )
+                done = (
+                    self._profile_integrated >= self._profile_total - dist_tol
+                    or self._profile_t_elapsed >= total_time
+                )
+                if done:
                     with self._lock:
                         if self._goal_queue:
                             self._goal_queue.pop(0)
@@ -400,9 +408,16 @@ class ControllerNode(Node):
                 )
                 self._profile_t_elapsed += dt
                 self._profile_integrated += setpoint * dt
-                twist.angular.z = self._profile_sign * max(-max_angular, min(max_angular, setpoint))
-                total_time = self._profile_t_accel + self._profile_t_hold + self._profile_t_decel
-                if self._profile_integrated >= self._profile_total - (angle_tol * DEG_TO_RAD) or self._profile_t_elapsed >= total_time:
+                ang_val = self._profile_sign * max(-max_angular, min(max_angular, setpoint))
+                twist.angular.z = ang_val
+                total_time = (
+                    self._profile_t_accel + self._profile_t_hold + self._profile_t_decel
+                )
+                angle_done = (
+                    self._profile_integrated >= self._profile_total - (angle_tol * DEG_TO_RAD)
+                    or self._profile_t_elapsed >= total_time
+                )
+                if angle_done:
                     with self._lock:
                         if self._goal_queue:
                             self._goal_queue.pop(0)

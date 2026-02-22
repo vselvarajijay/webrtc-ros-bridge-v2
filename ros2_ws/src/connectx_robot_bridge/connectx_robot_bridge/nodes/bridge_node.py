@@ -25,7 +25,6 @@ from connectx_robot_bridge.core.constants import (
     DEFAULT_MAX_LINEAR_SPEED,
     DEFAULT_TELEMETRY_PUBLISH_RATE,
     ROBOT_TELEMETRY_TOPIC,
-    SDK_FRONT_ENDPOINT,
 )
 from connectx_robot_bridge.core.robot_base import RobotBase
 from connectx_robot_bridge.core.robot_factory import create_robot
@@ -34,12 +33,18 @@ from connectx_robot_bridge.core.robot_factory import create_robot
 def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) -> None:
     """
     Set up cmd_vel subscriber for robot control.
+
     Uses last_lamp_ref[0] so every velocity command is sent with the latest lamp state.
-    
+
     Args:
-        node: ROS 2 node
-        robot: Robot instance to control
-        last_lamp_ref: Single-element list holding last lamp value (0 or 1) from /robot/lamp
+    ----
+    node : Node
+        ROS 2 node
+    robot : RobotBase
+        Robot instance to control
+    last_lamp_ref : list
+        Single-element list holding last lamp value (0 or 1) from /robot/lamp
+
     """
     node.declare_parameter('max_linear_speed', DEFAULT_MAX_LINEAR_SPEED)
     node.declare_parameter('max_angular_speed', DEFAULT_MAX_ANGULAR_SPEED)
@@ -60,38 +65,39 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) 
                 last_cmd_vel_log[0] = now
                 node.get_logger().error(
                     'cmd_vel received but no robot (robot is None). '
-                    'Set SDK_API_TOKEN and BOT_SLUG in .env and ensure bridge_node can authenticate.'
+                    'Set SDK_API_TOKEN and BOT_SLUG in .env and ensure bridge can authenticate.'
                 )
             return
         # Apply latest lamp state so this velocity command carries it to the SDK
         if hasattr(robot, 'set_lamp'):
             robot.set_lamp(last_lamp_ref[0])
-        
+
         # Convert ROS Twist to Frodobots SDK format
         linear_x = msg.linear.x
         angular_z = msg.angular.z
         linear_normalized, angular_normalized = twist_to_sdk_normalized(
             linear_x, angular_z, max_linear, max_angular
         )
-        
+
         # Send continuous velocity command for smooth control (includes lamp via set_lamp above)
         rtm_ok = robot.send_velocity(linear_normalized, angular_normalized)
         if rtm_ok and not rtm_first_ok_logged[0]:
             rtm_first_ok_logged[0] = True
             node.get_logger().info(
-                'RTM send OK: velocity commands are being accepted by Agora. '
-                'If the robot still does not move, ensure the robot (or SDK) is in the same channel and receiving peer messages.'
+                'RTM send OK: velocity commands accepted by Agora. '
+                'If robot does not move, ensure robot/SDK is in the same channel.'
             )
         if not rtm_ok and (abs(linear_x) > 0.01 or abs(angular_z) > 0.01):
             now = time.monotonic()
             if now - last_rtm_fail_log[0] >= RTM_FAIL_LOG_INTERVAL:
                 last_rtm_fail_log[0] = now
                 node.get_logger().warning(
-                    'RTM send failed: Agora API rejected or network error. '
-                    'Check RTM_TOKEN, BOT_UID, and that the robot is online and in the channel.'
+                    'RTM send failed: Agora API or network error. '
+                    'Check RTM_TOKEN, BOT_UID, and that robot is online and in channel.'
                 )
-        
-        # Log so operators see that commands are reaching the bridge (first few immediately, then rate-limited)
+
+        # Log so operators see commands reaching the bridge
+        # (first few immediately, then rate-limited)
         if abs(linear_x) > 0.01 or abs(angular_z) > 0.01:
             now = time.monotonic()
             should_log = (
@@ -102,21 +108,22 @@ def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) 
                 cmd_vel_log_count[0] += 1
                 last_cmd_vel_log[0] = now
                 node.get_logger().info(
-                    f'cmd_vel -> robot: linear={linear_x:.2f} (norm={linear_normalized:.2f}) '
-                    f'angular={angular_z:.2f} (norm={angular_normalized:.2f})'
+                    f'cmd_vel -> robot: linear={linear_x:.2f} (n={linear_normalized:.2f}) '
+                    f'angular={angular_z:.2f} (n={angular_normalized:.2f})'
                 )
 
     node.create_subscription(Twist, CMD_VEL_TOPIC, on_cmd_vel, 10)
     node.get_logger().info(
         f'Subscribed to {CMD_VEL_TOPIC} '
-        f'(max_linear={max_linear:.2f}, max_angular={max_angular:.2f}); bridge ready.'
+        f'(max_linear={max_linear:.2f}, max_angular={max_angular:.2f}); ready.'
     )
 
 
 def setup_lamp_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) -> None:
     """
-    Set up lamp state subscriber. Store latest lamp (0=off, 1=on) in last_lamp_ref;
-    cmd_vel handler applies it so every velocity command carries the lamp to the SDK.
+    Set up lamp state subscriber.
+
+    Store latest lamp (0=off, 1=on) in last_lamp_ref; cmd_vel applies it to SDK.
     """
     def on_lamp(msg: Int32) -> None:
         last_lamp_ref[0] = 1 if msg.data else 0
@@ -130,8 +137,9 @@ def setup_lamp_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) -> 
 def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
     """
     Set up camera publisher for front camera feed.
-    When camera_use_stream is True, runs a dedicated thread that pulls from
-    get_front_camera_stream() and publishes every frame; otherwise uses a timer at camera_publish_rate.
+
+    When camera_use_stream is True, runs a thread from get_front_camera_stream();
+    otherwise uses a timer at camera_publish_rate.
     """
     node.declare_parameter('camera_publish_rate', DEFAULT_CAMERA_PUBLISH_RATE)
     node.declare_parameter('camera_use_stream', True)
@@ -162,7 +170,9 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
             msg = CompressedImage()
             msg.header = Header()
             msg.header.stamp = node.get_clock().now().to_msg()
-            msg.header.frame_id = f"{CAMERA_FRAME_ID}_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
+            c, f = metrics.get('capture_ms', 0), metrics.get('fetch_ms', 0)
+            fid = frame_counter_ref[0]
+            msg.header.frame_id = f"{CAMERA_FRAME_ID}_{fid}_{c:.2f}_{f:.2f}"
             msg.format = image_format
             msg.data = list(frame_bytes)
             camera_pub.publish(msg)
@@ -182,8 +192,8 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     if none_count >= 50 and not no_frame_logged[0]:
                         no_frame_logged[0] = True
                         node.get_logger().warning(
-                            f"No camera frames from SDK after 50 attempts. Check SDK is running, {SDK_FRONT_ENDPOINT} is reachable, "
-                            "and with SDK_SKIP_BROWSER_JOIN=0 that auth/channel are configured and browser has joined."
+                            "No camera frames from SDK after 50 attempts. "
+                            "Check SDK running and auth/channel configured."
                         )
                     continue
                 none_count = 0
@@ -196,7 +206,9 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     msg = CompressedImage()
                     msg.header = Header()
                     msg.header.stamp = node.get_clock().now().to_msg()
-                    msg.header.frame_id = f"{CAMERA_FRAME_ID}_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
+                    c, f = metrics.get('capture_ms', 0), metrics.get('fetch_ms', 0)
+                    fid = frame_counter_ref[0]
+                    msg.header.frame_id = f"{CAMERA_FRAME_ID}_{fid}_{c:.2f}_{f:.2f}"
                     msg.format = image_format
                     msg.data = list(frame_bytes)
                     camera_pub.publish(msg)
@@ -213,6 +225,7 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
 def setup_camera_full_publisher(node: Node, robot: RobotBase) -> None:
     """
     Publish full-resolution (viewport) front camera on a separate topic at a low rate.
+
     Only active if the robot implements get_front_camera_frame_full().
     """
     if robot is None or not hasattr(robot, 'get_front_camera_frame_full'):
@@ -241,7 +254,8 @@ def setup_camera_full_publisher(node: Node, robot: RobotBase) -> None:
             msg = CompressedImage()
             msg.header = Header()
             msg.header.stamp = node.get_clock().now().to_msg()
-            msg.header.frame_id = f"{CAMERA_FRAME_ID}_full_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
+            c, f = metrics.get('capture_ms', 0), metrics.get('fetch_ms', 0)
+            msg.header.frame_id = f"{CAMERA_FRAME_ID}_full_{frame_counter_ref[0]}_{c:.2f}_{f:.2f}"
             msg.format = image_format
             msg.data = list(frame_bytes)
             camera_full_pub.publish(msg)
@@ -250,14 +264,12 @@ def setup_camera_full_publisher(node: Node, robot: RobotBase) -> None:
 
     node.create_timer(1.0 / full_rate, on_camera_full_timer)
     node.get_logger().info(
-        f'Publishing full-resolution camera on {CAMERA_FRONT_FULL_COMPRESSED_TOPIC} at {full_rate} Hz'
+        f'Publishing full-res camera on {CAMERA_FRONT_FULL_COMPRESSED_TOPIC} at {full_rate} Hz'
     )
 
 
 def setup_telemetry_publisher(node: Node, robot: RobotBase) -> None:
-    """
-    Set up telemetry publisher for robot sensor data (velocity, battery, GPS, IMU, etc.).
-    """
+    """Set up telemetry publisher for robot sensor data (velocity, battery, GPS, IMU)."""
     node.declare_parameter('telemetry_publish_rate', DEFAULT_TELEMETRY_PUBLISH_RATE)
     telemetry_rate = node.get_parameter('telemetry_publish_rate').value
     telemetry_pub = node.create_publisher(String, ROBOT_TELEMETRY_TOPIC, 10)
@@ -282,31 +294,30 @@ def setup_telemetry_publisher(node: Node, robot: RobotBase) -> None:
 
 
 def main(args=None):
-    """Main entry point for bridge node."""
+    """Run the bridge node (entry point)."""
     rclpy.init(args=args)
     node = Node('bridge_node')
 
     try:
         # Set up robot configuration
         robot_type = ConfigManager.setup_robot_config(node)
-        
+
         # Create robot instance
         robot = create_robot(robot_type)
         node.robot = robot
         if robot is None:
             node.get_logger().error(
-                f'Unknown robot_type "{robot_type}"; running without robot. Joystick/control will not move the robot.'
+                f'Unknown robot_type "{robot_type}"; running without robot.'
             )
         else:
             rtm_ok = getattr(robot, '_rtm_client', None) is not None
             if rtm_ok:
                 node.get_logger().info(
-                    'Robot control ready (RTM client initialized). Joystick commands will be sent to the robot.'
+                    'Robot control ready (RTM client initialized).'
                 )
             else:
                 node.get_logger().error(
-                    'Robot instance created but RTM client not initialized. '
-                    'Set SDK_API_TOKEN and BOT_SLUG in .env (and MISSION_SLUG if needed). Joystick will not move the robot.'
+                    'RTM client not initialized. Set SDK_API_TOKEN and BOT_SLUG in .env.'
                 )
 
         # Shared ref so cmd_vel always sends with latest lamp (0=off, 1=on)

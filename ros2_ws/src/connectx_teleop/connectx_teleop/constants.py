@@ -1,7 +1,5 @@
 """Constants for connectx_teleop (topic names, video/encoding, signaling). No bridge dependency."""
 
-import os
-
 # ROS topic names (must match bridge and connectx_controller)
 CMD_VEL_TOPIC = "/cmd_vel"
 LAMP_TOPIC = "/robot/lamp"

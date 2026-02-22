@@ -12,8 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ament_mypy.main import main
 import pytest
+
+try:
+    from ament_mypy.main import main
+except ImportError:
+    pytest.skip(
+        'ament_mypy not installed (e.g. ros-humble-ament-mypy)',
+        allow_module_level=True,
+    )
 
 
 @pytest.mark.mypy

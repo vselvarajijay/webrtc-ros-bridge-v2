@@ -21,7 +21,7 @@ setup(
     zip_safe=True,
     maintainer='ConnectX',
     maintainer_email='connectx@example.com',
-    description='ConnectX planner: world model and wander behavior from optical flow and telemetry.',
+    description='ConnectX planner: world model and wander from optical flow and telemetry.',
     license='Apache-2.0',
     extras_require={
         'test': [

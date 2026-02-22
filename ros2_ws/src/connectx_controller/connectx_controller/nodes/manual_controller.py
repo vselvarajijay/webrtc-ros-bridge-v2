@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Manual controller node: subscribes to /teleop/velocity_target (from keyboard_node)
-and /robot/telemetry, applies ramping and safety, publishes /cmd_vel.
+Manual controller node.
+
+Subscribes to /teleop/velocity_target (from keyboard_node) and /robot/telemetry,
+applies ramping and safety, publishes /cmd_vel.
 """
 
 from __future__ import annotations

@@ -12,11 +12,13 @@ def parse_telemetry(json_str: str) -> Optional[Tuple[float, float, float]]:
     """
     Parse telemetry JSON from /robot/telemetry.
 
-    Returns:
+    Returns
+    -------
         (heading_deg, speed_m_s, timestamp) or None if invalid/missing.
         heading_deg: 0--360 from orientation (0--255).
         speed_m_s: current speed (m/s).
         timestamp: Unix epoch.
+
     """
     if not json_str or not json_str.strip():
         return None
