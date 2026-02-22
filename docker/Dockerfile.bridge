@@ -37,8 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Foxglove WebSocket bridge for Foxglove Studio (port 8765)
+# cv_bridge required to build optical_flow_nav (optical flow node) in the workspace
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-kilted-foxglove-bridge \
+    ros-kilted-cv-bridge \
     && rm -rf /var/lib/apt/lists/*
 
 # Bridge Python deps (colcon does not install setup.py install_requires)

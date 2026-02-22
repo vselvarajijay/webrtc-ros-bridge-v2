@@ -14,7 +14,7 @@
 
 import pytest
 
-from connectx_msgs.msg import NavigationState
+from optical_flow_nav.msg import NavigationState
 from connectx_planner.nodes.wander_node import compute_wander_twist
 
 pytestmark = pytest.mark.unit

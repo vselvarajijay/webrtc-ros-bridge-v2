@@ -308,6 +308,9 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
         if (msg.type === 'telemetry' && msg.data && typeof msg.data === 'object') {
           setTelemetry((prev) => mergeTelemetry(prev, msg.data as Record<string, unknown>));
         }
+        if (msg.type === 'planning' && typeof msg.line === 'string') {
+          appendSystemLog(msg.line);
+        }
       } catch {}
     };
 
@@ -325,7 +328,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
         console.error('createOffer failed', err);
         setDebug('offer', 'failed', false);
       });
-  }, [attachRemoteVideoTrack, hideVideoPlaceholder, setDebug]);
+  }, [attachRemoteVideoTrack, hideVideoPlaceholder, setDebug, appendSystemLog]);
 
   useEffect(() => {
     fetchConfig()

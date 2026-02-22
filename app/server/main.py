@@ -333,7 +333,7 @@ def floor_mask_image():
         if _latest_floor_mask_image is None:
             return Response(
                 status_code=503,
-                content="Floor mask image not available. Ensure floor_mask_node is running.",
+                content="Floor mask not available.",
                 media_type="text/plain",
             )
         body = _latest_floor_mask_image

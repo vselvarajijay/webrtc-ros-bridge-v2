@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+
+"""
+Test node: read a video file and publish frames to /camera/image_raw
+for testing optical_flow_nav without a real camera.
+"""
+
+import os
+import sys
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+
+# Match optical_flow_node subscription (SensorDataQoS) so messages are delivered
+SENSOR_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=10,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = Node("test_video_publisher_node")
+
+    node.declare_parameter("video_path", "")
+    video_path = node.get_parameter("video_path").get_parameter_value().string_value
+    if not video_path:
+        node.get_logger().error("Parameter 'video_path' is empty. Set it via launch or --ros-args -p video_path:=/path/to/video.mp4")
+        rclpy.shutdown()
+        sys.exit(1)
+    if not os.path.isabs(video_path):
+        video_path = os.path.abspath(video_path)
+    if not os.path.isfile(video_path):
+        node.get_logger().error("Video file not found: %s" % video_path)
+        rclpy.shutdown()
+        sys.exit(1)
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        node.get_logger().error("Failed to open video: %s" % video_path)
+        rclpy.shutdown()
+        sys.exit(1)
+
+    node.declare_parameter("publish_rate", 10.0)
+    rate_hz = node.get_parameter("publish_rate").get_parameter_value().double_value
+    node.declare_parameter("loop", False)
+    loop_val = node.get_parameter("loop").get_parameter_value()
+    loop = loop_val.bool_value if loop_val.type == 1 else (str(loop_val.string_value).lower() in ("true", "1"))
+    node.declare_parameter("frame_id", "camera_link")
+    frame_id = node.get_parameter("frame_id").get_parameter_value().string_value
+
+    pub = node.create_publisher(Image, "/camera/image_raw", SENSOR_QOS)
+    bridge = CvBridge()
+    timer_period = 1.0 / rate_hz
+
+    def on_timer():
+        nonlocal cap
+        ret, frame = cap.read()
+        if not ret:
+            if loop:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret, frame = cap.read()
+            if not ret:
+                node.get_logger().warn("End of video (loop=%s); stopping." % loop)
+                timer.cancel()
+                return
+        msg = bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+        msg.header.stamp = node.get_clock().now().to_msg()
+        msg.header.frame_id = frame_id
+        pub.publish(msg)
+
+    timer = node.create_timer(timer_period, on_timer)
+    node.get_logger().info("Publishing %s to /camera/image_raw at %.1f Hz (loop=%s)" % (video_path, rate_hz, loop))
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        cap.release()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

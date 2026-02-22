@@ -1,0 +1,48 @@
+optical_flow_node:
+  ros__parameters:
+    camera:
+      use_camera_info: true
+      frame_id: "camera_link"
+      position:
+        x: 0.0
+        y: 0.0
+        z: 0.10
+      orientation:
+        pitch_deg: 15.0
+
+    flow:
+      method: "lucas_kanade"
+      resize_width: 320
+      resize_height: 240
+      history_window: 5
+      min_features: 100
+
+    mask:
+      enabled: true
+      type: "floor_band"
+      floor_band:
+        bottom_fraction: 0.4
+      # polygon.x / polygon.y omitted: use node defaults (empty). Empty arrays in YAML can fail to load in some ROS2 versions.
+      hsv_floor:
+        h_min: 0
+        h_max: 180
+        s_min: 0
+        s_max: 255
+        v_min: 0
+        v_max: 255
+
+    motion_compensation:
+      enabled: true
+      min_linear_velocity: 0.05
+      ignore_rotation_threshold_deg_s: 15.0
+      angular_damping_factor: 0.7
+
+    risk:
+      forward_risk_threshold: 0.6
+      center_weight: 1.5
+      urgency_gain: 1.2
+      smoothing_alpha: 0.4
+
+    debug:
+      publish_flow_image: true
+      publish_mask: false

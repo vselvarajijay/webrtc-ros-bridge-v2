@@ -74,7 +74,7 @@ case "$cmd" in
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     echo "Building ROS 2 workspace in container..."
     docker compose --profile webrtc run --rm connectx_bridge bash -c \
-      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
+      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
     echo "Build complete. Run ./cli.sh start to start services and open a shell."
     ;;
   start)
@@ -127,6 +127,13 @@ case "$cmd" in
       echo "  Check: docker compose --profile webrtc ps connectx_sdk"
       echo "  Logs:  ./cli.sh logs sdk"
       echo "  Restart: docker compose --profile webrtc up -d connectx_sdk"
+      echo ""
+    fi
+    if ! docker compose --profile webrtc exec -T connectx_bridge bash -c "source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash 2>/dev/null && ros2 node list 2>/dev/null" 2>/dev/null | grep -q optical_flow_node; then
+      echo ""
+      echo "Warning: optical_flow_nav node is not running. Wander and world model need it."
+      echo "  If you added or changed ros2_ws: run ./cli.sh build then ./cli.sh start again."
+      echo "  To see why it failed: ./cli.sh logs webrtc   (look for [optical_flow_nav] lines)"
       echo ""
     fi
     start_storybook
@@ -234,7 +241,7 @@ case "$cmd" in
     export CACHEBUST="${CACHEBUST:-$(date +%s)}"
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
     docker compose --profile webrtc run --rm connectx_bridge bash -c \
-      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
+      "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && colcon build"
     echo ""
     echo "=== Rebuild: Starting all webrtc profile services (force-recreate) ==="
     if [[ "$(uname)" == Darwin ]]; then

@@ -7,7 +7,7 @@ ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"
 AUTONOMY_COMMAND_TOPIC = "/autonomy/command"
 CAMERA_FRONT_COMPRESSED_TOPIC = "/camera/front/compressed"
 CAMERA_FRAME_ID = "camera_front"
-OPTICAL_FLOW_TOPIC = "/optical_flow"
+NAVIGATION_STATE_TOPIC = "/navigation_state"
 TELEOP_VELOCITY_TARGET_TOPIC = "/teleop/velocity_target"
 
 # WebRTC video output size (lower = faster decode/encode and less bandwidth)

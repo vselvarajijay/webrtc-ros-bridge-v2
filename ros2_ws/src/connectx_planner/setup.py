@@ -12,7 +12,6 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'config'), [
-            'config/world_model_params.yaml',
             'config/wander_params.yaml',
         ]),
     ],
@@ -32,7 +31,6 @@ setup(
     entry_points={
         'console_scripts': [
             'wander_node = connectx_planner.nodes.wander_node:main',
-            'world_model_node = connectx_planner.nodes.world_model_node:main',
         ],
     },
 )

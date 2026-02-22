@@ -26,7 +26,9 @@ from av.video.frame import PictureType
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Float32MultiArray, Int32, String
+from std_msgs.msg import Int32, String
+
+from optical_flow_nav.msg import NavigationState
 
 from connectx_teleop.constants import (
     AUTONOMY_COMMAND_TOPIC,
@@ -35,7 +37,7 @@ from connectx_teleop.constants import (
     CMD_VEL_TOPIC,
     LAMP_TOPIC,
     DEFAULT_IMAGE_FORMAT,
-    OPTICAL_FLOW_TOPIC,
+    NAVIGATION_STATE_TOPIC,
     ROBOT_TELEMETRY_TOPIC,
     VIDEO_OUTPUT_HEIGHT,
     VIDEO_OUTPUT_WIDTH,
@@ -340,6 +342,7 @@ def run_ros_node(
     stop_event: threading.Event,
     last_flow_ref: list,
     wander_mode_ref: list,
+    last_nav_state_ref: list,
 ) -> None:
     """
     Run rclpy node.
@@ -386,14 +389,25 @@ def run_ros_node(
         10,
     )
 
-    def on_optical_flow(msg: Float32MultiArray) -> None:
-        if len(msg.data) >= 6:
-            last_flow_ref[0] = list(msg.data[:6])
+    def on_navigation_state(msg: NavigationState) -> None:
+        last_nav_state_ref[0] = msg
+        # Backward-compatible optical_flow payload for UI: [vx_l, vy_l, mag_l, vx_c, vy_c, mag_c, ...]
+        last_flow_ref[0] = [
+            0.0,
+            0.0,
+            msg.flow_mag_left,
+            0.0,
+            0.0,
+            msg.flow_mag_center,
+            0.0,
+            0.0,
+            msg.flow_mag_right,
+        ]
 
     node.create_subscription(
-        Float32MultiArray,
-        OPTICAL_FLOW_TOPIC,
-        on_optical_flow,
+        NavigationState,
+        NAVIGATION_STATE_TOPIC,
+        on_navigation_state,
         10,
     )
 
@@ -606,6 +620,29 @@ _HEARTBEAT_TELEMETRY = {
 }
 
 
+def _format_world_model_line(nav_msg: Any) -> str:
+    """Format NavigationState as a single human-readable line for System Logs."""
+    turn_str = { -1: "left", 0: "center", 1: "right" }.get(getattr(nav_msg, "safest_turn", 0), "?")
+    return (
+        "World model: forward_safe=%s forward_risk=%.2f safest_turn=%s turn_conf=%.2f "
+        "urgency=%.2f confidence=%.2f | flow L=%.2f C=%.2f R=%.2f"
+        % (
+            getattr(nav_msg, "forward_safe", False),
+            getattr(nav_msg, "forward_risk", 0.0),
+            turn_str,
+            getattr(nav_msg, "turn_confidence", 0.0),
+            getattr(nav_msg, "urgency_score", 0.0),
+            getattr(nav_msg, "confidence", 0.0),
+            getattr(nav_msg, "flow_mag_left", 0.0),
+            getattr(nav_msg, "flow_mag_center", 0.0),
+            getattr(nav_msg, "flow_mag_right", 0.0),
+        )
+    )
+
+
+PLANNING_LOG_INTERVAL = 1.0  # seconds between world model lines in System Logs
+
+
 async def _telemetry_sender_loop(
     ws,
     telemetry_queue: queue.Queue,
@@ -613,9 +650,11 @@ async def _telemetry_sender_loop(
     stop_event: threading.Event,
     last_frame_pts_ref: Optional[list] = None,
     last_flow_ref: Optional[list] = None,
+    last_nav_state_ref: Optional[list] = None,
 ) -> None:
     """Send telemetry to app and browser. Heartbeat when queue empty so UI stays alive."""
     last_heartbeat = [0.0]
+    last_planning_sent = [0.0]
     last_payload_ws: List[Optional[Dict[str, Any]]] = [None]  # last full payload we sent
     heartbeat_interval = 2.0  # seconds
     first_ws_telemetry_logged: list = [False]
@@ -704,6 +743,20 @@ async def _telemetry_sender_loop(
                     dc = data_channel_ref[0]
                     if getattr(dc, "readyState", None) == "open":
                         dc.send(payload_str_dc)
+                        # Send human-readable world model for System Logs (throttled)
+                        if (
+                            last_nav_state_ref is not None
+                            and last_nav_state_ref[0] is not None
+                        ):
+                            now = time.time()
+                            if now - last_planning_sent[0] >= PLANNING_LOG_INTERVAL:
+                                last_planning_sent[0] = now
+                                line = _format_world_model_line(last_nav_state_ref[0])
+                                ts = time.strftime("%H:%M:%S", time.localtime(now))
+                                planning_msg = json.dumps(
+                                    {"type": "planning", "line": "[%s] %s" % (ts, line)}
+                                )
+                                dc.send(planning_msg)
                 except Exception:
                     pass
         except Exception as e:
@@ -717,6 +770,7 @@ async def run_signaling_and_webrtc(
     autonomy_command_queue: queue.Queue,
     stop_event: threading.Event,
     last_flow_ref: Optional[list] = None,
+    last_nav_state_ref: Optional[list] = None,
 ) -> None:
     """Connect to signaling WebSocket, handle offer/answer/ICE, and run WebRTC peer."""
     if not HAS_WEBSOCKETS or not HAS_AIORTC:
@@ -890,6 +944,7 @@ async def run_signaling_and_webrtc(
                         stop_event,
                         last_frame_pts_ref,
                         last_flow_ref,
+                        last_nav_state_ref,
                     )
                 )
                 try:
@@ -923,6 +978,7 @@ def main(args=None) -> None:
     stop = threading.Event()
     last_flow_ref: list = [None]
     wander_mode_ref: list = [False]
+    last_nav_state_ref: list = [None]
 
     ros_thread = threading.Thread(
         target=run_ros_node,
@@ -935,6 +991,7 @@ def main(args=None) -> None:
             stop,
             last_flow_ref,
             wander_mode_ref,
+            last_nav_state_ref,
         ),
         daemon=True,
     )
@@ -949,6 +1006,7 @@ def main(args=None) -> None:
                 autonomy_command_queue,
                 stop,
                 last_flow_ref,
+                last_nav_state_ref,
             )
         )
     except KeyboardInterrupt:

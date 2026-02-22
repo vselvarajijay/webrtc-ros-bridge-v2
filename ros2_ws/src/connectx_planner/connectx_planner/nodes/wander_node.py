@@ -12,7 +12,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String
-from connectx_msgs.msg import NavigationState
+from optical_flow_nav.msg import NavigationState
 
 from connectx_planner.constants import (
     CMD_VEL_TOPIC,
@@ -255,7 +255,7 @@ class WanderPlanner(Node):
             self._no_state_warn_count += 1
             if self._no_state_warn_count == 1 or self._no_state_warn_count % 50 == 0:
                 self.get_logger().warn(
-                    "Wander enabled but no /navigation_state yet; is world_model_node running?"
+                    "Wander enabled but no /navigation_state yet; is optical_flow_nav running?"
                 )
             cmd_linear = (
                 self._last_linear

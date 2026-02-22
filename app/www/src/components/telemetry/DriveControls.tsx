@@ -194,7 +194,7 @@ export function DriveControls() {
         aria-label="Emergency stop"
         style={{ width: '100%' }}
       >
-        E-STOP
+        STOP
       </Button>
 
       {/* Speed always visible */}

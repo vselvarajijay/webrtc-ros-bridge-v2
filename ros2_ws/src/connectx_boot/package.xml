@@ -9,7 +9,7 @@
 
   <depend>ament_index_python</depend>
   <depend>connectx_controller</depend>
-  <depend>connectx_perception_cpp</depend>
+  <depend>connectx_planner</depend>
   <depend>connectx_robot_bridge</depend>
 
   <test_depend>ament_copyright</test_depend>

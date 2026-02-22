@@ -18,7 +18,7 @@ export function TelemetryHeader() {
         onClick={eStop}
         aria-label="Emergency stop"
       >
-        E-STOP
+        STOP
       </Button>
       <Group gap="lg" wrap="nowrap">
         <Group gap="xs" wrap="nowrap">
