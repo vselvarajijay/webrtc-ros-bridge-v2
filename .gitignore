@@ -318,6 +318,9 @@ models/DA3Metric-Large/
 
 robot/
 
+# Runtime data: robot profiles database (created by the server at runtime)
+robot_profiles.json
+
 
 .pnpm-store
 
