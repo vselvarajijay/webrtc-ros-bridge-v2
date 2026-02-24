@@ -9,6 +9,7 @@ Environment variables:
   LLM_MODEL       – OpenAI model name (default: gpt-4o-mini)
 """
 
+import asyncio
 import inspect
 import os
 
@@ -39,24 +40,37 @@ async def get_robot_state() -> str:
 
 
 @tool
-async def send_velocity(linear_x: float = 0.0, angular_z: float = 0.0) -> str:
-    """Send a velocity command to the ConnectX robot.
+async def send_velocity(
+    linear_x: float = 0.0,
+    angular_z: float = 0.0,
+    duration_ms: int = 500,
+) -> str:
+    """Send a velocity command to the ConnectX robot for a given duration, then stop.
 
     Args:
         linear_x: Forward (+) or backward (-) speed in m/s. Range: -1.0 to 1.0.
         angular_z: Turn left (+) or right (-) in rad/s. Range: -1.0 to 1.0.
+        duration_ms: How long to apply the velocity in milliseconds; then stop. Default 500.
     """
+    request_timeout = max(10.0, duration_ms / 1000.0 + 5.0)
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
             r = await client.post(
                 f"{APP_URL}/api/control",
                 json={"linear_x": linear_x, "angular_z": angular_z},
             )
-            if r.status_code == 200:
-                return f"Sent velocity linear_x={linear_x} angular_z={angular_z}"
-            if r.status_code == 503:
-                return "Robot not connected. Connect the robot via ConnectX signaling first."
-            return f"HTTP error {r.status_code}: {r.text}"
+            if r.status_code != 200:
+                if r.status_code == 503:
+                    return "Robot not connected. Connect the robot via ConnectX signaling first."
+                return f"HTTP error {r.status_code}: {r.text}"
+            await asyncio.sleep(duration_ms / 1000.0)
+            stop_r = await client.post(
+                f"{APP_URL}/api/control",
+                json={"linear_x": 0.0, "angular_z": 0.0},
+            )
+            if stop_r.status_code == 200:
+                return f"Sent velocity linear_x={linear_x} angular_z={angular_z} for {duration_ms}ms, then stopped."
+            return f"Sent velocity for {duration_ms}ms; stop command returned HTTP {stop_r.status_code}: {stop_r.text}"
     except httpx.RequestError as e:
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
 

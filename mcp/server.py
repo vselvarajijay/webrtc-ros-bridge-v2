@@ -4,10 +4,14 @@ Uses the ConnectX app HTTP API (APP_URL). Run with: uv run python server.py
 """
 
 import asyncio
+import logging
 import os
 from typing import Literal
 
 import httpx
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 from mcp.server.fastmcp import FastMCP, Image
 
 APP_URL = os.environ.get("APP_URL", "http://localhost:8000").rstrip("/")
@@ -95,6 +99,10 @@ async def send_velocity(
     The robot moves with this velocity for duration_ms milliseconds, then is sent a stop
     (0, 0) automatically. Only has effect when the robot is connected via ConnectX."""
     request_timeout = max(10.0, duration_ms / 1000.0 + 5.0)
+    logger.info(
+        "send_velocity: linear_x=%.2f angular_z=%.2f duration_ms=%d",
+        linear_x, angular_z, duration_ms,
+    )
     try:
         async with httpx.AsyncClient(timeout=request_timeout) as client:
             r = await client.post(
@@ -102,18 +110,29 @@ async def send_velocity(
                 json={"linear_x": linear_x, "angular_z": angular_z},
             )
             if r.status_code != 200:
+                logger.warning(
+                    "send_velocity: velocity POST failed status=%d body=%s",
+                    r.status_code, r.text,
+                )
                 if r.status_code == 503:
                     return "Robot not connected. Connect the robot via ConnectX signaling first."
                 return f"HTTP error {r.status_code}: {r.text}"
+            logger.info("send_velocity: velocity sent, sleeping %dms", duration_ms)
             await asyncio.sleep(duration_ms / 1000.0)
             stop_r = await client.post(
                 f"{APP_URL}/api/control",
                 json={"linear_x": 0.0, "angular_z": 0.0},
             )
             if stop_r.status_code == 200:
+                logger.info("send_velocity: stop sent successfully")
                 return f"Sent velocity linear_x={linear_x} angular_z={angular_z} for {duration_ms}ms, then stopped."
+            logger.warning(
+                "send_velocity: stop POST failed status=%d body=%s",
+                stop_r.status_code, stop_r.text,
+            )
             return f"Sent velocity for {duration_ms}ms; stop command returned HTTP {stop_r.status_code}: {stop_r.text}"
     except httpx.RequestError as e:
+        logger.exception("send_velocity: request error to %s", APP_URL)
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
 
 
@@ -122,6 +141,12 @@ if __name__ == "__main__":
     import uvicorn
     from starlette.applications import Starlette
     from starlette.routing import Mount
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)-8s %(name)s %(message)s",
+        datefmt="%m/%d/%y %H:%M:%S",
+    )
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
