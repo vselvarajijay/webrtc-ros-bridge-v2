@@ -33,24 +33,23 @@ services:
     profiles:
       - webrtc
 
-  scout_sdk:
+  frodobot_sdk:
     build:
       context: .
-      dockerfile: docker/Dockerfile.sdk
+      dockerfile: docker/Dockerfile.frodobot
     image: webrtc-ros-bridge-v2-scout_sdk
     container_name: scout_sdk
+    env_file:
+      - path: .env.frodobots
+        required: false
     ports:
-      - "8001:8001"
+      - "8001:8000"
     environment:
-      # Browser loads the SDK page from same container (port 8001)
-      - SDK_PAGE_URL=http://127.0.0.1:8001/sdk
+      # App listens on 8000 inside container so headless browser can load http://127.0.0.1:8000/sdk; host exposes 8001.
+      - SDK_PAGE_URL=http://127.0.0.1:8000/sdk
       # Skip headless browser join when Earth Rovers auth is not configured. Set to 0 in .env to enable real front camera.
       - SDK_SKIP_BROWSER_JOIN=${SDK_SKIP_BROWSER_JOIN:-1}
-    volumes:
-      - ./.env:/app/.env:ro
-    command: ["python3", "-m", "hypercorn", "main:app", "--bind", "0.0.0.0:8001"]
-    profiles:
-      - webrtc
+    command: ["python3", "-m", "hypercorn", "main:app", "--bind", "0.0.0.0:8000"]    
 
   scout_bridge:
     build:
@@ -71,7 +70,7 @@ services:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=1
       # Use Docker service names so bridge can reach SDK/app/TURN on all platforms (Mac host networking doesn't share 127.0.0.1)
-      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://scout_sdk:8001}
+      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://scout_sdk:8000}
       - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://app:8000/ws/signaling}
       - APP_URL=${APP_URL:-http://app:8000}
       - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}

@@ -15,9 +15,6 @@ setup(
     ],
     package_data={
         '': ['py.typed'],
-        'connectx_robot_bridge': [
-            'robot_sdk/earth_rovers_sdk/*.py',
-        ],
     },
     install_requires=[
         'setuptools',

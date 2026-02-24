@@ -1,0 +1,34 @@
+# FrodoBot (Earth Rovers) SDK: build from upstream repo only.
+# https://github.com/frodobots-org/earth-rovers-sdk
+# No COPY from this repo; image is built from a clone at build time.
+# App listens on 8000 inside container (upstream default) so headless browser can load http://127.0.0.1:8000/sdk. Compose maps host 8001 to container 8000.
+FROM python:3.9-slim
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# fonts-kacst removed: not available in Debian Trixie (python:3.9-slim). Chromium runs with remaining fonts.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+     git \
+     chromium \
+     libxss1 \
+     fonts-liberation \
+     fonts-ipafont-gothic \
+     fonts-wqy-zenhei \
+     fonts-thai-tlwg \
+     fonts-khmeros \
+     fonts-freefont-ttf \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN git clone --depth 1 https://github.com/frodobots-org/earth-rovers-sdk.git . \
+  && pip install --no-cache-dir -r requirements.txt
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+CMD ["python3", "-m", "hypercorn", "main:app", "--bind", "0.0.0.0:8000"]

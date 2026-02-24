@@ -16,8 +16,7 @@ from connectx_robot_bridge.core.constants import (
 from connectx_robot_bridge.core.exceptions import AuthenticationError
 from connectx_robot_bridge.core.models.telemetry import TelemetryFrame
 from connectx_robot_bridge.core.robot_base import RobotBase
-from connectx_robot_bridge.robot_sdk.earth_rovers_sdk import RtmClient
-from connectx_robot_bridge.utils import base64_to_bytes, fetch_auth_sync
+from connectx_robot_bridge.utils import RtmClient, base64_to_bytes, fetch_auth_sync
 
 
 class EarthRoversRobot(RobotBase):

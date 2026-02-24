@@ -112,11 +112,9 @@ case "$cmd" in
 
     echo "Starting app (signaling + www), scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph || exit 1
     else
-      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      docker compose --profile webrtc up -d app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph || exit 1
     fi
     # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
     echo "Waiting for services to be ready..."

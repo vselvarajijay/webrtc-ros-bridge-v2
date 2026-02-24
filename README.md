@@ -33,6 +33,7 @@ ConnectX is for development and research. Use in a safe environment; it is not i
 ```bash
 # Copy env and set ROBOT_TYPE + any API keys for your robot (see .env.example)
 cp .env.example .env
+# For Earth Rovers / Frodobots, create .env.frodobots with SDK_API_TOKEN, BOT_SLUG, etc. (see .env.example)
 
 # Build Docker images (run once after clone or when deps change)
 ./cli.sh build
@@ -63,7 +64,7 @@ Run `python3 scripts/download_models.py` once to download models, then `./cli.sh
 
 ## Adding a New Robot
 
-**Currently supported:** `earth_rovers_sdk` (Earth Rovers). Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` and configure the relevant variables in `.env.example`. To add another robot type:
+**Currently supported:** `earth_rovers_sdk` (Earth Rovers / Frodobots). Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` and configure FRODOBOT_* there for the bridge. The SDK container (`scout_sdk`) is built from the upstream [earth-rovers-sdk](https://github.com/frodobots-org/earth-rovers-sdk) repo and is configured via `.env.frodobots` (SDK_API_TOKEN, BOT_SLUG, etc.). To add another robot type:
 
 ### 1. Implement `RobotBase`
 

@@ -71,6 +71,8 @@ __pycache__/
 
 # Local env (secrets); copy .env.example to .env
 .env
+# FrodoBot SDK container env (SDK_API_TOKEN, BOT_SLUG, etc.); copy from .env.example or create from Frodobots
+.env.frodobots
 
 # IDE specific
 .vscode/

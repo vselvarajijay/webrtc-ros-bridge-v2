@@ -12,6 +12,9 @@ from connectx_robot_bridge.core.constants import (
     REQUIRED_AUTH_KEYS,
 )
 from connectx_robot_bridge.core.exceptions import AuthenticationError
+from connectx_robot_bridge.utils.rtm_client import RtmClient
+
+__all__ = ['RtmClient', 'fetch_auth_sync', 'base64_to_bytes']
 
 
 def fetch_auth_sync() -> dict:
