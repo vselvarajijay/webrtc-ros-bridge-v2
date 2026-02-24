@@ -64,7 +64,7 @@ Run `python3 scripts/download_models.py` once to download models, then `./cli.sh
 
 ## Adding a New Robot
 
-**Currently supported:** `earth_rovers_sdk` (Earth Rovers / Frodobots). Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` and configure FRODOBOT_* there for the bridge. The SDK container (`scout_sdk`) is built from the upstream [earth-rovers-sdk](https://github.com/frodobots-org/earth-rovers-sdk) repo and is configured via `.env.frodobots` (SDK_API_TOKEN, BOT_SLUG, etc.). To add another robot type:
+**Currently supported:** `earth_rovers_sdk` (Earth Rovers / Frodobots). Set `ROBOT_TYPE=earth_rovers_sdk` in `.env` and configure FRODOBOT_* there for the bridge. The SDK container (`frodobot_sdk`) is built from the upstream [earth-rovers-sdk](https://github.com/frodobots-org/earth-rovers-sdk) repo and is configured via `.env.frodobots` (SDK_API_TOKEN, BOT_SLUG, etc.). To add another robot type:
 
 ### 1. Implement `RobotBase`
 

@@ -37,8 +37,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.frodobot
-    image: webrtc-ros-bridge-v2-scout_sdk
-    container_name: scout_sdk
+    image: webrtc-ros-bridge-v2-frodobot_sdk
+    container_name: frodobot_sdk
     env_file:
       - path: .env.frodobots
         required: false
@@ -60,7 +60,7 @@ services:
     ports:
       - "8765:8765"
     depends_on:
-      - scout_sdk
+      - frodobot_sdk
       - app
     stdin_open: true
     tty: true
@@ -70,7 +70,7 @@ services:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=1
       # Use Docker service names so bridge can reach SDK/app/TURN on all platforms (Mac host networking doesn't share 127.0.0.1)
-      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://scout_sdk:8000}
+      - SDK_LOCAL_URL=${SDK_LOCAL_URL:-http://frodobot_sdk:8000}
       - SIGNALING_WS_URL=${SIGNALING_WS_URL:-ws://app:8000/ws/signaling}
       - APP_URL=${APP_URL:-http://app:8000}
       - STUN_URL=${STUN_URL:-stun:stun.l.google.com:19302}
@@ -80,7 +80,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - .:/root/workspace
-    # No network_mode: host so bridge can reach scout_sdk via Docker DNS (required on Docker Desktop for Mac)
+    # No network_mode: host so bridge can reach frodobot_sdk via Docker DNS (required on Docker Desktop for Mac)
     # bridge_node, controller_node, floor_mask_node, optical_flow_node, world_model_node, wander_node, foxglove_bridge in background; webrtc_node in foreground
     command: ["bash", "-c", "cd /root/workspace/ros2_ws && source /opt/ros/kilted/setup.bash && [ -f /root/workspace/.env ] && set -a && source /root/workspace/.env && set +a && source install/setup.bash && (ros2 run connectx_robot_bridge bridge_node &) && (ros2 run connectx_robot_bridge calibration_node &) && (ros2 run connectx_controller controller_node &) && (ros2 run connectx_perception_cpp floor_mask_node 2>&1 | sed 's/^/[floor_mask_node] /' &) && (ros2 run connectx_perception_cpp optical_flow_node 2>&1 | sed 's/^/[optical_flow_node] /' &) && (python3 /root/workspace/scripts/optical_flow_relay_to_app.py &) && (python3 /root/workspace/scripts/floor_mask_relay_to_app.py &) && (ros2 run connectx_planner world_model_node 2>&1 | sed 's/^/[world_model_node] /' &) && (ros2 run connectx_planner wander_node &) && (ros2 run foxglove_bridge foxglove_bridge &) && sleep 1 && exec ros2 run connectx_teleop webrtc_node"]
     profiles:

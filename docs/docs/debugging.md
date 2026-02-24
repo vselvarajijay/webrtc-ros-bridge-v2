@@ -17,7 +17,7 @@ Notes on how to debug the ConnectX stack: bridge, controls, and message paths.
    - **"First velocity command sent via RTM"** — At least one command was sent successfully over RTM.
    - **"RTM send_message returned False"** — API or network issue; token may be expired or robot not in channel.
 
-2. **Env for Earth Rovers** — Bridge: in `.env` set `FRODOBOT_SDK_API_TOKEN`, `FRODOBOT_BOT_SLUG`, and (if using missions) `FRODOBOT_MISSION_SLUG`. The bridge fetches `RTM_TOKEN`, `CHANNEL_NAME`, etc. from the FrodoBots API. The SDK container (`scout_sdk`) is built from the upstream [earth-rovers-sdk](https://github.com/frodobots-org/earth-rovers-sdk) and gets env from `.env.frodobots` (use SDK-native names: `SDK_API_TOKEN`, `BOT_SLUG`, etc.).
+2. **Env for Earth Rovers** — Bridge: in `.env` set `FRODOBOT_SDK_API_TOKEN`, `FRODOBOT_BOT_SLUG`, and (if using missions) `FRODOBOT_MISSION_SLUG`. The bridge fetches `RTM_TOKEN`, `CHANNEL_NAME`, etc. from the FrodoBots API. The SDK container (`frodobot_sdk`) is built from the upstream [earth-rovers-sdk](https://github.com/frodobots-org/earth-rovers-sdk) and gets env from `.env.frodobots` (use SDK-native names: `SDK_API_TOKEN`, `BOT_SLUG`, etc.).
 
 3. **Robot must be in channel** — The physical robot (or Earth Rovers SDK container with browser joined) must be in the same Agora RTM channel to receive peer messages. If the robot is off or not joined, velocity commands will not reach it.
 

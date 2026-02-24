@@ -220,7 +220,7 @@ def _make_placeholder_frame() -> np.ndarray:
             )
             cv2.putText(
                 img,
-                "Start Earth Rovers SDK (scout_sdk) /v2/front",
+                "Start Earth Rovers SDK (frodobot_sdk) /v2/front",
                 (10, h // 2 + 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
@@ -263,7 +263,7 @@ class CameraTrack(VideoStreamTrack):
             if self._placeholder_frame is None:
                 self._placeholder_frame = _make_placeholder_frame()
                 LOG.info(
-                    "CameraTrack: no frames from %s yet; showing placeholder. Start Earth Rovers SDK (scout_sdk) for live feed.",
+                    "CameraTrack: no frames from %s yet; showing placeholder. Start Earth Rovers SDK (frodobot_sdk) for live feed.",
                     CAMERA_FRONT_COMPRESSED_TOPIC,
                 )
             self._last_frame = self._placeholder_frame
@@ -462,13 +462,13 @@ def run_ros_node(
         if not first_frame_logged[0] and (now - last_no_frame_log[0]) >= NO_DATA_WARN_INTERVAL and (now - start_time) >= 5.0:
             last_no_frame_log[0] = now
             LOG.warning(
-                "No camera frames on %s yet. Is bridge_node running in the same container? Is scout_sdk reachable and /v2/front returning frames?",
+                "No camera frames on %s yet. Is bridge_node running in the same container? Is frodobot_sdk reachable and /v2/front returning frames?",
                 CAMERA_FRONT_COMPRESSED_TOPIC,
             )
         if not first_telemetry_logged[0] and (now - last_no_telemetry_log[0]) >= NO_DATA_WARN_INTERVAL and (now - start_time) >= 5.0:
             last_no_telemetry_log[0] = now
             LOG.warning(
-                "No telemetry on %s yet. Is bridge_node running? Is scout_sdk /data reachable?",
+                "No telemetry on %s yet. Is bridge_node running? Is frodobot_sdk /data reachable?",
                 ROBOT_TELEMETRY_TOPIC,
             )
         try:

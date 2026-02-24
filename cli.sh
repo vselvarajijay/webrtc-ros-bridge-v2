@@ -52,7 +52,7 @@ stop_storybook() {
 case "$cmd" in
   build)
     echo "Removing any existing containers that might conflict..."
-    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
+    docker rm -f scout_app frodobot_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     echo ""
     if [[ -f app/www/package.json ]]; then
@@ -110,13 +110,13 @@ case "$cmd" in
       rm -f "$APP_PID_FILE"
     fi
 
-    echo "Starting app (signaling + www), scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
+    echo "Starting app (signaling + www), scout_turn, frodobot_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph || exit 1
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph || exit 1
     else
-      docker compose --profile webrtc up -d --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph || exit 1
+      docker compose --profile webrtc up -d --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph || exit 1
     fi
-    # Give scout_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
+    # Give frodobot_sdk time to bind to 8001 before scout_bridge hits /v2/front (depends_on only waits for start, not ready)
     echo "Waiting for services to be ready..."
     sleep 5
     start_storybook
@@ -159,8 +159,8 @@ case "$cmd" in
     fi
     ;;
   stop)
-    echo "Stopping app, scout_turn, scout_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
-    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+    echo "Stopping app, scout_turn, frodobot_sdk, scout_bridge, scout_perception, connectx_mcp, connectx_langgraph..."
+    docker compose --profile webrtc stop app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
@@ -193,7 +193,7 @@ case "$cmd" in
     ;;
   rebuild)
     echo "=== Rebuild: Stopping services ==="
-    docker compose --profile webrtc stop app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || true
+    docker compose --profile webrtc stop app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || true
     stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
@@ -219,7 +219,7 @@ case "$cmd" in
     fi
     echo ""
     echo "=== Rebuild: Building Docker images and ROS 2 workspace ==="
-    docker rm -f scout_app scout_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
+    docker rm -f scout_app frodobot_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
     docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
     export CACHEBUST="${CACHEBUST:-$(date +%s)}"
     docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
@@ -238,11 +238,11 @@ case "$cmd" in
       fi
     fi
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     else
-      docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      docker compose --profile webrtc up -d --force-recreate app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
+      docker compose --profile webrtc up -d --force-recreate app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     fi
     echo "Waiting for services to be ready..."
     sleep 5
@@ -288,7 +288,7 @@ case "$cmd" in
     elif [[ "$target" == "app" ]]; then
       docker compose --profile webrtc logs -f app
     elif [[ "$target" == "sdk" ]]; then
-      docker compose --profile webrtc logs -f scout_sdk
+      docker compose --profile webrtc logs -f frodobot_sdk
     elif [[ "$target" == "bridge" ]]; then
       docker compose --profile webrtc logs -f scout_bridge
     elif [[ "$target" == "perception" ]]; then
@@ -300,7 +300,7 @@ case "$cmd" in
     elif [[ "$target" == "langgraph" ]]; then
       docker compose --profile webrtc logs -f connectx_langgraph
     elif [[ "$target" == "all" ]]; then
-      docker compose --profile webrtc logs -f app scout_turn scout_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc logs -f app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
     else
       echo "Usage: $0 logs {webrtc|app|turn|sdk|bridge|perception|mcp|langgraph|all}"
       echo "  webrtc     Follow scout_bridge logs (WebRTC node runs there)"
