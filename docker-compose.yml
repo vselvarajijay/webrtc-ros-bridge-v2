@@ -1,4 +1,5 @@
 services:
+  # UI + API on port 8000 (FastAPI serves static and /data, /api, /ws).
   app:
     build:
       context: .

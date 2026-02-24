@@ -4,7 +4,7 @@ React + TypeScript + Vite app with Mantine and Tailwind. The telemetry UI (video
 
 ## Running the React app
 
-- **Development:** `pnpm dev` — runs the React app with HMR at the URL Vite prints (e.g. http://localhost:5173).
+- **Development:** `pnpm dev` — runs the React app with HMR at the URL Vite prints (e.g. http://localhost:5173). For telemetry and WebRTC, the ConnectX backend must be running (e.g. on port 8000); Vite proxies `/data`, `/api`, and `/ws` to it. Override with `VITE_BACKEND_URL` if the backend is elsewhere.
 - **At http://localhost:8000 (backend server):** Run `pnpm build` in `app/www`, then start the app server. The server serves the built React app from `dist/` at `/`; if `dist/index.html` is missing it returns a 503 with instructions to run `pnpm build`.
 
 ---

@@ -1,4 +1,4 @@
-# App server: FastAPI signaling + www
+# App: FastAPI serves UI (static) + /data, /api, /ws on port 8000. Single process for reliability.
 FROM python:3.10-slim
 
 WORKDIR /app

@@ -9,10 +9,20 @@ import { playwright } from '@vitest/browser-playwright';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Backend for dev proxy (telemetry /data, /api/*, WebSocket /ws/signaling)
+const BACKEND_URL = process.env.VITE_BACKEND_URL ?? "http://localhost:8000";
+
 // https://vite.dev/config/
 // React app entry is index.react.html so Vite dev/build don't process the large static index.html (telemetry UI).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      "/data": { target: BACKEND_URL, changeOrigin: true },
+      "/api": { target: BACKEND_URL, changeOrigin: true },
+      "/ws": { target: BACKEND_URL.replace(/^http/, "ws"), ws: true },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')

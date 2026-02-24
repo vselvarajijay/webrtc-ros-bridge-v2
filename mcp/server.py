@@ -3,6 +3,7 @@ ConnectX MCP server: exposes robot state, perception images, and control via MCP
 Uses the ConnectX app HTTP API (APP_URL). Run with: uv run python server.py
 """
 
+import asyncio
 import os
 from typing import Literal
 
@@ -86,19 +87,32 @@ async def get_robot_image(
 async def send_velocity(
     linear_x: float = 0.0,
     angular_z: float = 0.0,
+    duration_ms: int = 500,
 ) -> str:
-    """Send velocity command to the robot (forward/back and turn). Only has effect when the robot is connected via ConnectX."""
+    """Send a velocity command to the robot for a given duration, then stop.
+
+    Direction and speed are expressed via linear_x (forward/back) and angular_z (turn).
+    The robot moves with this velocity for duration_ms milliseconds, then is sent a stop
+    (0, 0) automatically. Only has effect when the robot is connected via ConnectX."""
+    request_timeout = max(10.0, duration_ms / 1000.0 + 5.0)
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
             r = await client.post(
                 f"{APP_URL}/api/control",
                 json={"linear_x": linear_x, "angular_z": angular_z},
             )
-            if r.status_code == 200:
-                return f"Sent velocity linear_x={linear_x} angular_z={angular_z}"
-            if r.status_code == 503:
-                return "Robot not connected. Connect the robot via ConnectX signaling first."
-            return f"HTTP error {r.status_code}: {r.text}"
+            if r.status_code != 200:
+                if r.status_code == 503:
+                    return "Robot not connected. Connect the robot via ConnectX signaling first."
+                return f"HTTP error {r.status_code}: {r.text}"
+            await asyncio.sleep(duration_ms / 1000.0)
+            stop_r = await client.post(
+                f"{APP_URL}/api/control",
+                json={"linear_x": 0.0, "angular_z": 0.0},
+            )
+            if stop_r.status_code == 200:
+                return f"Sent velocity linear_x={linear_x} angular_z={angular_z} for {duration_ms}ms, then stopped."
+            return f"Sent velocity for {duration_ms}ms; stop command returned HTTP {stop_r.status_code}: {stop_r.text}"
     except httpx.RequestError as e:
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
 

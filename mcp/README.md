@@ -37,4 +37,4 @@ From another host or Docker, set `APP_URL` to the ConnectX app (e.g. `http://hos
 - **get_robot_state** — Latest telemetry (battery, speed, GPS, orientation, IMU, etc.) from ConnectX.
 - **get_robot_image** — Perception image: `optical_flow` or `floor_mask`.
 - **connectx://robot/state** — Resource with the same state as `get_robot_state`.
-- **send_velocity** — (When control API is enabled) Send linear and angular velocity to the robot.
+- **send_velocity** — (When control API is enabled) Send linear and angular velocity to the robot. Accepts `duration_ms` (default 500): the robot moves for that many milliseconds, then receives a stop command automatically.
