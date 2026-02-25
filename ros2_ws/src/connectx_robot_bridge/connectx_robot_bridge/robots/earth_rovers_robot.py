@@ -39,6 +39,7 @@ class EarthRoversRobot(RobotBase):
         self._lamp = 0  # Bitfield: 0=off, 1=front, 2=back, 3=both
         self._first_velocity_sent = False
         self._last_rtm_fail_log = 0.0
+        self._session = requests.Session()
 
         try:
             auth = fetch_auth_sync()
@@ -133,7 +134,7 @@ class EarthRoversRobot(RobotBase):
                 return None
         try:
             t0 = time.perf_counter()
-            r = requests.get(SDK_FRONT_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
+            r = self._session.get(SDK_FRONT_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
             fetch_ms = (time.perf_counter() - t0) * 1000
             r.raise_for_status()
             data = r.json()
@@ -143,6 +144,10 @@ class EarthRoversRobot(RobotBase):
             capture_ms = float(data.get("capture_ms", 0))
             self._camera_fail_count = 0  # success: allow retries after future failures
             metrics = {"capture_ms": capture_ms, "fetch_ms": fetch_ms}
+            if data.get("capture_timestamp_ns") is not None:
+                metrics["capture_timestamp_ns"] = int(data["capture_timestamp_ns"])
+            if data.get("capture_timestamp") is not None:
+                metrics["capture_timestamp"] = float(data["capture_timestamp"])
             return (base64_to_bytes(b64), metrics)
         except Exception as e:
             self._camera_fail_count += 1
@@ -168,7 +173,7 @@ class EarthRoversRobot(RobotBase):
             return None
         try:
             t0 = time.perf_counter()
-            r = requests.get(SDK_FRONT_FULL_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
+            r = self._session.get(SDK_FRONT_FULL_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
             fetch_ms = (time.perf_counter() - t0) * 1000
             r.raise_for_status()
             data = r.json()
@@ -177,6 +182,10 @@ class EarthRoversRobot(RobotBase):
                 return None
             capture_ms = float(data.get("capture_ms", 0))
             metrics = {"capture_ms": capture_ms, "fetch_ms": fetch_ms}
+            if data.get("capture_timestamp_ns") is not None:
+                metrics["capture_timestamp_ns"] = int(data["capture_timestamp_ns"])
+            if data.get("capture_timestamp") is not None:
+                metrics["capture_timestamp"] = float(data["capture_timestamp"])
             return (base64_to_bytes(b64), metrics)
         except Exception as e:
             self._logger.debug("Front camera full frame unavailable: %s", e)
@@ -211,7 +220,7 @@ class EarthRoversRobot(RobotBase):
             TelemetryFrame containing sensor data, or None if unavailable.
         """
         try:
-            r = requests.get(SDK_DATA_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
+            r = self._session.get(SDK_DATA_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
             r.raise_for_status()
             data = r.json()
             # SDK sends orientation 0-180 (180 = 360°). Convert to 0-360 for the rest of the stack.

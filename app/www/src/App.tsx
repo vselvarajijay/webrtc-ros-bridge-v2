@@ -1,6 +1,7 @@
 import { createTheme, MantineProvider } from '@mantine/core';
 import { AppLayout } from '@/components/layout';
 import { CockpitHeader } from '@/components/cockpit';
+import { SystemTray } from '@/components/telemetry';
 import { WebRTCProvider } from '@/context/WebRTCContext';
 import { TelemetryPage } from '@/pages/TelemetryPage';
 
@@ -28,6 +29,7 @@ function App() {
       <WebRTCProvider>
         <AppLayout
           headerLeft={<CockpitHeader />}
+          headerRight={<SystemTray />}
           padding="md"
         >
           <TelemetryPage />
