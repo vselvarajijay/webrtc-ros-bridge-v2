@@ -252,7 +252,7 @@ async def _rotate_to_heading_impl(
         if time.monotonic() - start > timeout_sec:
             await client.post(
                 f"{APP_URL}/api/control",
-                json={"linear_x": 0.0, "angular_z": 0.0},
+                json={"linear": 0.0, "angular": 0.0},
             )
             return (
                 f"Timeout after {timeout_sec}s before reaching target heading {target_heading_deg}°."
@@ -271,7 +271,7 @@ async def _rotate_to_heading_impl(
         if abs(error_rad) <= threshold_rad:
             await client.post(
                 f"{APP_URL}/api/control",
-                json={"linear_x": 0.0, "angular_z": 0.0},
+                json={"linear": 0.0, "angular": 0.0},
             )
             return (
                 f"Reached target heading {target_heading_deg}° "
@@ -296,7 +296,7 @@ async def _rotate_to_heading_impl(
         omega_cmd = -omega
         ctrl_r = await client.post(
             f"{APP_URL}/api/control",
-            json={"linear_x": 0.0, "angular_z": omega_cmd},
+            json={"linear": 0.0, "angular": omega_cmd},
         )
         if ctrl_r.status_code == 503:
             return "Robot disconnected during rotate. Stopped."
