@@ -1,4 +1,4 @@
-import { OpticalFlowView, FloorMaskView } from '@/components/telemetry';
+import { OpticalFlowView, FloorMaskView, RobotKinematics } from '@/components/telemetry';
 import { VideoStream } from '@/features/VideoStream';
 
 const gridCellClass = 'min-h-0 overflow-hidden';
@@ -23,7 +23,9 @@ export function LiveViewTabs() {
       <div className={gridCellClass}>
         <FloorMaskView />
       </div>
-      <div className={gridCellClass} />
+      <div className={gridCellClass}>
+        <RobotKinematics />
+      </div>
     </div>
   );
 }

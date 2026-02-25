@@ -2,32 +2,9 @@ import { Box, Card, Text } from '@mantine/core';
 import { useWebRTC } from '@/context/WebRTCContext';
 import { VideoFeed } from '@/components/VideoFeed';
 
-const hudStyle: React.CSSProperties = {
-  position: 'absolute',
-  background: 'rgba(0,0,0,0.6)',
-  color: '#fff',
-  padding: '4px 8px',
-  fontSize: '0.75rem',
-  fontFamily: 'monospace',
-  borderRadius: 4,
-};
-
 export function VideoStream() {
-  const { videoRef, pipelineState, telemetry, connectionDebug } = useWebRTC();
+  const { videoRef, pipelineState } = useWebRTC();
 
-  const isConnected = connectionDebug.conn === 'connected';
-  const battery =
-    telemetry?.battery != null && Number.isFinite(telemetry.battery)
-      ? Number(telemetry.battery)
-      : null;
-  const speed =
-    telemetry?.speed != null && Number.isFinite(telemetry.speed)
-      ? Number(telemetry.speed)
-      : null;
-  const heading =
-    telemetry?.orientation != null && Number.isFinite(Number(telemetry.orientation))
-      ? Number(telemetry.orientation)
-      : null;
   return (
     <Card
       withBorder
@@ -57,26 +34,6 @@ export function VideoStream() {
           placeholder="Waiting for robot stream…"
           className="w-full h-full"
         />
-
-        <Box style={{ ...hudStyle, top: 8, left: 8 }}>
-          Battery: {battery != null ? `${Math.round(battery)}%` : '—'}
-        </Box>
-        <Box style={{ ...hudStyle, top: 8, right: 8 }}>
-          Heading: {heading != null ? heading.toFixed(1) : '—'}°
-        </Box>
-        <Box style={{ ...hudStyle, bottom: 8, right: 8 }}>
-          Speed: {speed != null ? speed.toFixed(2) : '—'} m/s
-        </Box>
-        <Box style={{ ...hudStyle, bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Box
-            className="size-2 rounded-full shrink-0"
-            style={{
-              backgroundColor: isConnected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-5)',
-            }}
-            aria-hidden
-          />
-          {isConnected ? 'connected' : connectionDebug.conn}
-        </Box>
       </Box>
     </Card>
   );

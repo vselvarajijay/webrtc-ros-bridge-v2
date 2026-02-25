@@ -3,9 +3,11 @@ import os
 import threading
 import time
 from dataclasses import asdict
+from typing import Any, Dict, Optional
 
 import rclpy
 from rclpy.node import Node
+from builtin_interfaces.msg import Time as BuiltinTime
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header, Int32, String
@@ -29,6 +31,27 @@ from connectx_robot_bridge.core.constants import (
 )
 from connectx_robot_bridge.core.robot_base import RobotBase
 from connectx_robot_bridge.core.robot_factory import create_robot
+
+
+def _robot_timestamp_to_stamp(metrics: Dict[str, Any]) -> Optional[BuiltinTime]:
+    """
+    Convert robot capture timestamp from metrics to builtin_interfaces/Time.
+    Prefers capture_timestamp_ns (nanoseconds); otherwise uses capture_timestamp (Unix seconds).
+    Returns None if no robot timestamp is present (caller should use node clock).
+    """
+    if "capture_timestamp_ns" in metrics:
+        ns = int(metrics["capture_timestamp_ns"])
+        t = BuiltinTime()
+        t.sec = int(ns // 1_000_000_000)
+        t.nanosec = int(ns % 1_000_000_000)
+        return t
+    if "capture_timestamp" in metrics:
+        ts = float(metrics["capture_timestamp"])
+        t = BuiltinTime()
+        t.sec = int(ts)
+        t.nanosec = int((ts % 1) * 1e9)
+        return t
+    return None
 
 
 def setup_cmd_vel_subscriber(node: Node, robot: RobotBase, last_lamp_ref: list) -> None:
@@ -161,7 +184,8 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
             frame_counter_ref[0] += 1
             msg = CompressedImage()
             msg.header = Header()
-            msg.header.stamp = node.get_clock().now().to_msg()
+            robot_stamp = _robot_timestamp_to_stamp(metrics)
+            msg.header.stamp = robot_stamp if robot_stamp is not None else node.get_clock().now().to_msg()
             msg.header.frame_id = f"{CAMERA_FRAME_ID}_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
             msg.format = image_format
             msg.data = list(frame_bytes)
@@ -195,7 +219,8 @@ def setup_camera_publisher(node: Node, robot: RobotBase) -> None:
                     frame_counter_ref[0] += 1
                     msg = CompressedImage()
                     msg.header = Header()
-                    msg.header.stamp = node.get_clock().now().to_msg()
+                    robot_stamp = _robot_timestamp_to_stamp(metrics)
+                    msg.header.stamp = robot_stamp if robot_stamp is not None else node.get_clock().now().to_msg()
                     msg.header.frame_id = f"{CAMERA_FRAME_ID}_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
                     msg.format = image_format
                     msg.data = list(frame_bytes)
@@ -240,7 +265,8 @@ def setup_camera_full_publisher(node: Node, robot: RobotBase) -> None:
             frame_counter_ref[0] += 1
             msg = CompressedImage()
             msg.header = Header()
-            msg.header.stamp = node.get_clock().now().to_msg()
+            robot_stamp = _robot_timestamp_to_stamp(metrics)
+            msg.header.stamp = robot_stamp if robot_stamp is not None else node.get_clock().now().to_msg()
             msg.header.frame_id = f"{CAMERA_FRAME_ID}_full_{frame_counter_ref[0]}_{metrics.get('capture_ms', 0):.2f}_{metrics.get('fetch_ms', 0):.2f}"
             msg.format = image_format
             msg.data = list(frame_bytes)

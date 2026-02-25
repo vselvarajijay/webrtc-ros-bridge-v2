@@ -4,3 +4,5 @@ export { OpticalFlowView } from './OpticalFlowView';
 export { FloorMaskView } from './FloorMaskView';
 export { DriveControls } from './DriveControls';
 export { TelemetryDashboard } from './TelemetryDashboard';
+export { RobotKinematics } from './RobotKinematics';
+export { SystemTray } from './SystemTray';
