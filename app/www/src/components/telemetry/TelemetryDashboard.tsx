@@ -10,8 +10,8 @@ export function TelemetryDashboard() {
   const speed = telemetry?.speed != null && Number.isFinite(telemetry.speed)
     ? Number(telemetry.speed).toFixed(2)
     : '—';
-  const heading = telemetry?.orientation != null
-    ? ((Number(telemetry.orientation) / 255) * 360).toFixed(1)
+  const heading = telemetry?.orientation != null && Number.isFinite(Number(telemetry.orientation))
+    ? Number(telemetry.orientation).toFixed(1)
     : '—';
 
   return (

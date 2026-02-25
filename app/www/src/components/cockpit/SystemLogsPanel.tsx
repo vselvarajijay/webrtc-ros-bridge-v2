@@ -25,8 +25,8 @@ export function SystemLogsPanel() {
         ? Number(telemetry.speed).toFixed(2)
         : '—';
     const heading =
-      telemetry.orientation != null
-        ? ((Number(telemetry.orientation) / 255) * 360).toFixed(0)
+      telemetry.orientation != null && Number.isFinite(Number(telemetry.orientation))
+        ? Number(telemetry.orientation).toFixed(0)
         : '—';
 
     const line = `[${formatTime()}] SPE KPH ${speed} m/s, Heading: ${heading}°`;

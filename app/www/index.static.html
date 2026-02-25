@@ -2030,7 +2030,7 @@
           setBar('barGps', Math.min(100, d.gps_signal));
         } else { set('valGps', '—'); setBar('barGps', 0); }
 
-        var deg = d.orientation != null ? (d.orientation / 255) * 360 : null;
+        var deg = d.orientation != null && isFinite(d.orientation) ? Number(d.orientation) : null;
         var keyCompassWrap = document.getElementById('keyCompassWrap');
         if (deg != null && isFinite(deg)) {
           deg = ((deg % 360) + 360) % 360;
@@ -2234,7 +2234,7 @@
         const d = merged;
 
         if (isValidGps(merged.latitude, merged.longitude)) {
-          var deg = merged.orientation != null ? (merged.orientation / 255) * 360 : null;
+          var deg = merged.orientation != null && isFinite(merged.orientation) ? Number(merged.orientation) : null;
           if (deg != null && isFinite(deg)) deg = ((deg % 360) + 360) % 360;
           updateMapPosition(merged.latitude, merged.longitude, deg);
         }
@@ -2770,9 +2770,8 @@
         }
 
         var currentHeadingDeg = null;
-        if (lastTelemetry && lastTelemetry.orientation != null) {
-          currentHeadingDeg = (lastTelemetry.orientation / 255) * 360;
-          if (!isFinite(currentHeadingDeg)) currentHeadingDeg = null;
+        if (lastTelemetry && lastTelemetry.orientation != null && isFinite(lastTelemetry.orientation)) {
+          currentHeadingDeg = Number(lastTelemetry.orientation);
         }
         var deltaDeg = angleDeg;
         var cmd = angleDeg >= 0 ? 'right ' + Math.round(angleDeg) : 'left ' + Math.round(-angleDeg);

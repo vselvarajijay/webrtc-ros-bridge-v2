@@ -25,8 +25,8 @@ export function VideoStream() {
       ? Number(telemetry.speed)
       : null;
   const heading =
-    telemetry?.orientation != null
-      ? (Number(telemetry.orientation) / 255) * 360
+    telemetry?.orientation != null && Number.isFinite(Number(telemetry.orientation))
+      ? Number(telemetry.orientation)
       : null;
   return (
     <Card
