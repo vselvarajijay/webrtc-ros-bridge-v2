@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Request, WebSocket
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+import httpx
 from .ice_servers import get_ice_servers
 
 # Script extensions that must be served as application/javascript for module scripts
@@ -411,6 +412,70 @@ def api_calibration_status():
 async def api_calibration_run():
     """Run calibration and save to robot/."""
     return _calibration_proxy("POST", "/calibration/run")
+
+
+# --- LangGraph chat proxy: forward in-app chat to connectx_langgraph (chat_agent) ---
+_LANGRAPH_URL = os.environ.get("LANGRAPH_URL", "http://localhost:8123").rstrip("/")
+_LANGRAPH_API_KEY = os.environ.get("LANGRAPH_API_KEY", "")
+_LANGRAPH_TIMEOUT = 60.0
+
+
+@app.post("/api/chat/threads")
+async def api_chat_threads_create():
+    """Create a LangGraph thread. Proxies to LangGraph server for the in-app chat panel."""
+    url = f"{_LANGRAPH_URL}/threads"
+    headers = {"Content-Type": "application/json"}
+    if _LANGRAPH_API_KEY:
+        headers["x-api-key"] = _LANGRAPH_API_KEY
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, json={}, headers=headers)
+            if r.status_code != 200:
+                return JSONResponse(
+                    status_code=r.status_code,
+                    content=r.json() if r.headers.get("content-type", "").startswith("application/json") else {"detail": r.text},
+                )
+            return JSONResponse(content=r.json())
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        logger.warning("LangGraph proxy (create thread) error: %s", e)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Chat service unavailable. Ensure LangGraph (connectx_langgraph) is running."},
+        )
+
+
+@app.post("/api/chat/threads/{thread_id:path}/runs/stream")
+async def api_chat_runs_stream(thread_id: str, request: Request):
+    """Stream a LangGraph run for the chat agent. Proxies to LangGraph server.
+    Forwards the upstream stream as-is; overrides Content-Type to text/event-stream
+    so the LangGraph JS SDK accepts the response (upstream may send SSE or NDJSON)."""
+    url = f"{_LANGRAPH_URL}/threads/{thread_id}/runs/stream"
+    headers = {"Content-Type": "application/json"}
+    if _LANGRAPH_API_KEY:
+        headers["x-api-key"] = _LANGRAPH_API_KEY
+    try:
+        body = await request.body()
+    except Exception:
+        body = b"{}"
+    async def stream_chunks():
+        async with httpx.AsyncClient(timeout=_LANGRAPH_TIMEOUT) as client:
+            async with client.stream("POST", url, content=body, headers=headers) as r:
+                async for chunk in r.aiter_bytes():
+                    if chunk:
+                        yield chunk
+
+    try:
+        return StreamingResponse(
+            stream_chunks(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        logger.warning("LangGraph proxy (stream run) error: %s", e)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Chat service unavailable. Ensure LangGraph (connectx_langgraph) is running."},
+        )
 
 
 # Serve static assets (JS, CSS, etc.) so that index.html can load /src/main.tsx or built /assets/*

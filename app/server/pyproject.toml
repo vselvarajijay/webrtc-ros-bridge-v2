@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.129.0",
     "uvicorn>=0.41.0",
+    "httpx>=0.27.0",
     "rclpy",
     "sensor_msgs",
     "cv_bridge",

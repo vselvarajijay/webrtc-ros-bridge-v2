@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY app/server/pyproject.toml .
-RUN pip install --no-cache-dir fastapi>=0.129.0 "uvicorn[standard]>=0.41.0"
+RUN pip install --no-cache-dir fastapi>=0.129.0 "uvicorn[standard]>=0.41.0" "httpx>=0.27.0"
 
 # Cache-bust so rebuilds get a fresh COPY of app/ (set from cli.sh rebuild)
 ARG CACHEBUST=0

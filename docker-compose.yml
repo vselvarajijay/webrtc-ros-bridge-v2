@@ -19,6 +19,7 @@ services:
       - TURN_URL=${TURN_URL:-turn:localhost:3478}
       - TURN_USERNAME=${TURN_USERNAME:-scout}
       - TURN_CREDENTIAL=${TURN_CREDENTIAL:-scout}
+      - LANGRAPH_URL=${LANGRAPH_URL:-http://connectx_langgraph:8123}
     profiles:
       - webrtc
 
