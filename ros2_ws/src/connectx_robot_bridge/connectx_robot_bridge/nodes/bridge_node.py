@@ -257,21 +257,30 @@ def setup_camera_full_publisher(node: Node, robot: RobotBase) -> None:
 def setup_telemetry_publisher(node: Node, robot: RobotBase) -> None:
     """
     Set up telemetry publisher for robot sensor data (velocity, battery, GPS, IMU, etc.).
+    Caches last successful telemetry and republishes it when get_telemetry() fails so the
+    UI receives a consistent stream without gaps.
     """
     node.declare_parameter('telemetry_publish_rate', DEFAULT_TELEMETRY_PUBLISH_RATE)
     telemetry_rate = node.get_parameter('telemetry_publish_rate').value
     telemetry_pub = node.create_publisher(String, ROBOT_TELEMETRY_TOPIC, 10)
+    last_telemetry_json: list = [None]  # single-element ref so closure can mutate
 
     def on_telemetry_timer() -> None:
         if robot is None:
             return
         try:
             telemetry = robot.get_telemetry()
-            if telemetry is None:
-                return
-            msg = String()
-            msg.data = json.dumps(asdict(telemetry))
-            telemetry_pub.publish(msg)
+            if telemetry is not None:
+                data = asdict(telemetry)
+                last_telemetry_json[0] = json.dumps(data)
+                msg = String()
+                msg.data = last_telemetry_json[0]
+                telemetry_pub.publish(msg)
+            elif last_telemetry_json[0] is not None:
+                # SDK temporarily unavailable: republish last so downstream gets consistent stream
+                msg = String()
+                msg.data = last_telemetry_json[0]
+                telemetry_pub.publish(msg)
         except Exception as e:
             node.get_logger().debug(f'Failed to get telemetry: {e}')
 

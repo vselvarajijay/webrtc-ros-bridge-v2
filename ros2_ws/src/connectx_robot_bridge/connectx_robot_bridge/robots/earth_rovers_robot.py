@@ -214,7 +214,14 @@ class EarthRoversRobot(RobotBase):
             r = requests.get(SDK_DATA_ENDPOINT, timeout=SDK_CHECK_TIMEOUT)
             r.raise_for_status()
             data = r.json()
-            
+            # SDK sends orientation 0-180 (180 = 360°). Convert to 0-360 for the rest of the stack.
+            raw_orient = data.get("orientation", 0)
+            try:
+                orientation_deg = (float(raw_orient) / 180.0) * 360.0
+                orientation = int(round(orientation_deg)) % 360
+            except (TypeError, ValueError):
+                orientation = 0
+
             # Create TelemetryFrame from JSON response
             return TelemetryFrame(
                 battery=data.get("battery", 0.0),
@@ -224,7 +231,7 @@ class EarthRoversRobot(RobotBase):
                 latitude=data.get("latitude", 0.0),
                 longitude=data.get("longitude", 0.0),
                 gps_signal=data.get("gps_signal", 0.0),
-                orientation=data.get("orientation", 0),
+                orientation=orientation,
                 vibration=data.get("vibration"),
                 accels=data.get("accels", []),
                 gyros=data.get("gyros", []),

@@ -16,11 +16,11 @@ class TelemetryForSafety:
     signal_level: int
     speed: float
     gps_signal: float
-    orientation: int  # 0-255
+    orientation: int  # 0-360 (degrees; bridge converts from SDK 0-180)
     rpms: List[List[float]]  # [fl, fr, rl, rr, timestamp] per sample
 
     def orientation_degrees(self) -> float:
-        return (self.orientation / 255.0) * 360.0
+        return float(self.orientation % 360)
 
     def average_rpm(self) -> Optional[float]:
         if not self.rpms:

@@ -209,17 +209,20 @@ def _stub_telemetry():
     }
 
 
+_DATA_NO_CACHE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+
+
 @app.get("/data")
 def data():
     """
     Telemetry endpoint. Bridge (scout_bridge) polls this when SDK is expected on port 8000.
     Returns last telemetry received from robot via signaling when available;
     otherwise returns minimal stub so the bridge does not 404 and the UI can show something.
+    No caching so clients always get the latest telemetry (e.g. for turn_by_degrees control loop).
     """
     last = get_last_telemetry()
-    if last is not None:
-        return last
-    return _stub_telemetry()
+    payload = last if last is not None else _stub_telemetry()
+    return JSONResponse(content=payload, headers=_DATA_NO_CACHE_HEADERS)
 
 
 @app.post("/api/control")

@@ -14,7 +14,7 @@ def parse_telemetry(json_str: str) -> Optional[Tuple[float, float, float]]:
 
     Returns:
         (heading_deg, speed_m_s, timestamp) or None if invalid/missing.
-        heading_deg: 0--360 from orientation (0--255).
+        heading_deg: 0-360 (bridge publishes orientation already in degrees).
         speed_m_s: current speed (m/s).
         timestamp: Unix epoch.
     """
@@ -31,7 +31,7 @@ def parse_telemetry(json_str: str) -> Optional[Tuple[float, float, float]]:
     timestamp = data.get("timestamp")
     if orientation is None and speed is None and timestamp is None:
         return None
-    heading_deg = (float(orientation) / 255.0) * 360.0 if orientation is not None else 0.0
+    heading_deg = float(orientation) % 360.0 if orientation is not None else 0.0
     speed_m_s = float(speed) if speed is not None else 0.0
     ts = float(timestamp) if timestamp is not None else 0.0
     return (heading_deg, speed_m_s, ts)

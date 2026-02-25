@@ -4,6 +4,7 @@ Uses the ConnectX app HTTP API (APP_URL). Run with: uv run python server.py
 """
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -23,24 +24,80 @@ MCP_PORT = int(os.environ.get("MCP_PORT", "8001"))
 
 mcp = FastMCP(
     "ConnectX Robot",
-    instructions="Tools and resources for querying ConnectX robot state, perception images, sending velocity commands, and rotating to a target heading (rotate_to_heading).",
+    instructions=(
+        "Tools and resources for querying ConnectX robot state, perception images, sending velocity commands, and rotating the robot. "
+        "For 'turn right 45 degrees' or 'turn left 30 degrees' call rotate_to_heading(45, relative=True) or rotate_to_heading(-30, relative=True). "
+        "For absolute heading (e.g. 'face 90 degrees', 'point north') call rotate_to_heading(90) or rotate_to_heading(0) with relative=False or omitted."
+    ),
     stateless_http=True,
     json_response=True,
     port=MCP_PORT,
 )
 
 
+# Poll /data until payload has orientation (robot telemetry fully available)
+_DATA_POLL_INTERVAL_SEC = 0.5
+# Request latest telemetry (no cached response)
+_DATA_NO_CACHE_HEADERS = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
+
+
+def _data_url() -> str:
+    """GET /data URL with cache-busting query so we always get latest telemetry."""
+    return f"{APP_URL}/data?_={time.monotonic()}"
+
+
+_DATA_MAX_RETRIES = 5
+
+
+async def _fetch_data_with_orientation(
+    client: httpx.AsyncClient,
+    max_retries: int = _DATA_MAX_RETRIES,
+    interval_sec: float = _DATA_POLL_INTERVAL_SEC,
+) -> tuple[dict | None, str | None]:
+    """GET /data with retries until payload has orientation. Returns (data, None) or (None, error_message)."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = await client.get(_data_url(), headers=_DATA_NO_CACHE_HEADERS)
+        except httpx.RequestError as e:
+            return (None, f"Could not reach ConnectX app at {APP_URL}: {e}")
+        if r.status_code == 503:
+            return (
+                None,
+                "Robot not connected. Ensure the ConnectX bridge is running and the robot has connected via signaling.",
+            )
+        if r.status_code != 200:
+            return (None, f"HTTP error {r.status_code}: {r.text}")
+        try:
+            data = r.json()
+        except Exception:
+            if attempt < max_retries:
+                await asyncio.sleep(interval_sec)
+                continue
+            return (None, "Telemetry not ready: invalid JSON from /data.")
+        if data.get("orientation") is not None and isinstance(
+            data["orientation"], (int, float)
+        ):
+            return (data, None)
+        if attempt < max_retries:
+            await asyncio.sleep(interval_sec)
+    return (
+        None,
+        f"Telemetry not ready: /data did not include orientation after {max_retries} retries. "
+        "Robot may still be connecting.",
+    )
+
+
 @mcp.tool()
 async def get_robot_state() -> str:
-    """Get latest robot telemetry (battery, speed, GPS, orientation, IMU, etc.) from ConnectX."""
+    """Get latest robot telemetry (battery, speed, GPS, orientation, IMU, etc.) from ConnectX.
+    Retries up to 5 times until the payload includes orientation; returns full telemetry when available."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(f"{APP_URL}/data")
-            r.raise_for_status()
-            return r.text
+            data, err = await _fetch_data_with_orientation(client)
+            if err:
+                return err
+            return json.dumps(data)
     except httpx.HTTPStatusError as e:
-        if e.response.status_code == 503:
-            return "Robot not connected. Ensure the ConnectX bridge is running and the robot has connected via signaling."
         return f"HTTP error {e.response.status_code}: {e.response.text}"
     except httpx.RequestError as e:
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
@@ -48,14 +105,31 @@ async def get_robot_state() -> str:
 
 @mcp.resource("connectx://robot/state")
 def robot_state_resource() -> str:
-    """Get latest robot telemetry as a resource (same as get_robot_state)."""
+    """Get latest robot telemetry as a resource (same as get_robot_state). Retries up to 5 times until payload has orientation."""
     try:
-        r = httpx.get(f"{APP_URL}/data", timeout=10.0)
-        r.raise_for_status()
-        return r.text
+        for attempt in range(1, _DATA_MAX_RETRIES + 1):
+            r = httpx.get(_data_url(), timeout=10.0, headers=_DATA_NO_CACHE_HEADERS)
+            if r.status_code == 503:
+                return "Robot not connected. Ensure the ConnectX bridge is running and the robot has connected via signaling."
+            r.raise_for_status()
+            try:
+                data = r.json()
+            except Exception:
+                if attempt < _DATA_MAX_RETRIES:
+                    time.sleep(_DATA_POLL_INTERVAL_SEC)
+                    continue
+                return "Telemetry not ready: invalid JSON from /data."
+            if data.get("orientation") is not None and isinstance(
+                data["orientation"], (int, float)
+            ):
+                return r.text
+            if attempt < _DATA_MAX_RETRIES:
+                time.sleep(_DATA_POLL_INTERVAL_SEC)
+        return (
+            f"Telemetry not ready: /data did not include orientation after {_DATA_MAX_RETRIES} retries. "
+            "Robot may still be connecting."
+        )
     except httpx.HTTPStatusError as e:
-        if e.response.status_code == 503:
-            return "Robot not connected. Ensure the ConnectX bridge is running and the robot has connected via signaling."
         return f"HTTP error {e.response.status_code}: {e.response.text}"
     except httpx.RequestError as e:
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
@@ -71,6 +145,11 @@ def _wrap_angle_deg(angle_deg: float) -> float:
     """Wrap angle to [-180, 180]."""
     x = (angle_deg + 180.0) % 360.0 - 180.0
     return x
+
+
+def _orientation_to_degrees(raw: int | float) -> float:
+    """Return orientation as 0-360 degrees. Bridge already publishes 0-360 (converted from SDK 0-180)."""
+    return float(raw) % 360.0
 
 
 @mcp.tool(structured_output=False)
@@ -144,70 +223,101 @@ async def send_velocity(
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
 
 
-@mcp.tool()
-async def rotate_to_heading(
+# How often to re-fetch telemetry and re-check orientation while turning (seconds)
+_ROTATE_CHECK_INTERVAL_SEC = 0.03
+# Retries when reading orientation during rotate (keep getting latest)
+_ROTATE_ORIENTATION_RETRIES = 3
+_ROTATE_ORIENTATION_INTERVAL_SEC = 0.05
+
+
+async def _rotate_to_heading_impl(
+    client: httpx.AsyncClient,
     target_heading_deg: float,
     heading_error_threshold_deg: float = 10.0,
-    Kp: float = 1.5,
-    Kd: float = 0.3,
-    max_omega_rad_s: float = 1.0,
+    Kp: float = 0.9,
+    Kd: float = 0.2,
+    max_omega_rad_s: float = 0.35,
     control_dt_sec: float = 0.05,
     timeout_sec: float = 30.0,
 ) -> str:
-    """Rotate the robot to a target heading (orientation) using a PD controller.
-
-    Fetches current orientation from the robot telemetry (GET /data), computes
-    heading error (short-way wrap), and sends angular velocity via the control
-    API until the error is below the threshold. Pure rotation (no forward motion).
-
-    Args:
-        target_heading_deg: Target orientation in degrees (0-360).
-        heading_error_threshold_deg: Stop when heading error is within this many degrees (default 10).
-        Kp: Proportional gain for heading error.
-        Kd: Derivative gain for heading error rate.
-        max_omega_rad_s: Clamp angular velocity to ± this value in rad/s.
-        control_dt_sec: Loop period in seconds.
-        timeout_sec: Abort after this many seconds.
+    """Shared implementation: rotate to target_heading_deg (0-360) using PD control.
+    Each loop: get latest telemetry (with retries), check orientation, stop if within threshold else send command.
+    Keeps fetching /data with retries so we always use the latest orientation as the robot turns.
     """
-    logger.info(
-        "rotate_to_heading: target_deg=%.1f threshold_deg=%.1f",
-        target_heading_deg,
-        heading_error_threshold_deg,
-    )
     threshold_rad = math.radians(heading_error_threshold_deg)
     prev_error_rad: float | None = None
-    start = time.monotonic()
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        while True:
-            if time.monotonic() - start > timeout_sec:
-                await client.post(
-                    f"{APP_URL}/api/control",
-                    json={"linear_x": 0.0, "angular_z": 0.0},
-                )
-                return (
-                    f"Timeout after {timeout_sec}s before reaching target heading {target_heading_deg}°."
-                )
-
-            r = await client.get(f"{APP_URL}/data")
-            if r.status_code == 503:
-                return "Robot not connected. Connect the robot via ConnectX signaling first."
-            if r.status_code != 200:
-                return f"Failed to get telemetry: HTTP {r.status_code}: {r.text}"
-            try:
-                data = r.json()
-            except Exception as e:
-                return f"Invalid telemetry JSON: {e}"
-            current_deg = data.get("orientation")
-            if current_deg is None or not isinstance(current_deg, (int, float)):
-                return (
-                    "Telemetry has no valid 'orientation'. Cannot rotate to heading."
-                )
-
-            current_deg = float(current_deg)
+    prev_check_time = time.monotonic()
+    start = prev_check_time
+    while True:
+        if time.monotonic() - start > timeout_sec:
+            await client.post(
+                f"{APP_URL}/api/control",
+                json={"linear_x": 0.0, "angular_z": 0.0},
+            )
+            return (
+                f"Timeout after {timeout_sec}s before reaching target heading {target_heading_deg}°."
+            )
+        # Get latest orientation (retry so we keep getting fresh data as it turns)
+        data, err = await _fetch_data_with_orientation(
+            client,
+            max_retries=_ROTATE_ORIENTATION_RETRIES,
+            interval_sec=_ROTATE_ORIENTATION_INTERVAL_SEC,
+        )
+        if err:
+            return err
+        current_deg = _orientation_to_degrees(data["orientation"])
+        error_deg = _wrap_angle_deg(target_heading_deg - current_deg)
+        error_rad = math.radians(error_deg)
+        if abs(error_rad) <= threshold_rad:
+            await client.post(
+                f"{APP_URL}/api/control",
+                json={"linear_x": 0.0, "angular_z": 0.0},
+            )
+            return (
+                f"Reached target heading {target_heading_deg}° "
+                f"(current {current_deg:.1f}°, error {error_deg:.1f}° within {heading_error_threshold_deg}°)."
+            )
+        # Compute and send angular command; re-check after control_dt_sec
+        if prev_error_rad is None:
+            d_error_rad = 0.0
+        else:
+            dt = time.monotonic() - prev_check_time
+            d_error_rad = (error_rad - prev_error_rad) / dt if dt > 0 else 0.0
+        prev_error_rad = error_rad
+        prev_check_time = time.monotonic()
+        omega = Kp * error_rad + Kd * d_error_rad
+        # Scale down max omega for small errors to avoid over-correction and overshoot
+        error_deg_abs = abs(error_deg)
+        scale = max(0.2, min(1.0, error_deg_abs / 45.0))  # full speed at 45°+, gentler below
+        max_effective = max_omega_rad_s * scale
+        omega = max(-max_effective, min(max_effective, omega))
+        # ConnectX/Earth Rovers: positive angular = turn left (CCW), negative = right (CW).
+        # Compass increases when turning right; positive error = need to increase heading -> turn right -> negative omega.
+        omega_cmd = -omega
+        ctrl_r = await client.post(
+            f"{APP_URL}/api/control",
+            json={"linear_x": 0.0, "angular_z": omega_cmd},
+        )
+        if ctrl_r.status_code == 503:
+            return "Robot disconnected during rotate. Stopped."
+        if ctrl_r.status_code != 200:
+            return (
+                f"Control API error during rotate: HTTP {ctrl_r.status_code}: {ctrl_r.text}"
+            )
+        # Until next control step: keep getting latest orientation and re-check so we stop as soon as on target
+        next_cmd_time = time.monotonic() + control_dt_sec
+        while time.monotonic() < next_cmd_time and (time.monotonic() - start) <= timeout_sec:
+            await asyncio.sleep(_ROTATE_CHECK_INTERVAL_SEC)
+            data, err = await _fetch_data_with_orientation(
+                client,
+                max_retries=_ROTATE_ORIENTATION_RETRIES,
+                interval_sec=_ROTATE_ORIENTATION_INTERVAL_SEC,
+            )
+            if err:
+                continue
+            current_deg = _orientation_to_degrees(data["orientation"])
             error_deg = _wrap_angle_deg(target_heading_deg - current_deg)
             error_rad = math.radians(error_deg)
-
             if abs(error_rad) <= threshold_rad:
                 await client.post(
                     f"{APP_URL}/api/control",
@@ -218,26 +328,101 @@ async def rotate_to_heading(
                     f"(current {current_deg:.1f}°, error {error_deg:.1f}° within {heading_error_threshold_deg}°)."
                 )
 
-            if prev_error_rad is None:
-                d_error_rad = 0.0
-            else:
-                d_error_rad = (error_rad - prev_error_rad) / control_dt_sec
-            prev_error_rad = error_rad
-            omega = Kp * error_rad + Kd * d_error_rad
-            omega = max(-max_omega_rad_s, min(max_omega_rad_s, omega))
 
-            ctrl_r = await client.post(
-                f"{APP_URL}/api/control",
-                json={"linear_x": 0.0, "angular_z": omega},
+@mcp.tool()
+async def turn_by_degrees(
+    angle_deg: float,
+    heading_error_threshold_deg: float = 10.0,
+    Kp: float = 0.9,
+    Kd: float = 0.2,
+    max_omega_rad_s: float = 0.35,
+    control_dt_sec: float = 0.05,
+    timeout_sec: float = 30.0,
+) -> str:
+    """Turn the robot by a relative angle in degrees. Use this for phrases like 'turn right 45 degrees' or 'turn left 30 degrees'.
+
+    Positive angle_deg = turn right (clockwise). Negative = turn left (counter-clockwise).
+    Fetches current orientation, computes target heading = (current + angle_deg) wrapped to 0-360,
+    then rotates to that heading using a PD controller. Pure rotation, no forward motion.
+
+    Args:
+        angle_deg: Relative turn in degrees. Right = positive, left = negative. E.g. turn right 45 -> 45, turn left 30 -> -30.
+        heading_error_threshold_deg: Stop when heading error is within this many degrees (default 10).
+        Kp, Kd, max_omega_rad_s, control_dt_sec, timeout_sec: Same as rotate_to_heading.
+    """
+    logger.info("turn_by_degrees: angle_deg=%.1f", angle_deg)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            data, err = await _fetch_data_with_orientation(client)
+            if err:
+                return err
+            current_deg = _orientation_to_degrees(data["orientation"])
+            target_heading_deg = (current_deg + angle_deg) % 360.0
+            return await _rotate_to_heading_impl(
+                client,
+                target_heading_deg,
+                heading_error_threshold_deg=heading_error_threshold_deg,
+                Kp=Kp,
+                Kd=Kd,
+                max_omega_rad_s=max_omega_rad_s,
+                control_dt_sec=control_dt_sec,
+                timeout_sec=timeout_sec,
             )
-            if ctrl_r.status_code == 503:
-                return "Robot disconnected during rotate. Stopped."
-            if ctrl_r.status_code != 200:
-                return (
-                    f"Control API error during rotate: HTTP {ctrl_r.status_code}: {ctrl_r.text}"
-                )
+    except httpx.RequestError as e:
+        return f"Could not reach ConnectX app at {APP_URL}: {e}"
 
-            await asyncio.sleep(control_dt_sec)
+
+@mcp.tool()
+async def rotate_to_heading(
+    target_heading_deg: float,
+    relative: bool = False,
+    heading_error_threshold_deg: float = 10.0,
+    Kp: float = 0.9,
+    Kd: float = 0.2,
+    max_omega_rad_s: float = 0.35,
+    control_dt_sec: float = 0.05,
+    timeout_sec: float = 30.0,
+) -> str:
+    """Rotate the robot to a target heading. Use for both relative and absolute turns.
+
+    For 'turn right 45 degrees' or 'turn left 30 degrees': call rotate_to_heading(45, relative=True)
+    or rotate_to_heading(-30, relative=True). The angle is in degrees (positive = right).
+    For absolute heading (e.g. 'face 90 degrees'): call rotate_to_heading(90) or rotate_to_heading(90, relative=False).
+
+    Fetches current orientation (when relative=True, adds target_heading_deg to current), then sends
+    angular velocity until heading error is below threshold. Pure rotation (no forward motion).
+
+    Args:
+        target_heading_deg: Angle in degrees. If relative=True: turn by this amount (right=positive). If relative=False: absolute heading 0-360.
+        relative: If True, target_heading_deg is a relative turn in degrees. If False, absolute heading 0-360.
+        heading_error_threshold_deg: Stop when heading error is within this many degrees (default 10).
+        Kp, Kd, max_omega_rad_s, control_dt_sec, timeout_sec: PD control and timing.
+    """
+    logger.info(
+        "rotate_to_heading: target_deg=%.1f relative=%s threshold_deg=%.1f",
+        target_heading_deg,
+        relative,
+        heading_error_threshold_deg,
+    )
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        if relative:
+            data, err = await _fetch_data_with_orientation(client)
+            if err:
+                return err
+            current_deg = _orientation_to_degrees(data["orientation"])
+            target_heading_deg = (current_deg + target_heading_deg) % 360.0
+        else:
+            target_heading_deg = target_heading_deg % 360.0
+        return await _rotate_to_heading_impl(
+            client,
+            target_heading_deg,
+            heading_error_threshold_deg=heading_error_threshold_deg,
+            Kp=Kp,
+            Kd=Kd,
+            max_omega_rad_s=max_omega_rad_s,
+            control_dt_sec=control_dt_sec,
+            timeout_sec=timeout_sec,
+        )
 
 
 if __name__ == "__main__":

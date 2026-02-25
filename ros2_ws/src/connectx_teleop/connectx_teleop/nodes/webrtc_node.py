@@ -559,6 +559,15 @@ def _is_full_telemetry(obj: dict) -> bool:
     )
 
 
+def _merge_telemetry(base: dict, overlay: dict) -> dict:
+    """Merge overlay into base; only overwrite keys where overlay has non-null values. Returns new dict."""
+    out = dict(base)
+    for k, v in overlay.items():
+        if v is not None:
+            out[k] = v
+    return out
+
+
 # Minimal payload so browser gets something when no real telemetry yet (connection alive)
 _HEARTBEAT_TELEMETRY = {
     "battery": None,
@@ -575,9 +584,9 @@ async def _telemetry_sender_loop(
     last_frame_pts_ref: Optional[list] = None,
     last_flow_ref: Optional[list] = None,
 ) -> None:
-    """Send telemetry to app server and browser. Send heartbeat when queue empty so UI stays alive."""
+    """Send telemetry to app server and browser. Merge full + partial so UI gets consistent data. Heartbeat when queue empty."""
     last_heartbeat = [0.0]
-    last_payload_ws = [None]  # last full payload we sent (for heartbeat)
+    last_full = [None]  # last full telemetry dict we saw (persisted so we never drop full fields)
     heartbeat_interval = 2.0  # seconds
     first_ws_telemetry_logged: list = [False]
 
@@ -599,18 +608,22 @@ async def _telemetry_sender_loop(
                 for data in collected:
                     try:
                         obj = json.loads(data) if isinstance(data, str) else data
-                        if obj is not None:
+                        if obj is not None and isinstance(obj, dict):
                             parsed.append(obj)
                     except json.JSONDecodeError:
                         continue
                 if parsed:
+                    # Update last full from this batch (most recent full wins)
                     for obj in reversed(parsed):
                         if _is_full_telemetry(obj):
-                            payload_obj_ws = obj
+                            last_full[0] = dict(obj)
                             break
-                        if payload_obj_ws is None:
-                            payload_obj_ws = obj
-                    payload_obj_dc = parsed[-1]
+                    # Build merged payload: start with last full (or newest partial), then overlay all in order
+                    base = last_full[0] if last_full[0] is not None else {}
+                    for obj in parsed:
+                        base = _merge_telemetry(base, obj)
+                    payload_obj_ws = base
+                    payload_obj_dc = base
             else:
                 # No telemetry: send heartbeat so browser knows connection is alive
                 now = time.time()
@@ -618,8 +631,8 @@ async def _telemetry_sender_loop(
                     last_heartbeat[0] = now
                     hb = dict(_HEARTBEAT_TELEMETRY)
                     hb["timestamp"] = now
-                    payload_obj_ws = last_payload_ws[0] if last_payload_ws[0] else hb
-                    payload_obj_dc = hb
+                    payload_obj_ws = _merge_telemetry(last_full[0] or {}, hb) if last_full[0] else hb
+                    payload_obj_dc = payload_obj_ws
 
             if payload_obj_ws is None and payload_obj_dc is None:
                 continue
@@ -634,8 +647,6 @@ async def _telemetry_sender_loop(
                 flow = last_flow_ref[0]
                 payload_obj_ws["optical_flow"] = flow
                 payload_obj_dc["optical_flow"] = flow
-
-            last_payload_ws[0] = payload_obj_ws if _is_full_telemetry(payload_obj_ws) else last_payload_ws[0]
             payload_ws = {"type": "telemetry", "data": payload_obj_ws}
             if last_frame_pts_ref is not None:
                 payload_ws["frame_pts"] = last_frame_pts_ref[0]
@@ -857,7 +868,7 @@ def main(args=None) -> None:
     image_format = os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
     control_queue: queue.Queue = queue.Queue(maxsize=128)  # items: (twist, lamp); larger so bursts from browser aren't dropped
-    telemetry_queue: queue.Queue = queue.Queue(maxsize=8)
+    telemetry_queue: queue.Queue = queue.Queue(maxsize=32)  # larger so full telemetry isn't evicted by partials
     autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()
     last_flow_ref: list = [None]
