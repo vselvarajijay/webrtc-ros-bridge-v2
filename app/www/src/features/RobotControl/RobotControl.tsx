@@ -19,7 +19,12 @@ const GRID_BUTTONS: { linear: number; angular: number; label: string }[] = [
   { linear: -1, angular: -1, label: '↘' },
 ];
 
-export function RobotControl() {
+export interface RobotControlProps {
+  /** When true, the STOP button is not rendered (e.g. when used inside ControlAndChatPanel). */
+  hideStop?: boolean;
+}
+
+export function RobotControl({ hideStop }: RobotControlProps = {}) {
   const { sendControl, sendWander, commandsReady, lastControlSent, driveMode, setDriveMode, eStop } = useWebRTC();
   const [speedLevel, setSpeedLevel] = useState(3);
   const [direction, setDirection] = useState<{ linear: number; angular: number }>({ linear: 0, angular: 0 });
@@ -200,16 +205,18 @@ export function RobotControl() {
         size="sm"
         fullWidth
       />
-      <Button
-        color="red"
-        variant="filled"
-        size="md"
-        onClick={eStop}
-        aria-label="Emergency stop"
-        style={{ width: '100%' }}
-      >
-        STOP
-      </Button>
+      {!hideStop && (
+        <Button
+          color="red"
+          variant="filled"
+          size="md"
+          onClick={eStop}
+          aria-label="Emergency stop"
+          style={{ width: '100%' }}
+        >
+          STOP
+        </Button>
+      )}
 
       {driveMode === 'teleop' && (
         <Text size="xs" c="dimmed" title="Values sent to robot (data channel or WebSocket when ?control_via_signaling=1)">

@@ -2,15 +2,17 @@ import { useRef, useState } from 'react';
 import { Box, Button, ScrollArea, Text, Textarea } from '@mantine/core';
 import { useStream } from '@langchain/langgraph-sdk/react';
 
-const PANEL_STYLE = {
-  display: 'flex' as const,
-  flexDirection: 'column' as const,
-  height: '100%',
+const PANEL_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
   minHeight: 0,
+  height: '100%',
+  width: '100%',
   backgroundColor: 'var(--mantine-color-dark-9)',
   border: '1px solid var(--mantine-color-dark-4)',
   borderRadius: 8,
-  overflow: 'hidden' as const,
+  overflow: 'hidden',
 };
 
 /** Base URL for the LangGraph-style chat API (ConnectX proxy at /api/chat). */
@@ -40,15 +42,27 @@ export function ChatPanel() {
   };
 
   return (
-    <Box style={PANEL_STYLE}>
-      <Text size="sm" fw={600} p="xs" style={{ borderBottom: '1px solid var(--mantine-color-dark-4)' }}>
-        Chat (LangGraph)
-      </Text>
+    <Box style={PANEL_STYLE} className="min-h-0">
+      <Box
+        component="header"
+        style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-dark-4)' }}
+      >
+        <Text size="sm" fw={600} p="xs">
+          Chat (LangGraph)
+        </Text>
+      </Box>
       <ScrollArea
         viewportRef={scrollRef}
-        style={{ flex: 1, minHeight: 0 }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
         type="auto"
-        styles={{ viewport: { '& > div': { display: 'block !important' } } }}
+        styles={{
+          root: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' },
+          viewport: {
+            '& > div': { display: 'block !important' },
+            flex: 1,
+            minHeight: 0,
+          },
+        }}
       >
         <Box p="xs" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {stream.messages.length === 0 && !stream.error && (
@@ -186,6 +200,7 @@ export function ChatPanel() {
       <Box
         p="xs"
         style={{
+          flexShrink: 0,
           borderTop: '1px solid var(--mantine-color-dark-4)',
           display: 'flex',
           gap: '0.5rem',

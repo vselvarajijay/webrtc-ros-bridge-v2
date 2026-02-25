@@ -32,9 +32,11 @@ export function VideoStream() {
     <Card
       withBorder
       padding="sm"
-      className="overflow-hidden"
+      className="overflow-hidden flex flex-col min-h-0"
       style={{
         height: '100%',
+        minHeight: 0,
+        maxHeight: '100%',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: 'var(--mantine-color-dark-9)',
@@ -42,12 +44,12 @@ export function VideoStream() {
         borderRadius: 8,
       }}
     >
-      <Text size="sm" fw={600} mb="xs">
+      <Text size="sm" fw={600} mb="xs" className="shrink-0">
         Live View
       </Text>
       <Box
         className="relative rounded overflow-hidden flex-1 min-h-0 flex items-center justify-center"
-        style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}
+        style={{ backgroundColor: 'var(--mantine-color-dark-9)', minHeight: 0 }}
       >
         <VideoFeed
           videoRef={videoRef}

@@ -45,21 +45,32 @@ export function SystemLogsPanel() {
         flexDirection: 'column',
         height: '100%',
         minHeight: 0,
+        maxHeight: '100%',
         backgroundColor: 'var(--mantine-color-dark-9)',
         border: '1px solid var(--mantine-color-dark-4)',
         borderRadius: 8,
         overflow: 'hidden',
       }}
     >
-      <Text size="sm" fw={600} p="xs" style={{ borderBottom: '1px solid var(--mantine-color-dark-4)' }}>
+      <Text
+        size="sm"
+        fw={600}
+        p="xs"
+        style={{
+          borderBottom: '1px solid var(--mantine-color-dark-4)',
+          flexShrink: 0,
+        }}
+      >
         System Logs & Telemetry
       </Text>
       <pre
         ref={scrollRef}
         style={{
-          flex: 1,
+          flex: '1 1 0',
           minHeight: 0,
+          height: 0,
           overflowY: 'auto',
+          overflowX: 'hidden',
           backgroundColor: 'var(--mantine-color-dark-9)',
           color: '#c9d1d9',
           fontFamily: 'ui-monospace, monospace',

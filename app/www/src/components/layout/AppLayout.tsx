@@ -30,6 +30,15 @@ export function AppLayout({
 
   return (
     <AppShell
+      styles={{
+        root: {
+          height: '100vh',
+          maxHeight: '100vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
       header={{ height: 60 }}
       navbar={
         navbar
@@ -49,7 +58,7 @@ export function AppLayout({
             }
           : undefined
       }
-      padding={padding}
+      padding={0}
     >
       <AppShell.Header style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}>
         <AppHeader
@@ -64,8 +73,18 @@ export function AppLayout({
         />
       </AppShell.Header>
       {navbar && <AppShell.Navbar p="md" style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}>{navbar}</AppShell.Navbar>}
-      <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-        <Box style={{ flex: 1, minHeight: 0 }}>{children}</Box>
+      <AppShell.Main
+        p={padding}
+        pt={60}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          flex: 1,
+          overflow: 'hidden',
+        }}
+      >
+        <Box style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>{children}</Box>
       </AppShell.Main>
       {aside && (
         <AppShell.Aside p="md" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', backgroundColor: 'var(--mantine-color-dark-9)' }}>
