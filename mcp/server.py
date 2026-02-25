@@ -5,7 +5,9 @@ Uses the ConnectX app HTTP API (APP_URL). Run with: uv run python server.py
 
 import asyncio
 import logging
+import math
 import os
+import time
 from typing import Literal
 
 import httpx
@@ -21,7 +23,7 @@ MCP_PORT = int(os.environ.get("MCP_PORT", "8001"))
 
 mcp = FastMCP(
     "ConnectX Robot",
-    instructions="Tools and resources for querying ConnectX robot state, perception images, and sending velocity commands.",
+    instructions="Tools and resources for querying ConnectX robot state, perception images, sending velocity commands, and rotating to a target heading (rotate_to_heading).",
     stateless_http=True,
     json_response=True,
     port=MCP_PORT,
@@ -63,6 +65,12 @@ def _image_url(image_type: Literal["optical_flow", "floor_mask"]) -> str:
     if image_type == "optical_flow":
         return f"{APP_URL}/api/optical_flow_image"
     return f"{APP_URL}/api/floor_mask_image"
+
+
+def _wrap_angle_deg(angle_deg: float) -> float:
+    """Wrap angle to [-180, 180]."""
+    x = (angle_deg + 180.0) % 360.0 - 180.0
+    return x
 
 
 @mcp.tool(structured_output=False)
@@ -134,6 +142,102 @@ async def send_velocity(
     except httpx.RequestError as e:
         logger.exception("send_velocity: request error to %s", APP_URL)
         return f"Could not reach ConnectX app at {APP_URL}: {e}"
+
+
+@mcp.tool()
+async def rotate_to_heading(
+    target_heading_deg: float,
+    heading_error_threshold_deg: float = 10.0,
+    Kp: float = 1.5,
+    Kd: float = 0.3,
+    max_omega_rad_s: float = 1.0,
+    control_dt_sec: float = 0.05,
+    timeout_sec: float = 30.0,
+) -> str:
+    """Rotate the robot to a target heading (orientation) using a PD controller.
+
+    Fetches current orientation from the robot telemetry (GET /data), computes
+    heading error (short-way wrap), and sends angular velocity via the control
+    API until the error is below the threshold. Pure rotation (no forward motion).
+
+    Args:
+        target_heading_deg: Target orientation in degrees (0-360).
+        heading_error_threshold_deg: Stop when heading error is within this many degrees (default 10).
+        Kp: Proportional gain for heading error.
+        Kd: Derivative gain for heading error rate.
+        max_omega_rad_s: Clamp angular velocity to ± this value in rad/s.
+        control_dt_sec: Loop period in seconds.
+        timeout_sec: Abort after this many seconds.
+    """
+    logger.info(
+        "rotate_to_heading: target_deg=%.1f threshold_deg=%.1f",
+        target_heading_deg,
+        heading_error_threshold_deg,
+    )
+    threshold_rad = math.radians(heading_error_threshold_deg)
+    prev_error_rad: float | None = None
+    start = time.monotonic()
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            if time.monotonic() - start > timeout_sec:
+                await client.post(
+                    f"{APP_URL}/api/control",
+                    json={"linear_x": 0.0, "angular_z": 0.0},
+                )
+                return (
+                    f"Timeout after {timeout_sec}s before reaching target heading {target_heading_deg}°."
+                )
+
+            r = await client.get(f"{APP_URL}/data")
+            if r.status_code == 503:
+                return "Robot not connected. Connect the robot via ConnectX signaling first."
+            if r.status_code != 200:
+                return f"Failed to get telemetry: HTTP {r.status_code}: {r.text}"
+            try:
+                data = r.json()
+            except Exception as e:
+                return f"Invalid telemetry JSON: {e}"
+            current_deg = data.get("orientation")
+            if current_deg is None or not isinstance(current_deg, (int, float)):
+                return (
+                    "Telemetry has no valid 'orientation'. Cannot rotate to heading."
+                )
+
+            current_deg = float(current_deg)
+            error_deg = _wrap_angle_deg(target_heading_deg - current_deg)
+            error_rad = math.radians(error_deg)
+
+            if abs(error_rad) <= threshold_rad:
+                await client.post(
+                    f"{APP_URL}/api/control",
+                    json={"linear_x": 0.0, "angular_z": 0.0},
+                )
+                return (
+                    f"Reached target heading {target_heading_deg}° "
+                    f"(current {current_deg:.1f}°, error {error_deg:.1f}° within {heading_error_threshold_deg}°)."
+                )
+
+            if prev_error_rad is None:
+                d_error_rad = 0.0
+            else:
+                d_error_rad = (error_rad - prev_error_rad) / control_dt_sec
+            prev_error_rad = error_rad
+            omega = Kp * error_rad + Kd * d_error_rad
+            omega = max(-max_omega_rad_s, min(max_omega_rad_s, omega))
+
+            ctrl_r = await client.post(
+                f"{APP_URL}/api/control",
+                json={"linear_x": 0.0, "angular_z": omega},
+            )
+            if ctrl_r.status_code == 503:
+                return "Robot disconnected during rotate. Stopped."
+            if ctrl_r.status_code != 200:
+                return (
+                    f"Control API error during rotate: HTTP {ctrl_r.status_code}: {ctrl_r.text}"
+                )
+
+            await asyncio.sleep(control_dt_sec)
 
 
 if __name__ == "__main__":
