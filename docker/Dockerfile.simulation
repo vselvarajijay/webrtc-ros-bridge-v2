@@ -1,0 +1,30 @@
+# Gazebo Ionic + ROS 2 Kilted simulation for ConnectX (box car, bridge, Foxglove).
+# Extends desktop-full for gz and GUI deps; headless rendering used at runtime.
+FROM osrf/ros:kilted-desktop-full
+
+# Add OSRF Gazebo repo so we can install gz-ionic (not in default ROS/Ubuntu repos)
+RUN apt-get update && apt-get install -y --no-install-recommends curl lsb-release gnupg \
+    && curl -sSL https://packages.osrfoundation.org/gazebo.gpg -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
+       | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify package names first: docker run --rm <this-image> apt-cache search ros-kilted-ros-gz
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-kilted-ros-gz-bridge \
+    ros-kilted-robot-state-publisher \
+    ros-kilted-joint-state-publisher \
+    ros-kilted-foxglove-bridge \
+    gz-ionic \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-build packages: connectx_msgs (for Foxglove schema when /navigation_state etc. appear), connectx_simulation
+COPY ros2_ws/src/connectx_msgs /root/ros2_ws/src/connectx_msgs
+COPY ros2_ws/src/connectx_simulation /root/ros2_ws/src/connectx_simulation
+
+RUN bash -c "source /opt/ros/kilted/setup.bash && \
+             cd /root/ros2_ws && \
+             colcon build --packages-select connectx_msgs connectx_simulation && \
+             echo 'source /root/ros2_ws/install/setup.bash' >> /root/.bashrc"
+
+WORKDIR /root/workspace

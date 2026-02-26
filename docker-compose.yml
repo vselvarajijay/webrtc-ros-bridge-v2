@@ -197,6 +197,40 @@ services:
     profiles:
       - webrtc
 
+  # Gazebo Sim (ROS 2 Kilted + Gazebo Ionic). Headless rendering for Mac M4.
+  # Foxglove Studio: connect to ws://localhost:8766 when using the gazebo profile.
+  # See docs/gazebo-simulation.md.
+  gazebo:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.simulation
+    image: connectx-gazebo-sim
+    container_name: gazebo_sim
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_LOCALHOST_ONLY=1
+      # Software GL so Ogre2 can run headless in Docker (no X display). Override in .env if needed.
+      - LIBGL_ALWAYS_SOFTWARE=${LIBGL_ALWAYS_SOFTWARE:-1}
+      - MESA_GL_VERSION_OVERRIDE=${MESA_GL_VERSION_OVERRIDE:-3.3}
+    ports:
+      - "8766:8766"
+      - "8767:8767"
+    volumes:
+      - .:/root/workspace
+    command: >
+      bash -c "cd /root/ros2_ws &&
+               source /opt/ros/kilted/setup.bash &&
+               source install/setup.bash &&
+               (python3 -m http.server 8767 --directory /root/ros2_ws/install/connectx_simulation/share/connectx_simulation/urdf &) &&
+               (ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8766 -p max_qos_depth:=100 &) &&
+               sleep 2 &&
+               exec ros2 launch connectx_simulation sim.launch.py"
+    profiles:
+      - gazebo
+
 volumes:
   pip_cache:
     driver: local
