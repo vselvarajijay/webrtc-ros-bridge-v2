@@ -192,8 +192,8 @@ case "$cmd" in
     echo "Orphaned containers removed."
     ;;
   rebuild)
-    echo "=== Rebuild: Stopping services ==="
-    docker compose --profile webrtc stop app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || true
+    echo "=== Rebuild: Stopping services (webrtc + gazebo) ==="
+    docker compose --profile webrtc --profile gazebo stop app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph gazebo 2>/dev/null || true
     stop_storybook
     if [[ -f "$APP_PID_FILE" ]]; then
       pid=$(cat "$APP_PID_FILE" 2>/dev/null)
@@ -218,15 +218,16 @@ case "$cmd" in
       fi
     fi
     echo ""
-    echo "=== Rebuild: Building Docker images and ROS 2 workspace ==="
-    docker rm -f scout_app frodobot_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph 2>/dev/null || true
-    docker compose --profile webrtc down --remove-orphans 2>/dev/null || true
+    echo "=== Rebuild: Building Docker images (webrtc + gazebo/simulation) ==="
+    docker rm -f scout_app frodobot_sdk scout_bridge scout_perception scout_webrtc scout_shell scout_turn connectx_mcp connectx_langgraph gazebo_sim 2>/dev/null || true
+    docker compose --profile webrtc --profile gazebo down --remove-orphans 2>/dev/null || true
     export CACHEBUST="${CACHEBUST:-$(date +%s)}"
-    docker compose --profile webrtc build --remove-orphans 2>/dev/null || docker compose --profile webrtc build
+    docker compose --profile webrtc --profile gazebo build --remove-orphans 2>/dev/null || docker compose --profile webrtc --profile gazebo build
+    echo "=== Rebuild: Building ROS 2 workspace in scout_bridge ==="
     docker compose --profile webrtc run --rm scout_bridge bash -c \
       "source /opt/ros/kilted/setup.bash && cd /root/workspace/ros2_ws && rm -rf build/connectx_msgs install/connectx_msgs build/connectx_perception_cpp install/connectx_perception_cpp && colcon build"
     echo ""
-    echo "=== Rebuild: Starting services (force-recreate so app serves latest www) ==="
+    echo "=== Rebuild: Starting all services (webrtc + gazebo) ==="
     if [[ "$(uname)" == Darwin ]]; then
       if command -v xhost &>/dev/null; then
         xhost + 127.0.0.1 2>/dev/null || true
@@ -238,17 +239,17 @@ case "$cmd" in
       fi
     fi
     if [[ "$(uname)" == Darwin ]]; then
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      DISPLAY=host.docker.internal:0 docker compose --profile webrtc up -d --force-recreate app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc --profile gazebo up -d --force-recreate --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph gazebo 2>/dev/null || \
+      DISPLAY=host.docker.internal:0 docker compose --profile webrtc --profile gazebo up -d --force-recreate app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph gazebo
     else
-      docker compose --profile webrtc up -d --force-recreate --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph 2>/dev/null || \
-      docker compose --profile webrtc up -d --force-recreate app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph
+      docker compose --profile webrtc --profile gazebo up -d --force-recreate --remove-orphans app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph gazebo 2>/dev/null || \
+      docker compose --profile webrtc --profile gazebo up -d --force-recreate app scout_turn frodobot_sdk scout_bridge scout_perception connectx_mcp connectx_langgraph gazebo
     fi
     echo "Waiting for services to be ready..."
     sleep 5
     start_storybook
     echo ""
-    echo "Rebuild complete! Services are running."
+    echo "Rebuild complete! All services are running (webrtc + Gazebo simulation)."
     echo ""
     echo "App (signaling + www): http://localhost:8000/"
     echo "Earth Rovers SDK (front camera, /v2/front): http://localhost:8001/"
@@ -260,12 +261,12 @@ case "$cmd" in
     echo "  → If Storybook did not start, run: cd app/www && pnpm run storybook"
     echo ""
     echo "Foxglove Studio (ROS 2 visualization):"
-    echo "  1. Open Foxglove Studio: https://app.foxglove.dev/  (or install the desktop app)"
-    echo "  2. Add connection → Foxglove WebSocket"
-    echo "  3. URL: ws://localhost:8765"
-    echo "  4. Connect to view /cmd_vel, /camera/front/compressed, /robot/telemetry, and other ROS 2 topics."
+    echo "  Scout/bridge: ws://localhost:8765"
+    echo "  Gazebo sim:   ws://localhost:8766  (use this for 3D sim view)"
+    echo "  → Add connection → Foxglove WebSocket → URL above"
     echo ""
     echo "Drive from the web UI: http://localhost:8000/"
+    echo "  Select Physical or Simulator in Controls to drive the robot or the Gazebo box_car."
     echo "Tap on the front camera to orient the robot (rotation only; uses autonomy controller)."
     echo "Use Start wandering / Stop wandering in the Drive section (speed uses the same slider as drive)."
     echo "To use keyboard teleop instead: ./cli.sh teleop   or   ./cli.sh start --teleop"
@@ -326,7 +327,8 @@ case "$cmd" in
     echo "               Options: --teleop  Also run CLI keyboard teleop (don't use with web UI at same time)"
     echo "                        --xterm   Run teleop in a separate xterm window (implies --teleop)"
     echo "  stop        Stop all services including connectx_mcp and connectx_langgraph"
-    echo "  rebuild     Stop services, rebuild Docker images and ROS 2 workspace, then start services"
+    echo "  rebuild     Stop services, rebuild Docker images (webrtc + gazebo/simulation) and ROS 2 workspace,"
+    echo "              then start all services together (app, bridge, Gazebo sim, etc.)"
     echo "  teleop      Run manual_controller + keyboard_node in scout_bridge (arrow key control)"
     echo "  test        Run all ROS 2 workspace tests (colcon test in scout_bridge container)"
     echo "  logs        Follow container logs. Run in another terminal while start is running."

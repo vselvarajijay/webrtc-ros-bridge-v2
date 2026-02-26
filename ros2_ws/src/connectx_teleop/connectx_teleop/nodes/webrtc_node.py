@@ -12,6 +12,8 @@ import os
 import queue
 import threading
 import time
+import urllib.error
+import urllib.request
 from fractions import Fraction
 from typing import Optional
 
@@ -31,6 +33,7 @@ from connectx_teleop.constants import (
     CAMERA_FRAME_ID,
     CAMERA_FRONT_COMPRESSED_TOPIC,
     CMD_VEL_TOPIC,
+    CMD_VEL_SIM_TOPIC,
     LAMP_TOPIC,
     DEFAULT_IMAGE_FORMAT,
     OPTICAL_FLOW_TOPIC,
@@ -293,6 +296,41 @@ class CameraTrack(VideoStreamTrack):
         return frame
 
 
+def _target_from_control(data: dict) -> str:
+    """Parse target from control message: 'physical' | 'simulator'. Default 'physical'."""
+    t = data.get("target")
+    if t == "simulator":
+        return "simulator"
+    return "physical"
+
+
+_sim_control_first_log: list = [True]
+
+
+def _post_sim_control_sync(url_base: str, linear_x: float, angular_z: float) -> None:
+    """POST velocity to sim control relay (HTTP). Used when target is simulator and ROS is in another container."""
+    url = url_base.rstrip("/") + "/control"
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({"linear_x": linear_x, "angular_z": angular_z}).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=2)
+        if _sim_control_first_log[0]:
+            _sim_control_first_log[0] = False
+            LOG.info("Sim control -> %s (linear_x=%.2f angular_z=%.2f); subsequent sends not logged", url_base, linear_x, angular_z)
+    except urllib.error.URLError as e:
+        if _sim_control_first_log[0]:
+            _sim_control_first_log[0] = False
+        LOG.warning("Sim control POST %s failed: %s (is gazebo_sim running and relay up?)", url_base, e)
+    except Exception as e:
+        if _sim_control_first_log[0]:
+            _sim_control_first_log[0] = False
+        LOG.warning("Sim control POST failed: %s", e)
+
+
 def _twist_from_control(data: dict) -> Optional[Twist]:
     """Parse JSON control message to geometry_msgs/Twist. Supports linear_x/angular_z or full linear/angular."""
     try:
@@ -330,11 +368,13 @@ def run_ros_node(
     last_flow_ref: list,
     wander_mode_ref: list,
 ) -> None:
-    """Run rclpy node. Drains control_queue of (twist, lamp) and autonomy_command_queue of command strings.
-    When wander_mode_ref[0] is True (wander active), do not publish to /cmd_vel so wander_planner is the sole source."""
+    """Run rclpy node. Drains control_queue of (twist, lamp, target) and autonomy_command_queue of command strings.
+    When wander_mode_ref[0] is True (wander active), do not publish to /cmd_vel so wander_planner is the sole source.
+    target is 'physical' or 'simulator'; twist is published to /cmd_vel or /cmd_vel_sim accordingly; the other topic gets zero."""
     rclpy.init()
     node = Node("webrtc_node")
     cmd_pub = node.create_publisher(Twist, CMD_VEL_TOPIC, 10)
+    cmd_sim_pub = node.create_publisher(Twist, CMD_VEL_SIM_TOPIC, 10)
     lamp_pub = node.create_publisher(Int32, LAMP_TOPIC, 10)
     autonomy_pub = node.create_publisher(String, AUTONOMY_COMMAND_TOPIC, 10)
 
@@ -455,7 +495,11 @@ def run_ros_node(
     last_no_telemetry_log = [0.0]
     NO_DATA_WARN_INTERVAL = 15.0
     last_twist_ref: list = [None]  # [Twist|None]; repeat at drain rate when queue empty for smooth control
+    last_target_ref: list = ["physical"]  # [str]; which topic received the last twist
     last_lamp_published: list = [0]
+    zero_twist = Twist()
+    zero_twist.linear.x = 0.0
+    zero_twist.angular.z = 0.0
 
     while not stop_event.is_set():
         now = time.monotonic()
@@ -498,9 +542,6 @@ def run_ros_node(
                         wander_mode_ref[0] = is_wander
                         if is_wander:
                             # Clear last twist so when we exit wander the first webrtc publish is zero
-                            zero_twist = Twist()
-                            zero_twist.linear.x = 0.0
-                            zero_twist.angular.z = 0.0
                             last_twist_ref[0] = zero_twist
             except queue.Empty:
                 pass
@@ -515,18 +556,29 @@ def run_ros_node(
                     pass
             else:
                 try:
-                    # Drain control queue: each item is (twist, lamp) so state is passed together
+                    # Drain control queue: each item is (twist, lamp) or (twist, lamp, target)
                     while True:
                         item = control_queue.get_nowait()
                         try:
-                            twist, lamp = item
+                            if len(item) >= 3:
+                                twist, lamp, target = item[0], item[1], item[2]
+                            else:
+                                twist, lamp = item[0], item[1]
+                                target = "physical"
                             last_twist_ref[0] = twist
+                            last_target_ref[0] = target if target == "simulator" else "physical"
                             last_lamp_published[0] = int(lamp) if lamp else 0
                             lamp_pub.publish(Int32(data=last_lamp_published[0]))
-                            cmd_pub.publish(twist)
+                            # Publish twist to selected target; publish zero to the other so both stop when switching
+                            if last_target_ref[0] == "simulator":
+                                cmd_sim_pub.publish(twist)
+                                cmd_pub.publish(zero_twist)
+                            else:
+                                cmd_pub.publish(twist)
+                                cmd_sim_pub.publish(zero_twist)
                             published_this_cycle = True
                         except (TypeError, ValueError) as e:
-                            LOG.warning("Control queue item invalid (twist, lamp): %s", e)
+                            LOG.warning("Control queue item invalid (twist, lamp, target?): %s", e)
                 except queue.Empty:
                     pass
                 except Exception as e:
@@ -534,7 +586,12 @@ def run_ros_node(
                 # Repeat last twist at drain rate when queue empty so robot gets steady 50 Hz stream
                 if not published_this_cycle and last_twist_ref[0] is not None:
                     lamp_pub.publish(Int32(data=last_lamp_published[0]))
-                    cmd_pub.publish(last_twist_ref[0])
+                    if last_target_ref[0] == "simulator":
+                        cmd_sim_pub.publish(last_twist_ref[0])
+                        cmd_pub.publish(zero_twist)
+                    else:
+                        cmd_pub.publish(last_twist_ref[0])
+                        cmd_sim_pub.publish(zero_twist)
 
     try:
         node.destroy_node()
@@ -691,6 +748,11 @@ async def run_signaling_and_webrtc(
 
     asyncio.get_running_loop().set_exception_handler(_asyncio_exception_handler)
     LOG.info("Signaling URL: %s", SIGNALING_WS_URL)
+    sim_url = os.getenv("SIM_CONTROL_URL", "").strip()
+    if sim_url:
+        LOG.info("SIM_CONTROL_URL=%s (simulator target will send via HTTP)", sim_url)
+    else:
+        LOG.info("SIM_CONTROL_URL not set (simulator target will use ROS /cmd_vel_sim in this container)")
     while not stop_event.is_set():
         try:
             async with websockets.connect(
@@ -722,7 +784,27 @@ async def run_signaling_and_webrtc(
                             data = msg.get("data") or {}
                             twist = _twist_from_control(data)
                             if twist is not None:
-                                _put_latest(control_queue, (twist, last_lamp_ref[0]))
+                                target = _target_from_control(data)
+                                sim_url = os.getenv("SIM_CONTROL_URL", "").strip()
+                                if target == "simulator":
+                                    if sim_url:
+                                        asyncio.create_task(
+                                            asyncio.to_thread(
+                                                _post_sim_control_sync,
+                                                sim_url,
+                                                twist.linear.x,
+                                                twist.angular.z,
+                                            )
+                                        )
+                                    else:
+                                        if _sim_control_first_log[0]:
+                                            LOG.warning(
+                                                "Simulator selected but SIM_CONTROL_URL not set (signaling path)."
+                                            )
+                                            _sim_control_first_log[0] = False
+                                        _put_latest(control_queue, (twist, last_lamp_ref[0], target))
+                                else:
+                                    _put_latest(control_queue, (twist, last_lamp_ref[0], target))
                             continue
                         if typ == "offer" and "sdp" in msg:
                             if pc is not None:
@@ -788,17 +870,43 @@ async def run_signaling_and_webrtc(
                                             if twist is not None:
                                                 if not first_control_logged[0]:
                                                     first_control_logged[0] = True
+                                                    target_preview = _target_from_control(data)
+                                                    sim_url_preview = os.getenv("SIM_CONTROL_URL", "").strip()
+                                                    target_raw = data.get("target", "(key missing)")
                                                     LOG.info(
-                                                        "First control received on data channel (linear_x=%.2f angular_z=%.2f)",
+                                                        "First control on data channel: linear_x=%.2f angular_z=%.2f target_raw=%s -> target=%s SIM_CONTROL_URL=%s",
                                                         twist.linear.x,
                                                         twist.angular.z,
+                                                        target_raw,
+                                                        target_preview,
+                                                        sim_url_preview or "(not set)",
                                                     )
                                                 # Update lamp only when message includes it; otherwise keep current
                                                 if "lamp" in data:
                                                     last_lamp_ref[0] = 1 if data.get("lamp") else 0
                                                 lamp = last_lamp_ref[0]
-                                                # Always queue so robot gets a continuous stream (no deduplication)
-                                                _put_latest(control_queue, (twist, lamp))
+                                                target = _target_from_control(data)
+                                                sim_url = os.getenv("SIM_CONTROL_URL", "").strip()
+                                                if target == "simulator":
+                                                    if sim_url:
+                                                        # Send to sim container via HTTP (no ROS DDS across containers)
+                                                        asyncio.create_task(
+                                                            asyncio.to_thread(
+                                                                _post_sim_control_sync,
+                                                                sim_url,
+                                                                twist.linear.x,
+                                                                twist.angular.z,
+                                                            )
+                                                        )
+                                                    else:
+                                                        if _sim_control_first_log[0]:
+                                                            LOG.warning(
+                                                                "Simulator selected but SIM_CONTROL_URL not set; cannot send to sim. Set SIM_CONTROL_URL (e.g. http://gazebo_sim:5000) when running with gazebo profile."
+                                                            )
+                                                            _sim_control_first_log[0] = False
+                                                        _put_latest(control_queue, (twist, lamp, target))
+                                                else:
+                                                    _put_latest(control_queue, (twist, lamp, target))
                                                 # Always push partial telemetry so UI shows commanded speed
                                                 partial = {"speed": float(twist.linear.x), "timestamp": time.time()}
                                                 _put_latest(telemetry_queue, json.dumps(partial))
@@ -867,7 +975,7 @@ def main(args=None) -> None:
 
     image_format = os.getenv("IMAGE_FORMAT", DEFAULT_IMAGE_FORMAT)
     frame_queue: queue.Queue = queue.Queue(maxsize=FRAME_QUEUE_MAXSIZE)
-    control_queue: queue.Queue = queue.Queue(maxsize=128)  # items: (twist, lamp); larger so bursts from browser aren't dropped
+    control_queue: queue.Queue = queue.Queue(maxsize=128)  # items: (twist, lamp, target); larger so bursts from browser aren't dropped
     telemetry_queue: queue.Queue = queue.Queue(maxsize=32)  # larger so full telemetry isn't evicted by partials
     autonomy_command_queue: queue.Queue = queue.Queue(maxsize=32)
     stop = threading.Event()

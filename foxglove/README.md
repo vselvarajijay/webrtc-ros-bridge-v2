@@ -1,8 +1,11 @@
 # Foxglove layouts for ConnectX
 
-Use these with the **Gazebo simulation** (port 8766). For the webrtc/robot bridge use port 8765 instead.
+- **Simulation (Gazebo):** connect to **`ws://localhost:8766`** — use `./scripts/open-foxglove-gazebo.sh` or add connection URL `ws://localhost:8766`. This gives you only sim data (robot TF, room markers, no mixing with scout_bridge).
+- **Robot/WebRTC bridge:** connect to **`ws://localhost:8765`** for real robot or when driving the robot (not the sim).
 
-## Open Foxglove and connect (one click)
+**Important:** When viewing the **simulator**, always use **8766**. If you connect to 8765 while the sim is running, you can get mixed TF (scout_bridge + gazebo_sim) and the 3D view may shake or show the wrong frame. In the 3D panel, set **Follow mode** to **Fixed** (not Pose) so the camera stays put and doesn’t amplify jitter when driving the sim.
+
+## Open Foxglove and connect (one click, sim)
 
 With the [Foxglove desktop app](https://foxglove.dev/download) installed:
 
@@ -38,7 +41,8 @@ docker compose --profile gazebo up gazebo
     - **URL (local):** `file:///ABSOLUTE_PATH_TO_REPO/ros2_ws/src/connectx_simulation/urdf/box_car.urdf` (Foxglove Desktop only).
   - Leave **Display mode** as **Visual** (or Auto). Turn on **Grid** (built-in layer) for a ground reference.
   - Optionally enable **Transforms** → **Labels** / **Axis scale** to see frame axes.
-- You should see the box car (blue chassis, four wheels) and the grid in the 3D view.
+  - **Room walls:** Add a **Point cloud** layer → set topic to **`/room_walls`**. You should see the four walls as a point cloud (6×6 m room). (We use PointCloud2 instead of Markers to avoid Foxglove schema errors.)
+- You should see the box car (blue chassis, four wheels), the grid, and the room walls in the 3D view.
 
 **“Invalid topic: /robot_description”:** Use **Source** → **URL** → **`http://localhost:8767/box_car.urdf`** instead (sim must be running).
 

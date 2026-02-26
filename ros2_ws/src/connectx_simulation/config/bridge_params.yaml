@@ -20,3 +20,18 @@
   direction: GZ_TO_ROS
 
 # TF: do NOT bridge Pose_V -> /tf (frame_id/child_frame_id are empty). Use robot_state_publisher only.
+
+# Model pose for dynamic world->chassis TF (Foxglove 3D). PosePublisher plugin publishes to /model/box_car/pose
+- ros_topic_name: /model_pose
+  gz_topic_name: /model/box_car/pose
+  ros_type_name: geometry_msgs/msg/PoseStamped
+  gz_type_name: gz.msgs.Pose
+  direction: GZ_TO_ROS
+
+# Teleop from UI (webrtc_node publishes /cmd_vel_sim when target is Simulator)
+# Use world-scoped GZ topic so DiffDrive in box_car_world receives commands (same pattern as joint_state)
+- ros_topic_name: /cmd_vel_sim
+  gz_topic_name: /world/box_car_world/model/box_car/cmd_vel
+  ros_type_name: geometry_msgs/msg/Twist
+  gz_type_name: gz.msgs.Twist
+  direction: ROS_TO_GZ

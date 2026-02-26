@@ -43,11 +43,16 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
             output='screen',
         ),
-        # World frame so Foxglove 3D has a fixed origin and grid; chassis is at world origin
+        # Dynamic world -> chassis TF from Gazebo model pose (Foxglove 3D shows robot moving)
         Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            arguments=['--x', '0', '--y', '0', '--z', '0', '--yaw', '0', '--pitch', '0', '--roll', '0', '--frame-id', 'world', '--child-frame-id', 'chassis'],
+            package='connectx_simulation',
+            executable='pose_to_tf',
+            output='screen',
+        ),
+        # Room walls as PointCloud2 for Foxglove 3D (add Point cloud layer, topic /room_walls; avoids Marker schema issues)
+        Node(
+            package='connectx_simulation',
+            executable='room_walls',
             output='screen',
         ),
     ])

@@ -24,6 +24,7 @@ export function MockWebRTCProvider({
 }: MockWebRTCProviderProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [driveMode, setDriveMode] = useState<'teleop' | 'autonomous'>('teleop');
+  const [robotTarget, setRobotTarget] = useState<'physical' | 'simulator'>('physical');
 
   const sendControl = useCallback((_linearX: number, _angularZ: number) => {
     // no-op in storybook
@@ -55,6 +56,8 @@ export function MockWebRTCProvider({
     setLampOn: () => {},
     driveMode,
     setDriveMode,
+    robotTarget,
+    setRobotTarget,
     sendControl,
     sendWander,
     eStop,

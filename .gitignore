@@ -314,6 +314,8 @@ __marimo__/
 # Model files (large, download separately)
 models/
 models/DA3Metric-Large/
+# Gazebo/simulation models in connectx_simulation are versioned
+!ros2_ws/src/connectx_simulation/models/
 *.engine
 *.trt
 

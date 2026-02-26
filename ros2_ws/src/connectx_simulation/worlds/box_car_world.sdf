@@ -40,6 +40,92 @@
       </link>
     </model>
 
+    <!-- Room walls: 6 m x 6 m around spawn at origin. Static, collision + visual. -->
+    <model name="wall_north">
+      <static>true</static>
+      <pose>0 3 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry>
+            <box><size>6 0.1 0.5</size></box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box><size>6 0.1 0.5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="wall_south">
+      <static>true</static>
+      <pose>0 -3 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry>
+            <box><size>6 0.1 0.5</size></box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box><size>6 0.1 0.5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="wall_east">
+      <static>true</static>
+      <pose>3 0 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry>
+            <box><size>0.1 6 0.5</size></box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box><size>0.1 6 0.5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="wall_west">
+      <static>true</static>
+      <pose>-3 0 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry>
+            <box><size>0.1 6 0.5</size></box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box><size>0.1 6 0.5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
     <include>
       <uri>model://box_car</uri>
       <pose>0 0 0.1 0 0 0</pose>

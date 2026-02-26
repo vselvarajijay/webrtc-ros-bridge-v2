@@ -27,12 +27,18 @@ docker compose --profile gazebo up gazebo
 
 ```bash
 docker exec -it gazebo_sim bash
-source /opt/ros/kilted/setup.bash && source /root/ros2_ws/install/setup.bash
+source /opt/ros/kilted/setup.bash && source /root/workspace/ros2_ws/install/setup.bash
 ros2 topic list
-# Expect: /clock, /imu/data, /joint_states, /robot_description, /urdf/robot_description, /tf (no camera in headless)
+# Expect: /clock, /imu/data, /joint_states, /model_pose, /robot_description, /room_walls, /urdf/robot_description, /tf (no camera in headless)
+ros2 node list | grep -E "room_walls|pose_to_tf"
+# If /room_walls is missing, check: docker compose --profile gazebo logs gazebo 2>&1 | grep -E "room_walls|error"
 ```
 
 **Stop:** `Ctrl+C` in the terminal, or `docker compose --profile gazebo down`.
+
+**5. Drive the sim from the web UI:**
+
+- Open the app (e.g. http://localhost:8000). In the **Drive** section, set **Drive target** to **Simulator** (not Physical). Then use the arrow keys or on-screen controls; commands are sent to the Gazebo sim via `sim_control_relay`. If the robot does not move, confirm the target is **Simulator** and that the `gazebo_sim` container is running.
 
 ---
 
@@ -59,10 +65,12 @@ docker compose --profile gazebo up --build
 
 ## What runs
 
-- **Gazebo Ionic** — headless sim with a simple 4-wheel box car in a flat world (no camera in Docker to avoid Ogre2 crash).
-- **ros_gz_bridge** — bridges `/clock`, `/imu/data`, `/joint_states` from Gazebo to ROS 2 (camera omitted for headless).
+- **Gazebo Ionic** — headless sim with a simple 4-wheel box car in a flat world (no camera in Docker to avoid Ogre2 crash). The box_car model uses the **DiffDrive** plugin and subscribes to `/model/box_car/cmd_vel` (Gazebo Transport).
+- **ros_gz_bridge** — bridges `/clock`, `/imu/data`, `/joint_states` from Gazebo to ROS 2, and **ROS → GZ** `/cmd_vel_sim` → `/model/box_car/cmd_vel` for teleop (camera omitted for headless).
 - **robot_state_publisher** — publishes `/robot_description` and TF for the box car URDF (for Foxglove 3D).
 - **foxglove_bridge** — exposes ROS 2 topics to Foxglove Studio on port **8766** (gazebo profile only).
+
+Gazebo uses **ROS_DOMAIN_ID** from `ROS_DOMAIN_ID_GAZEBO` (default **1**) so it does not see nodes from the webrtc profile (e.g. `/bridge_node`). That avoids Foxglove errors like "Failed to retrieve parameters from node '/bridge_node'". Set `ROS_DOMAIN_ID_GAZEBO=0` in `.env` if you need sim and bridge on the same ROS domain.
 
 Webrtc profile uses Foxglove on port **8765** (scout_bridge). Use **8766** when only the gazebo profile is running.
 
@@ -105,3 +113,11 @@ docker compose --profile webrtc --profile gazebo up --build
 ```
 
 Use **ws://localhost:8766** in Foxglove for simulation topics (port 8766 is published from the gazebo container).
+
+### Controlling the simulator from the teleop UI
+
+When both the **webrtc** and **gazebo** profiles are running:
+
+1. **ROS 2 network:** `scout_bridge` and `gazebo_sim` use `ROS_LOCALHOST_ONLY=0` by default (via `ROS_LOCALHOST_ONLY` in docker-compose, defaulting to `0`) so that DDS discovery works across containers. The webrtc_node in scout_bridge publishes `/cmd_vel_sim` when you select **Simulator** in the UI; ros_gz_bridge in the gazebo container subscribes to `/cmd_vel_sim` and forwards it to the box_car DiffDrive plugin.
+2. In the web UI at **http://localhost:8000**, open the **Controls** panel. Use the **Physical** | **Simulator** selector: choose **Simulator** to drive the box_car in Gazebo with the joystick or arrow keys; choose **Physical** to drive the physical robot (existing behavior).
+3. If the sim does not move when **Simulator** is selected, ensure both profiles are up and that `ROS_LOCALHOST_ONLY` is not set to `1` in your environment (so the two containers share the same ROS 2 network).

@@ -4,6 +4,7 @@ import os
 
 # ROS topic names (must match bridge and connectx_controller)
 CMD_VEL_TOPIC = "/cmd_vel"
+CMD_VEL_SIM_TOPIC = "/cmd_vel_sim"
 LAMP_TOPIC = "/robot/lamp"
 ROBOT_TELEMETRY_TOPIC = "/robot/telemetry"
 AUTONOMY_COMMAND_TOPIC = "/autonomy/command"

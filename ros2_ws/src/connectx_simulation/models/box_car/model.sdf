@@ -1,0 +1,218 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="box_car">
+    <pose>0 0 0.1 0 0 0</pose>
+
+    <!-- Chassis: 0.5 x 0.3 x 0.1 m -->
+    <link name="chassis">
+      <inertial>
+        <mass>5.0</mass>
+        <inertia>
+          <ixx>0.048</ixx><iyy>0.108</iyy><izz>0.142</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="chassis_col">
+        <geometry>
+          <box><size>0.5 0.3 0.1</size></box>
+        </geometry>
+      </collision>
+      <visual name="chassis_vis">
+        <geometry>
+          <box><size>0.5 0.3 0.1</size></box>
+        </geometry>
+        <material>
+          <ambient>0.2 0.3 0.5 1</ambient>
+          <diffuse>0.2 0.4 0.8 1</diffuse>
+          <specular>0.3 0.3 0.3 1</specular>
+        </material>
+      </visual>
+
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>100</update_rate>
+        <topic>/box_car/imu</topic>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.017</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.017</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.017</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+      <!-- Camera removed: Ogre2 headless crashes in Docker. -->
+    </link>
+
+    <!-- Front-left wheel
+         pose on link (relative to model origin): x=+0.2, y=+0.175, z=0
+         rolled pi/2 about X so cylinder Z-axis aligns with world Y (axle direction) -->
+    <link name="wheel_fl">
+      <pose>0.2 0.175 0 1.5707963 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.00125</ixx><iyy>0.00125</iyy><izz>0.0025</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="wheel_fl_col">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+      </collision>
+      <visual name="wheel_fl_vis">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.2 0.4 0.8 1</diffuse>
+          <specular>0.5 0.5 0.5 1</specular>
+        </material>
+      </visual>
+    </link>
+    <joint name="joint_wheel_fl" type="revolute">
+      <parent>chassis</parent>
+      <child>wheel_fl</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit><lower>-1e16</lower><upper>1e16</upper></limit>
+      </axis>
+    </joint>
+
+    <!-- Front-right wheel -->
+    <link name="wheel_fr">
+      <pose>0.2 -0.175 0 1.5707963 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.00125</ixx><iyy>0.00125</iyy><izz>0.0025</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="wheel_fr_col">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+      </collision>
+      <visual name="wheel_fr_vis">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.1 0.1 0.1 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
+        </material>
+      </visual>
+    </link>
+    <joint name="joint_wheel_fr" type="revolute">
+      <parent>chassis</parent>
+      <child>wheel_fr</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit><lower>-1e16</lower><upper>1e16</upper></limit>
+      </axis>
+    </joint>
+
+    <!-- Rear-left wheel -->
+    <link name="wheel_rl">
+      <pose>-0.2 0.175 0 1.5707963 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.00125</ixx><iyy>0.00125</iyy><izz>0.0025</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="wheel_rl_col">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+      </collision>
+      <visual name="wheel_rl_vis">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.1 0.1 0.1 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
+        </material>
+      </visual>
+    </link>
+    <joint name="joint_wheel_rl" type="revolute">
+      <parent>chassis</parent>
+      <child>wheel_rl</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit><lower>-1e16</lower><upper>1e16</upper></limit>
+      </axis>
+    </joint>
+
+    <!-- Rear-right wheel -->
+    <link name="wheel_rr">
+      <pose>-0.2 -0.175 0 1.5707963 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.00125</ixx><iyy>0.00125</iyy><izz>0.0025</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="wheel_rr_col">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+      </collision>
+      <visual name="wheel_rr_vis">
+        <geometry>
+          <cylinder><radius>0.1</radius><length>0.05</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.1 0.1 0.1 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
+        </material>
+      </visual>
+    </link>
+    <joint name="joint_wheel_rr" type="revolute">
+      <parent>chassis</parent>
+      <child>wheel_rr</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit><lower>-1e16</lower><upper>1e16</upper></limit>
+      </axis>
+    </joint>
+
+    <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+      <topic>/world/box_car_world/model/box_car/joint_state</topic>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+      <topic>/world/box_car_world/model/box_car/cmd_vel</topic>
+      <left_joint>joint_wheel_fl</left_joint>
+      <left_joint>joint_wheel_rl</left_joint>
+      <right_joint>joint_wheel_fr</right_joint>
+      <right_joint>joint_wheel_rr</right_joint>
+      <wheel_separation>0.35</wheel_separation>
+      <wheel_radius>0.1</wheel_radius>
+      <max_linear_acceleration>1.0</max_linear_acceleration>
+      <max_angular_acceleration>1.0</max_angular_acceleration>
+      <max_linear_velocity>1.0</max_linear_velocity>
+      <max_angular_velocity>2.0</max_angular_velocity>
+    </plugin>
+    <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+      <publish_model_pose>true</publish_model_pose>
+      <publish_link_pose>false</publish_link_pose>
+      <publish_collision_pose>false</publish_collision_pose>
+      <publish_visual_pose>false</publish_visual_pose>
+      <publish_nested_model_pose>false</publish_nested_model_pose>
+    </plugin>
+  </model>
+</sdf>

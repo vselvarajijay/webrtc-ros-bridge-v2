@@ -25,7 +25,7 @@ export interface RobotControlProps {
 }
 
 export function RobotControl({ hideStop }: RobotControlProps = {}) {
-  const { sendControl, sendWander, commandsReady, lastControlSent, driveMode, setDriveMode, eStop } = useWebRTC();
+  const { sendControl, sendWander, commandsReady, lastControlSent, driveMode, setDriveMode, robotTarget, setRobotTarget, eStop, appendSystemLog } = useWebRTC();
   const [speedLevel, setSpeedLevel] = useState(3);
   const [direction, setDirection] = useState<{ linear: number; angular: number }>({ linear: 0, angular: 0 });
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
@@ -195,6 +195,25 @@ export function RobotControl({ hideStop }: RobotControlProps = {}) {
         padding: '1rem',
       }}
     >
+      <Text size="xs" fw={500} c="dimmed">Drive target (arrows)</Text>
+      <SegmentedControl
+        value={robotTarget}
+        onChange={(v) => {
+          const next = v as 'physical' | 'simulator';
+          setRobotTarget(next);
+          const ts = new Date().toTimeString().slice(0, 8);
+          appendSystemLog(`[${ts}] Robot target: ${next === 'simulator' ? 'Simulator (Gazebo)' : 'Physical'}`);
+        }}
+        data={[
+          { label: 'Physical', value: 'physical' },
+          { label: 'Simulator', value: 'simulator' },
+        ]}
+        size="sm"
+        fullWidth
+      />
+      <Text size="xs" c="dimmed">
+        {robotTarget === 'simulator' ? 'Arrows drive Gazebo sim.' : 'Select Simulator to drive the sim with arrows.'}
+      </Text>
       <SegmentedControl
         value={driveMode}
         onChange={(v) => setDriveMode(v as 'teleop' | 'autonomous')}

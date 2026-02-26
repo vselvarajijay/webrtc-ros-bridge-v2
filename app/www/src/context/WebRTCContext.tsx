@@ -27,6 +27,8 @@ export interface ConnectionDebug {
 
 export type DriveMode = 'teleop' | 'autonomous';
 
+export type RobotTarget = 'physical' | 'simulator';
+
 export interface LastControlSent {
   linearX: number;
   angularZ: number;
@@ -50,6 +52,8 @@ interface WebRTCContextValue {
   setLampOn: (on: boolean) => void;
   driveMode: DriveMode;
   setDriveMode: (mode: DriveMode) => void;
+  robotTarget: RobotTarget;
+  setRobotTarget: (target: RobotTarget) => void;
   sendControl: (linearX: number, angularZ: number) => void;
   sendWander: (enable: boolean) => void;
   eStop: () => void;
@@ -108,6 +112,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
   const [lastControlSent, setLastControlSent] = useState<LastControlSent | null>(null);
   const [lampOn, setLampOn] = useState(false);
   const [driveMode, setDriveMode] = useState<DriveMode>('teleop');
+  const [robotTarget, setRobotTarget] = useState<RobotTarget>('physical');
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -376,7 +381,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
           ws.send(
             JSON.stringify({
               type: 'control',
-              data: { linear_x: linearX, angular_z: angularZ },
+              data: { linear_x: linearX, angular_z: angularZ, target: robotTarget },
             })
           );
           updateSentDisplay();
@@ -396,13 +401,14 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
             linear_x: linearX,
             angular_z: angularZ,
             lamp: lampOn ? 1 : 0,
+            target: robotTarget,
           })
         );
         updateSentDisplay();
         maybeLogControl();
       } catch (_) {}
     },
-    [lampOn, controlViaSignaling]
+    [lampOn, controlViaSignaling, robotTarget]
   );
 
   const sendWander = useCallback(
@@ -450,6 +456,8 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     setLampOn,
     driveMode,
     setDriveMode,
+    robotTarget,
+    setRobotTarget,
     sendControl,
     sendWander,
     eStop,
